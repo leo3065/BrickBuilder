@@ -33,7 +33,7 @@ class Renderer:
         gl.glOrtho(-w/2, w/2, -h/2, h/2, camera.near_plane, camera.far_plane)
         
         gl.glMatrixMode(gl.GL_MODELVIEW)
-        gl.glMultiplyMatrixf(np.array(view, dtype=np.float32).flatten())
+        gl.glLoadTransposeMatrixf(np.array(view, dtype=np.float32).flatten())
         
         # Section View (Clipping Plane)
         if section_z is not None:

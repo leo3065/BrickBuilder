@@ -1,0 +1,15 @@
+[project]
+name = "brickbuilder"
+version = "0.1.0"
+description = "A Python-based GUI program for building and designing 3D brick models."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "PySide6>=6.0.0",
+    "PyOpenGL>=3.1.0",
+    "PyGLM>=2.7.0",
+    "numpy>=2.3.5",
+]
+
+[project.scripts]
+brickbuilder = "brickbuilder.main:main"

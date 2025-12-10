@@ -8,6 +8,8 @@ from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.model import Model
 from brickbuilder.core import picking
+from brickbuilder.core.tools import Tool
+from brickbuilder.core.colors import COLORS, DEFAULT_COLOR
 
 class Viewport(QOpenGLWidget):
     def __init__(self, parent=None):
@@ -16,8 +18,13 @@ class Viewport(QOpenGLWidget):
         self.camera = Camera()
         self.model = Model()
         
+        self.current_tool = Tool.PLACE
+        self.current_color = DEFAULT_COLOR
+        
         self.ghost_position: Optional[glm.ivec3] = None
         self.ghost_color = glm.vec3(0.0, 1.0, 0.0) # Green ghost
+        
+        self.selected_brick_pos: Optional[glm.ivec3] = None
         
         # Enable mouse tracking for hover effects if needed later
         self.setMouseTracking(True)
@@ -36,37 +43,86 @@ class Viewport(QOpenGLWidget):
 
     def paintGL(self):
         pixel_ratio = self.devicePixelRatio()
-        self.renderer.render(self.camera, self.model, self.ghost_position, int(self.width() * pixel_ratio), int(self.height() * pixel_ratio))
+        self.renderer.render(self.camera, self.model, self.ghost_position, int(self.width() * pixel_ratio), int(self.height() * pixel_ratio), self.selected_brick_pos)
+
+    def set_tool(self, tool: Tool):
+        self.current_tool = tool
+        self.ghost_position = None
+        self.selected_brick_pos = None
+        self.update()
+
+    def reset_scene(self):
+        self.model.clear()
+        self.camera.reset()
+        self.ghost_position = None
+        self.selected_brick_pos = None
+        self.update()
+
+    def set_current_color(self, color: glm.vec3):
+        self.current_color = color
+        # If in Paint mode and something selected, paint it?
+        if self.current_tool == Tool.SELECT and self.selected_brick_pos:
+             pass
 
     def mousePressEvent(self, event: QMouseEvent):
         self.last_mouse_pos = event.position()
         
         if event.buttons() & Qt.MouseButton.LeftButton:
-            # Place or Remove
-            if self.ghost_position:
-                if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-                    # Remove logic
-                    # Raycast again to find what strictly was hit (not the neighbor/ghost)
-                    # We can reuse the logic but we need the actual hit brick
-                    ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera)
-                    hit_pos, _, _ = picking.intersect_model(ray, self.model)
-                    if hit_pos:
-                       self.model.remove_brick(hit_pos)
-                else:
-                    # Place logic
-                    self.model.add_brick(self.ghost_position, glm.vec3(1.0, 0.0, 0.0)) # Red brick default
-                
-                # Refresh ghost immediately so it snaps to the new state (or disappears if removed)
+            self._handle_left_click(event)
+            self.update()
+
+    def _handle_left_click(self, event: QMouseEvent):
+        ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera)
+
+        if self.current_tool == Tool.PLACE:
+            self._handle_place_tool(event, ray)
+        elif self.current_tool == Tool.SELECT:
+            self._handle_select_tool(ray)
+        elif self.current_tool == Tool.PAINT:
+            self._handle_paint_tool(ray)
+        elif self.current_tool == Tool.ERASE:
+            self._handle_erase_tool(ray)
+
+    def _handle_place_tool(self, event: QMouseEvent, ray):
+        if self.ghost_position:
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                 # Quick erase override in Place mode
+                hit_pos, _, _ = picking.intersect_model(ray, self.model)
+                if hit_pos:
+                   self.model.remove_brick(hit_pos)
+            else:
+                self.model.add_brick(self.ghost_position, self.current_color)
+                # Refresh ghost immediately
                 self.update_ghost(event.position().x(), event.position().y())
-                self.update()
+
+    def _handle_select_tool(self, ray):
+        hit_pos, _, _ = picking.intersect_model(ray, self.model)
+        self.selected_brick_pos = hit_pos
+
+    def _handle_paint_tool(self, ray):
+        hit_pos, _, _ = picking.intersect_model(ray, self.model)
+        if hit_pos:
+            brick = self.model.get_brick(hit_pos)
+            if brick:
+                brick.color = self.current_color
+                self.model.modified = True
+
+    def _handle_erase_tool(self, ray):
+        hit_pos, _, _ = picking.intersect_model(ray, self.model)
+        if hit_pos:
+            self.model.remove_brick(hit_pos)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         current_pos = event.position()
         
-        # Update Ghost
-        self.update_ghost(current_pos.x(), current_pos.y())
+        # Tool-specific hover logic
+        if self.current_tool == Tool.PLACE:
+             self.update_ghost(current_pos.x(), current_pos.y())
+        else:
+            self.ghost_position = None
 
         if self.last_mouse_pos is not None:
+             # Navigation stays same
             delta = current_pos - self.last_mouse_pos
             self.last_mouse_pos = current_pos
 

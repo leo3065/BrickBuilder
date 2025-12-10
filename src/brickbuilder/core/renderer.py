@@ -19,65 +19,45 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, ghost_position, width, height):
+    def render(self, camera, model, ghost_position, width, height, selected_brick_pos=None, show_grid=True, show_gizmo=True, section_z=None):
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
-        
-        # Debug: Print camera info occasionally
-        if not hasattr(self, 'frame_count'):
-            self.frame_count = 0
-        self.frame_count += 1
-        
-        if self.frame_count % 100 == 0:
-            print(f"Camera distance: {camera.distance}")
-            print(f"Camera pitch: {camera.pitch}, yaw: {camera.yaw}")
-            # Print diagonal of projection matrix to deduce FOV state
-            # proj[0][0] = f / aspect
-        # if not hasattr(self, 'frame_count'):
-        #     self.frame_count = 0
-        # self.frame_count += 1
-        
-        # if self.frame_count % 100 == 0:
-        #     print(f"Camera distance: {camera.distance}")
-        #     print(f"Camera pitch: {camera.pitch}, yaw: {camera.yaw}")
-        #     # Print diagonal of projection matrix to deduce FOV state
-        #     # proj[0][0] = f / aspect
-        #     # proj[1][1] = f  (where f = cot(fov/2))
-        #     p = np.array(proj).flatten()
-        #     print(f"Proj[0][0]: {p[0]}, Proj[1][1]: {p[5]}")
-        
-        # GLM is column-major. np.array(glm_mat) yields [[col0], [col1]...].
-        # However, it seems when converting to numpy 4x4, we get rows consistent with C-order.
-        # OpenGL expects Column-Major flat list.
-        # If we have rows, we need to transpose to get columns.
-        # This fixes the "perspective distortion in ortho" (translation ending up in W).
-        
+
         w = camera.scale * camera.aspect_ratio
         h = camera.scale
         
         gl.glMatrixMode(gl.GL_PROJECTION)
         gl.glLoadIdentity()
-        # Left, Right, Bottom, Top, Near, Far
-        # Camera near/far are positive distances from eye. glOrtho uses Z values. 
-        # In Camera space, looking down -Z. 
-        # But glOrtho standard maps zNear/zFar to -1, 1 depth.
-        # Let's simple use glOrtho directly.
         gl.glOrtho(-w/2, w/2, -h/2, h/2, camera.near_plane, camera.far_plane)
         
         gl.glMatrixMode(gl.GL_MODELVIEW)
-        # Use Transpose load which expects Row-Major data (what numpy gives us naturally)
-        gl.glLoadTransposeMatrixf(np.array(view, dtype=np.float32).flatten())
+        gl.glMultiplyMatrixf(np.array(view, dtype=np.float32).flatten())
+        
+        # Section View (Clipping Plane)
+        if section_z is not None:
+             # Plane equation: Ax + By + Cz + D = 0
+             # We want to clip everything ABOVE section_z.
+             # So we want to KEEP everything where z <= section_z.
+             # Or: 0x + 0y - 1z + section_z >= 0  => -z >= -section_z => z <= section_z
+             # Equation: (0, 0, -1, section_z)
+             
+             # Note: glClipPlane transforms the plane equation by the inverse of the current modelview matrix 
+             # when it is specified. So it becomes fixed in eye coordinates.
+             # We want it fixed in World Coordinates (Z axis).
+             # So we should set it while ModelView is just the View matrix (which it is now).
+             
+             plane = [0.0, 0.0, -1.0, float(section_z)]
+             gl.glClipPlane(gl.GL_CLIP_PLANE0, plane)
+             gl.glEnable(gl.GL_CLIP_PLANE0)
         
         gl.glDisable(gl.GL_LIGHTING)
-        self.draw_grid()
-        # self.draw_origin_marker() # Removed as requested
-        # self.draw_axis() # Moved to gizmo
+        if show_grid:
+            self.draw_grid()
         gl.glEnable(gl.GL_LIGHTING)
         
         # Render Bricks
-        # Offset all bricks by Z+0.5 so Z=0 index sits ON the grid
         gl.glPushMatrix()
         gl.glTranslatef(0, 0, 0.5)
         
@@ -86,10 +66,35 @@ class Renderer:
         if ghost_position:
             self.render_ghost(ghost_position)
             
+        if selected_brick_pos:
+            self.render_selection(selected_brick_pos)
+            
         gl.glPopMatrix()
         
+        if section_z is not None:
+            gl.glDisable(gl.GL_CLIP_PLANE0)
+        
         # Draw Gizmo
-        self.draw_orientation_gizmo(camera, width, height)
+        if show_gizmo:
+            self.draw_orientation_gizmo(camera, width, height)
+
+    def render_selection(self, pos):
+        # Draw a wireframe box around the selected brick
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
+        
+        gl.glLineWidth(3.0)
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+        
+        gl.glBegin(gl.GL_QUADS)
+        gl.glColor3f(1.0, 1.0, 0.0) # Yellow
+        self.draw_cube(pos.x, pos.y, pos.z)
+        gl.glEnd()
+        
+        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+        gl.glLineWidth(1.0)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glEnable(gl.GL_LIGHTING)
 
     def draw_orientation_gizmo(self, camera, width, height):
         gizmo_size = 150

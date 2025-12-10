@@ -3,22 +3,21 @@ import math
 
 class Camera:
     def __init__(self):
+        self.reset()
+        
+    def reset(self):
         self.target = glm.vec3(0.0, 0.0, 0.0)
         self.distance = 50.0 # Keep camera far enough back
         self.yaw = -math.pi / 4  # 45 degrees
         self.pitch = math.pi / 6 # 30 degrees
-        
-        # Orthographic scale (vertical size of the view in world units)
-        self.scale = 20.0 
-        self.aspect_ratio = 16/9
-        self.near_plane = -100.0 # Ortho can see behind locally if needed, but usually 0 or negative relative to eye is fine if eye is far. 
-        # But lookAt places eye at +distance. So we want near/far relative to that.
-        # Let's use standard near/far.
-        self.near_plane = 0.1
-        self.far_plane = 500.0
+        self.scale = 20.0
         
         # Up vector for the world (Z-up)
         self.world_up = glm.vec3(0.0, 0.0, 1.0) # Z is up
+        
+        self.aspect_ratio = 16/9
+        self.near_plane = 0.1
+        self.far_plane = 500.0
         
     def get_view_matrix(self):
         x = self.distance * math.cos(self.pitch) * math.cos(self.yaw)

@@ -3,15 +3,17 @@ A Python-based GUI program for building and designing 3D brick models.
 
 ## Feature plan
 ### Basic
-- [ ] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Cooridnate system: +X is Right, +Y is Forward, +Z is Up.
-- [ ] Building using 1x1x1 brick blocks (use cube shape for now) that snaps to grid, including adding, removing, and moving blocks. When adding, the new block will be placed on the face of the selected block, or on the grid if no block is selected. Keep the outline of the model clean.
-- [ ] A save/load function to save the current model and load a saved model.
-- [ ] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.
-- [ ] When in placing mode, showing a preview of the brick block to be placed.
-- [ ] Allowing selecing the color of the brick blocks, both before building and after building.
+- [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Cooridnate system: +X is Right, +Y is Forward, +Z is Up.
+- [x] Building using 1x1x1 brick blocks (use cube shape for now) that snaps to grid, including adding, removing, and moving blocks. When adding, the new block will be placed on the face of the selected block, or on the grid if no block is selected. Keep the outline of the model clean.
+- [x] A save/load function to save the current model and load a saved model.
+- [x] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.
+- [x] When in placing mode, showing a preview of the brick block to be placed.
+- [x] Allowing selecing the color of the brick blocks, both before building and after building.
 - [ ] Allowing section view of the model, especially vewing blocks under a selected layer. Makes it easy to go though layers.
 - [ ] Multi-select function for various operations, such as moving, removing, and color changing. 
-- [ ] Adding a color palette manu for brick colors, with the ability to add custom colors, as well as exporting and importing color palettes.
+- [x] Adding a color palette manu for brick colors.
+- [ ] Ability to add custom colors to the palette.
+- [ ] Exporting and importing color palettes.
 - [ ] Allowing semi-transparent brick blocks.
 - [ ] Customizable grid dimentions (default to wxdxh: 4mm x 4mm x 3mm).
 - [ ] Adding support for data-driven brick block shape and size definition.

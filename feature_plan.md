@@ -22,8 +22,8 @@ A Python-based GUI program for building and designing 3D brick models.
 - [ ] Adding support half-brick offset brick placement that can be toggled on and off.
 
 ### Intermediate
-- [ ] Allowing fine rotation of brick blocks around its Z axis in 7.5 degrees increment.
-- [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block. New blocks built on the rotated block will snap to the same grid as the rotated block.
+- [ ] Allowing fine rotation of brick blocks around its Z axis in 7.5 degrees increment. New blocks built on the rotated block will snap to the same grid as the rotated block.
+- [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
 - [ ] Allowing snapping a block to the same grid as another block.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
 - [ ] Add a view option that highlights the colliding blocks.

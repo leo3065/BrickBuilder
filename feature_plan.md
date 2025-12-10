@@ -9,7 +9,7 @@ A Python-based GUI program for building and designing 3D brick models.
 - [x] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.
 - [x] When in placing mode, showing a preview of the brick block to be placed.
 - [x] Allowing selecing the color of the brick blocks, both before building and after building.
-- [ ] Allowing section view of the model, especially vewing blocks under a selected layer. Makes it easy to go though layers.
+- [ ] Allowing section view of the model, especially viewing blocks under a selected layer. Makes it easy to go though layers.
 - [ ] Multi-select function for various operations, such as moving, removing, and color changing. 
 - [x] Adding a color palette manu for brick colors.
 - [ ] Ability to add custom colors to the palette.
@@ -26,7 +26,7 @@ A Python-based GUI program for building and designing 3D brick models.
 - [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block. New blocks built on the rotated block will snap to the same grid as the rotated block.
 - [ ] Allowing snapping a block to the same grid as another block.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
-- [ ] Add a veiw option that highlights the colliding blocks.
+- [ ] Add a view option that highlights the colliding blocks.
 - [ ] Allowing rotating 2 blocks around their Z axis to the same grid with minimal rotation.
 - [ ] Allowing free rotating 2 ball joint blocks to the same grid with minimal rotation.
 

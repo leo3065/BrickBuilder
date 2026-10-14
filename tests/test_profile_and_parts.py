@@ -83,3 +83,12 @@ def test_studs_derived_and_hidden_by_bodies():
     assert sorted(p.studs) == [(0, 0, 1), (1, 0, 0)]
     flat = part_from_dict("t:f", "", {"name": "F", "body": [{"shape": "box", "size": [1, 2, 1], "studs": "none"}]})
     assert flat.studs == ()
+
+
+def test_base_plates():
+    lib = load_builtin_library("nanoblock")
+    for size in (10, 20):
+        plate = lib[f"nanoblock:plate_{size}x{size}"]
+        assert plate.category == "Plates"
+        assert len(plate.cells) == size * size and {c[2] for c in plate.cells} == {0}  # brick height
+        assert len(plate.studs) == size * size                                        # every top cell

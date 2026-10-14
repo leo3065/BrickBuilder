@@ -64,8 +64,8 @@ Naming notes:
 | 2x6 : Base of wheel | | | | the only 2×6 on the site (no plain 2×6 brick exists) |
 | 2x8 : 1/2A2 | 23 | `brick_2x8` | NB208 | plain 2×8 |
 | 4x4 : Tire | 45 | | NB404W ❓ | large wheel |
-| 10x10 : 1/2P1010 | 1 | | NB10Base | base plate |
-| 20x20 : 1/2P2020 | 2 | | NB20Base | base plate |
+| 10x10 : 1/2P1010 | 1 | `plate_10x10` | NB10Base | base plate: brick height, studs on every cell |
+| 20x20 : 1/2P2020 | 2 | `plate_20x20` | NB20Base | base plate: brick height, studs on every cell |
 | 20x20 : holed | | | | base plate with holes |
 
 Special parts without a picture on the list page: Nanoid Face, Nanoid Hair, MotorUnitCover,

@@ -99,6 +99,13 @@ def test_outline_follows_the_merged_shape(profile, library, name, edges):
     assert len(part_outline(lib(library, name).bodies, profile.subdiv)) == edges
 
 
+def test_single_box_shortcut_matches_general_outline(profile):
+    # The lone-box shortcut must give what the general method gives for the same shape
+    one = [Body("box", (0, 0, 0), (2, 4, 1), True)]
+    halves = [Body("box", (0, 0, 0), (2, 2, 1), True), Body("box", (0, 2, 0), (2, 2, 1), True)]
+    assert sorted(part_outline(one, profile.subdiv)) == sorted(part_outline(halves, profile.subdiv))
+
+
 def test_no_seam_between_box_and_wedge(profile, library):
     segs = part_outline(lib(library, "slope_1x2").bodies, profile.subdiv)
     # On the side face x=0, the box top edge under the triangle (y 0..2 sub-cells at z=1) is a seam

@@ -356,6 +356,14 @@ def _primitive(v: Sequence[Fraction]) -> Int3:
 
 def part_outline(bodies: Sequence[Body], subdiv: Int3) -> List[Tuple[Vec3, Vec3]]:
     """Outline segments of a part's merged shape, in part sub-grid coordinates (before turning)."""
+    if len(bodies) == 1 and bodies[0].kind == "box":
+        # Shortcut: a lone box is just its 12 edges (big plates would take seconds otherwise)
+        b = bodies[0]
+        lo = [float(b.lo[i] * subdiv[i]) for i in range(3)]
+        hi = [float((b.lo[i] + b.size[i]) * subdiv[i]) for i in range(3)]
+        corners = [(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]
+        return [(p, q) for i, p in enumerate(corners) for q in corners[i + 1:]
+                if sum(1 for k in range(3) if p[k] != q[k]) == 1]
     regions = dict(part_regions(bodies, subdiv))
     # 1. piece faces
     pieces: Dict[Int3, Dict[object, List[FPoint]]] = {}

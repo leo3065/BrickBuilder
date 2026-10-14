@@ -86,20 +86,42 @@ cover irregular layouts later (single-stud parts such as NB102S/NB202S1).
 **Slope profile ✅:** seen from the side, a slope is a box (base) plus a right triangle sitting on
 it, extruded along the other horizontal axis. Studs aren't part of the outline. ✅ Ignoring studs,
 the triangle is always one of the two halves of an **m (cells) × n (layers) rectangle** cut along
-its diagonal, so its corners are whole numbers on the sub-grid. Parameters: base size, the
-triangle's run (m) and rise (n), and which way the vertical face points. Inverted slopes hang the
-triangle below instead. A sketch, not final:
+its diagonal, so its corners are whole numbers on the sub-grid. Inverted slopes keep the upper
+half instead (solid top, sloped underside).
+
+So the body type is a **wedge**: a box cut along its diagonal, keeping the lower or upper half.
+A slope part is a box body plus a wedge body (sketch, not final):
 ```toml
+# NB102A, 1x2 slope: 1x2x1 base; on one cell a lower triangle 1 cell x 1 layer,
+# its vertical face at the part's centre (the slope faces away from the centre)
 [[body]]
-shape = "slope"
-size = [1, 2, 1]        # base box
-rise = 1                # layers (n)
-run = [0, 1]            # the part of the base the triangle sits on (cell range along the slope axis)
-high_side = "+y"        # direction of the triangle's vertical face
+shape = "box"
+size = [1, 2, 1]
+[[body]]
+shape = "wedge"
+size = [1, 1, 1]        # m x n of the rectangle, extruded across the slope
+at = [0, 0, 1]
+keep = "lower"          # lower = solid bottom, sloped top; upper = solid top, sloped underside
+tall = "+y"             # side where the wedge is full height
+
+# NB102B, inverted 1x2: one full cell, beside it an upper triangle 1 x 1, tall next to the box
+[[body]]
+shape = "box"
+size = [1, 1, 1]
+[[body]]
+shape = "wedge"
+size = [1, 1, 1]
+at = [0, 1, 0]
+keep = "upper"
+tall = "-y"
 ```
-❓ The LDraw NB10202A (1×2×2 slope) peaks at 2 layers **+ a stud height**, which doesn't fit the
-rule. To check on a real part: total height ≈ 6.25 mm (fits; LDraw is drawn too tall) or ≈ 8.25 mm
-(needs an exception).
+NB10202A (1×2×2 slope) and NB10202V (1×2×2 offset, inverted) are the same with wedge size
+`[1, 1, 2]`: a 2-layer triangle, so NB10202A peaks 3 layers above its bottom. ✅ This resolves the
+earlier question: the LDraw NB10202A is drawn 2.5 LDU (1 mm) too short.
+
+Each pair (NB102A + NB102B, NB10202A + NB10202V) fits together because the two wedges are the same
+rectangle cut along the same diagonal, on opposite sides; complementary wedges have both `keep`
+and `tall` flipped. Studs: a lower wedge's sloped top has none; an upper wedge's flat top does.
 
 **Connections ✅:** a normal slope's sloped top is solid: no studs, and nothing attaches to it. An
 **inverted slope's underside is open** (walls only on the sides, none along the slope), so it has

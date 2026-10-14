@@ -116,10 +116,7 @@ tests/               pytest suite
   XY); arrow keys nudge it half a cell along the world axis nearest the screen direction, and
   the nudge resets when the target changes.
 - Palette RGB values are eyeballed approximations; clear colors render opaque.
-- README still describes a generic "brick building app" with "standard brick colors";
-  should eventually state the Nanoblock-first / system-agnostic scope above.
-- README/help say **Alt+Left orbit** and **Shift+Alt+Left pan**; the viewport only
-  handles the middle button, and Alt+Left actually goes through the active tool.
+- Camera controls are middle mouse only (README and Help match); Alt+Left goes to the active tool.
 - **Section view**: `Renderer.render(section_z=...)` supports a clip plane, but the
   viewport never passes it and there's no UI for it.
 - Selection in SELECT mode is display-only; `set_current_color` has a stub for

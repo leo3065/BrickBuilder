@@ -317,8 +317,8 @@ class MainWindow(QMainWindow):
         
         controls = """
         <b>Camera:</b><br>
-        - Orbit: Middle Mouse (or Alt + Left)<br>
-        - Pan: Shift + Middle Mouse (or Shift + Alt + Left)<br>
+        - Orbit: Middle Mouse drag<br>
+        - Pan: Shift + Middle Mouse drag<br>
         - Zoom: Scroll Wheel<br>
         <br>
         <b>Tools:</b><br>
@@ -330,6 +330,10 @@ class MainWindow(QMainWindow):
         - Select (W): Click to select brick.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>
+        <br>
+        <b>Edit / File:</b><br>
+        - Undo: Ctrl+Z; Redo: Ctrl+Y or Ctrl+Shift+Z<br>
+        - New: Ctrl+N; Open: Ctrl+O; Save: Ctrl+S; Save As: Ctrl+Shift+S<br>
         """
         
         lbl = QLabel(controls)

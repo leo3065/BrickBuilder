@@ -1,44 +1,68 @@
 # BrickBuilder
 
-A Python-based 3D brick building application built with PySide6 and OpenGL.
+A desktop app for designing models in **Nanoblock** micro bricks, built with PySide6 and OpenGL.
+
+Brick CAD tools ship Lego part libraries and grids, and voxel editors handle slopes, half-offset
+layers and ball joints poorly. BrickBuilder works on Nanoblock's own grid (4 × 4 mm cells,
+3.125 mm per layer, measured) with Nanoblock parts and colours. Grid sizes, parts and colours are
+data, not code, so other micro-brick systems could be added without changing the program.
 
 ## Features
-- **3D Viewport**: Smooth 3D navigation with Orbit, Pan, and Zoom.
-- **Brick Placement**: Intuitive snap-to-grid placement system.
-- **Tools**:
-  - **Place (Q)**: Add blocks. (Hold Ctrl to remove).
-  - **Select (W)**: Select blocks to view details.
-  - **Paint (E)**: Color blocks with a palette.
-  - **Erase (R)**: Remove blocks.
-- **Color Palette**: Choose from standard brick colors.
-- **Save/Load**: Persist your creations to JSON files.
+- **3D view** with orbit, pan and zoom, orthographic, Z up, and a grid on the ground plane.
+- **Parts** in groups:
+  - **Bricks:** 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8.
+  - **Slopes:** 1×2, 1×2×2, 1×3, 2×2, 2×3, 2×4, plus the inverted 1×2 and 1×2×2. A slope and its
+    inverted partner can share a cell, as in two-colour patterns from real sets.
+  - **Plates:** 10×10 and 20×20 base plates.
+- **Placement preview** that turns red when a part would overlap something.
+- **Rotation** in 90° steps, a choice of which cell of the part sits under the cursor, and
+  **half-offset placement**.
+- **The 45 official Nanoblock colours.** Colour names come from nanoblock.info; the RGB values
+  are approximate.
+- **Undo/redo**, Save / Save As, and a prompt before closing with unsaved changes.
 
-## Getting Started
+See [`feature_plan.md`](feature_plan.md) for what's planned next.
 
-### Prerequisites
-- Python 3.13+
-- [`uv`](https://github.com/astral-sh/uv) package manager
+## Getting started
+Requires Python 3.13+ and [`uv`](https://github.com/astral-sh/uv).
 
-### Installation
-1. Clone the repository.
-2. Install dependencies:
-   ```bash
-   uv sync
-   ```
+```bash
+uv sync
+```
 
-### Running
-Start the application:
 ```bash
 uv run run_app.py
+```
+
+Run the tests with:
+
+```bash
+uv run pytest
 ```
 
 ## Controls
 
 ### Camera
-- **Orbit**: `Alt + Left Click` (or Middle Mouse)
-- **Pan**: `Shift + Alt + Left Click` (or Shift + Middle Mouse)
-- **Zoom**: `Scroll Wheel`
+- **Orbit:** middle mouse drag
+- **Pan:** Shift + middle mouse drag
+- **Zoom:** scroll wheel
 
-### General
-- **Tools**: Keys `Q`, `W`, `E`, `R` to switch tools.
-- **File**: `Ctrl+N` (New), `Ctrl+O` (Open), `Ctrl+S` (Save).
+### Tools
+- **Place (Q):** click to place the part chosen in the Parts list. Ctrl + click removes a part.
+  - **Space / Shift+Space:** rotate the part 90°.
+  - **A / Shift+A:** choose which of its cells sits under the cursor (starts nearest the centre).
+  - **H:** toggle half-cell snapping. **Arrow keys:** nudge the preview half a cell.
+- **Select (W):** click to select a part.
+- **Paint (E):** click to recolour a part with the current colour.
+- **Erase (R):** click to remove a part.
+
+### Edit and file
+- **Undo:** Ctrl+Z. **Redo:** Ctrl+Y or Ctrl+Shift+Z.
+- **New:** Ctrl+N. **Open:** Ctrl+O. **Save:** Ctrl+S. **Save As:** Ctrl+Shift+S.
+- **Help:** F1.
+
+## Documentation
+- [`docs/part_format.md`](docs/part_format.md): design and file formats for system profiles,
+  part definitions, the part library and save files, plus the measured Nanoblock dimensions.
+- [`docs/nanoblock_parts.md`](docs/nanoblock_parts.md): the real Nanoblock part list from
+  nanoblock.info, matched to LDraw files and BrickBuilder part ids.

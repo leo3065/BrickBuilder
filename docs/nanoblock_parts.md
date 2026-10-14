@@ -61,7 +61,7 @@ Naming notes:
 | 2x4 : 1/2A | 31 | `brick_2x4` | NB204 | plain 2×4 |
 | 2x4 : flat | 28 | | NB204F | 2×4, no studs |
 | 2x4 : Slope 1 | 35 | `slope_2x4` | NB204A | |
-| 2x6 : Base of wheel | | | | the only 2×6 on the site, see below |
+| 2x6 : Base of wheel | | | | the only 2×6 on the site (no plain 2×6 brick exists) |
 | 2x8 : 1/2A2 | 23 | `brick_2x8` | NB208 | plain 2×8 |
 | 4x4 : Tire | 45 | | NB404W ❓ | large wheel |
 | 10x10 : 1/2P1010 | 1 | | NB10Base | base plate |
@@ -72,5 +72,4 @@ Special parts without a picture on the list page: Nanoid Face, Nanoid Hair, Moto
 Puddle, Charger, Chassis, Railway wheel, Nanobbit, Miffy (Nijntje), LED PLATE,
 LED PLATE : Optical fiber, LED PLATE : USB.
 
-❓ **`brick_2x6`** is in our starter set, but the site's only 2×6 is "Base of wheel" (and LDraw
-has no 2×6). Check whether a plain 2×6 brick exists before relying on it.
+There is no plain 2×6 brick, so the starter set doesn't include one (`brick_2x6` was removed).

@@ -249,7 +249,7 @@ Model        # parts: dict[id, PlacedPart]; occupancy: dict[sub-cell, part id]
 1. Profile file + a single cell-to-world function used by the renderer, picking and camera →
    4×4×3 rendering.
 2. Parts limited to `box` with derived studs; occupancy map; placed-part model; save v2.
-   Starter set ✅: 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×6, 2×8.
+   Starter set ✅: 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8 (no plain 2×6 exists).
 3. Library panel.
 4. Modifiers, slopes, mesh bodies, explicit sockets → frames, fine rotation, ball joints.
 

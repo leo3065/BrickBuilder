@@ -56,7 +56,7 @@ def test_bad_profiles_rejected(overrides, message):
 def test_starter_library():
     lib = load_builtin_library("nanoblock")
     sizes = sorted(k.split("_")[1] for k, p in lib.items() if p.category == "Bricks")
-    assert sizes == sorted(["1x1", "1x2", "1x3", "1x4", "1x6", "2x2", "2x3", "2x4", "2x6", "2x8"])
+    assert sizes == sorted(["1x1", "1x2", "1x3", "1x4", "1x6", "2x2", "2x3", "2x4", "2x8"])
     b = lib["nanoblock:brick_2x4"]
     assert b.name == "Brick 2×4" and b.category == "Bricks" and b.ldraw == "NB204.dat"
     assert len(b.cells) == 8 and len(b.studs) == 8

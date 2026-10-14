@@ -12,8 +12,12 @@ diamond blocks, other micro-bricks). Rule of thumb:
 - Anything that differs between systems lives in **data**, not code: cell dimensions,
   stud pitch, offset step (half-unit), allowed rotation steps, part definitions, palette.
   Think of it as a "system profile" with Nanoblock as the only shipped profile.
-- Don't hard-code Nanoblock numbers (4/4/3, 0.5 offset, 7.5°) in rendering/picking/model
-  code; read them from the profile.
+- Don't hard-code Nanoblock numbers (4/4/3, 0.5 offset) in rendering/picking/model
+  code; read them from the profile. The 7.5° rotation step is an arbitrary **editor snap
+  setting**, not a system property — it doesn't belong in the profile.
+- Design for profiles / part definitions / library / save v2: `docs/part_format.md`
+  (TOML, cell units, derived studs, sockets with DOF, frames). Parametric part families
+  are deliberately deferred — `params` key reserved only.
 - Don't build features only another system needs (Lego plates at 1/3 height, SNOT,
   Technic, profile-switching UI) until there's an actual second system to support.
 
@@ -24,9 +28,12 @@ point); two-sided wing color vs resolution/strength. Wing support borrows from t
 Koraidon/Miraidon sets (regular + sloped bricks bracing beyond the joints).
 
 ## Nanoblock domain facts
-- 1×1 unit = **4 mm × 4 mm × 3 mm** (W × D × H, studs excluded). The widely quoted
-  "4×4×5" figure wrongly includes stud height. Lego is 5×5×4 for comparison.
-- So a unit cell is **not a cube**: height/width = 0.75. Anything doing proportions,
+- 1×1 unit is nominally **4 mm × 4 mm × 3 mm** (W × D × H, studs excluded); the widely
+  quoted "4×4×5" figure includes the 2 mm stud. Lego is 5×5×4 for comparison.
+  Measured (see `docs/part_format.md`): stud pitch 4.00, **stacking pitch 3.125**
+  (single body 3.05 + seating gap), stud Ø2.65 × 2.00 solid. Use the stacking pitch for
+  proportions.
+- So a unit cell is **not a cube**: height/width ≈ 0.78. Anything doing proportions,
   rendering or import/voxelization must respect this.
 - Half-unit offset placement, slopes, multi-cell bricks, 90° Z rotation and ball joints
   are all real Nanoblock techniques the tool needs to support eventually
@@ -96,7 +103,7 @@ Planned features break that:
   footprint; keep a separate occupancy map (cell → brick) for collisions and picking.
 - half-brick offsets → consider an internal half-unit grid (double resolution) rather
   than float positions.
-- fine Z rotation (7.5°), ball joints and per-part grids → bricks belong to a
+- fine Z rotation (UI-snapped, default 7.5°), ball joints and per-part grids → bricks belong to a
   "grid frame" (transform); the global grid becomes just the root frame.
 - non-cube cells (4×4×3) → a single place for cell-to-world scale used by renderer,
   picking and camera, sourced from the system profile.

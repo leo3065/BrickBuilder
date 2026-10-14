@@ -62,7 +62,7 @@ src/brickbuilder/
                      outlines), ghost, selection, axis gizmo, optional Z clip plane (section_z)
   core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE
   ui/main_window.py  Menus (Edit > Rotate: Space / Shift+Space, anchor: A / Shift+A), tool toolbar (Q/W/E/R), parts +
-                     color docks, status bar, file dialogs, unsaved prompt
+                     color docks, status bar, Save/Save As (current file + title marker), close prompt
   ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview (red = overlap)
   profiles/*.toml    Built-in system profiles (nanoblock.toml, incl. 45-color palette)
   parts/<profile>/<Category>/<name>.toml   Built-in parts; id = "<profile>:<file stem>"
@@ -89,7 +89,8 @@ tests/               pytest suite
 - Ground placement only happens when the ray points downward; layer 0 sits on the grid.
 - Save format v2 (see `docs/part_format.md`): `{version, profile, frames, parts: [{id, part,
   frame, pos (cells, 0.5 allowed), turns, color}]}`. v1 (`bricks` with float RGB) still loads
-  as 1×1 bricks. Bad files raise `ModelError` and leave the model untouched. Bump `version`
+  as 1×1 bricks. Bad files raise `ModelError` and leave the model untouched. Saving writes a `.tmp` file
+  and swaps it in, so a failed save never truncates the existing file. Bump `version`
   and keep older loader paths when the schema changes.
 - Type hints are used throughout; `glm` (PyGLM) types for vectors.
 
@@ -110,8 +111,6 @@ tests/               pytest suite
   handles the middle button, and Alt+Left actually goes through the active tool.
 - **Section view**: `Renderer.render(section_z=...)` supports a clip plane, but the
   viewport never passes it and there's no UI for it.
-- **Ctrl+S is always "Save As"**: no current-file tracking.
-- No `closeEvent`, so closing the window skips the unsaved-changes prompt.
 - Selection in SELECT mode is display-only; `set_current_color` has a stub for
   repainting the selection.
 - Picking iterates every part (fine at small scale); the renderer calls one cached display

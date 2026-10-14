@@ -125,6 +125,21 @@ def test_save_roundtrip_including_half_offset(model, library, profile, tmp_path)
     assert loaded.add_part(part(library, "1x1"), (10, 10, 0), 0, "red").id == 3
 
 
+def test_failed_save_keeps_old_file(model, library, tmp_path, monkeypatch):
+    path = tmp_path / "m.json"
+    path.write_text("old contents", encoding="utf-8")
+    model.add_part(part(library, "1x1"), (0, 0, 0), 0, "red")
+
+    def boom(*_):
+        raise OSError("disk full")
+    monkeypatch.setattr("brickbuilder.core.model.os.replace", boom)
+    with pytest.raises(OSError):
+        model.save_to_file(str(path))
+    assert path.read_text(encoding="utf-8") == "old contents"
+    assert not (tmp_path / "m.json.tmp").exists()
+    assert model.modified
+
+
 @pytest.mark.parametrize("mutate, message", [
     (lambda d: d.update(version=99), "version"),
     (lambda d: d.update(profile="lego"), "profile"),

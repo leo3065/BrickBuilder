@@ -6,7 +6,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Coordinate system: +X is Right, +Y is Forward, +Z is Up.
 - [x] Building with parts that snap to the grid, including adding and removing them. When adding, the new part goes against the face under the cursor, or on the grid if nothing is under the cursor. Keep the outline of the model clean.
 - [x] A save/load function to save the current model and load a saved model.
-- [ ] Save (to the current file) as well as Save As, and the unsaved-changes prompt when closing the window.
+- [x] Save (to the current file) as well as Save As, and the unsaved-changes prompt when closing the window.
 - [x] Undo/redo.
 - [ ] Preferences dialog, saved per user: undo history size (fixed at 500 for now), rotation snap angle (default 7.5°) and similar editor settings.
 - [ ] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.

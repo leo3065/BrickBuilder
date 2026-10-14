@@ -1,6 +1,8 @@
 from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QListWidget, QListWidgetItem
 from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
 from PySide6.QtCore import Qt, QSize
+from pathlib import Path
+from typing import Optional
 from brickbuilder.ui.viewport import Viewport
 from brickbuilder.core.tools import Tool
 from brickbuilder.core.model import anchor_cells
@@ -8,7 +10,7 @@ from brickbuilder.core.model import anchor_cells
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("BrickBuilder")
+        self.current_file: Optional[str] = None # where Save writes; None = never saved
         self.resize(1280, 720)
 
         self.viewport = Viewport()
@@ -42,10 +44,16 @@ class MainWindow(QMainWindow):
         file_menu.addAction(open_action)
         
         # Save
-        save_action = QAction("Save As...", self)
+        save_action = QAction("Save", self)
         save_action.setShortcut(QKeySequence.Save)
         save_action.triggered.connect(self.save_file)
         file_menu.addAction(save_action)
+
+        # Save As
+        save_as_action = QAction("Save As...", self)
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self.save_file_as)
+        file_menu.addAction(save_as_action)
 
         # Edit Menu
         edit_menu = menu_bar.addMenu("Edit")
@@ -293,10 +301,23 @@ class MainWindow(QMainWindow):
         history = self.viewport.history
         self.undo_action.setEnabled(history.can_undo())
         self.redo_action.setEnabled(history.can_redo())
+        self.update_title()
+
+    def update_title(self):
+        # [*] is where Qt shows the unsaved-changes marker
+        name = Path(self.current_file).name if self.current_file else "Untitled"
+        self.setWindowTitle(f"{name}[*] - BrickBuilder")
+        self.setWindowModified(self.viewport.model.modified)
+
+    def closeEvent(self, event):
+        if self.check_unsaved_changes():
+            event.accept()
+        else:
+            event.ignore()
 
     def check_unsaved_changes(self) -> bool:
         if self.viewport.model.modified:
-            msg = QMessageBox()
+            msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Warning)
             msg.setText("The document has been modified.")
             msg.setInformativeText("Do you want to save your changes?")
@@ -312,28 +333,45 @@ class MainWindow(QMainWindow):
 
     def new_file(self) -> None:
         if self.check_unsaved_changes():
+            self.current_file = None
             self.viewport.reset_scene()
 
     def open_file(self) -> None:
         if not self.check_unsaved_changes():
             return
             
-        filename, _ = QFileDialog.getOpenFileName(self, "Open Model", "", "JSON Files (*.json)")
+        filename, _ = QFileDialog.getOpenFileName(self, "Open Model", self._dialog_dir(), "JSON Files (*.json)")
         if filename:
             try:
                 self.viewport.model.load_from_file(filename)
-                self.viewport.model_replaced()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not load file:\n{e}")
+                return
+            self.current_file = filename
+            self.viewport.model_replaced()
 
     def save_file(self) -> bool:
-        filename, _ = QFileDialog.getSaveFileName(self, "Save Model", "", "JSON Files (*.json)")
-        if filename:
-            try:
-                self.viewport.model.save_to_file(filename)
-                self.viewport.history.mark_clean()
-                return True
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Could not save file:\n{e}")
-                return False
-        return False
+        # Save to the current file; the first save of a new document asks for a name
+        if self.current_file is None:
+            return self.save_file_as()
+        return self._write(self.current_file)
+
+    def save_file_as(self) -> bool:
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Model", self._dialog_dir(), "JSON Files (*.json)")
+        if not filename:
+            return False
+        return self._write(filename)
+
+    def _write(self, filename: str) -> bool:
+        try:
+            self.viewport.model.save_to_file(filename)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not save file:\n{e}")
+            return False
+        self.current_file = filename
+        self.viewport.history.mark_clean()
+        self.update_title()
+        return True
+
+    def _dialog_dir(self) -> str:
+        return str(Path(self.current_file).parent) if self.current_file else ""

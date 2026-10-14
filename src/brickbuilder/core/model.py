@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 import json
+import os
 import glm
 from brickbuilder.core.parts import PartDef
 from brickbuilder.core.profile import Profile
@@ -289,8 +290,16 @@ class Model:
                 raise ModelError(f"{where}: overlaps another part")
 
     def save_to_file(self, filename: str) -> None:
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2)
+        # Write to a temporary file and swap it in, so a failed save never truncates the old file
+        data = json.dumps(self.to_dict(), indent=2)
+        tmp = f"{filename}.tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(data)
+            os.replace(tmp, filename)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
         self.modified = False
 
     def load_from_file(self, filename: str) -> None:

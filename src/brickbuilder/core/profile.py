@@ -62,6 +62,13 @@ class Profile:
             (sub[2] / nz) * self.cell.z,
         )
 
+    def world_to_sub(self, point: glm.vec3) -> Tuple[float, float, float]:
+        """Inverse of sub_to_world: continuous sub-grid coordinates of a world point."""
+        nx, ny, nz = self.subdiv
+        return ((point.x / self.cell.x + 0.5) * nx,
+                (point.y / self.cell.y + 0.5) * ny,
+                point.z / self.cell.z * nz)
+
     def cell_to_sub(self, index) -> Tuple[int, int, int]:
         """Sub-cell at the minimum corner of cell `index`."""
         nx, ny, nz = self.subdiv

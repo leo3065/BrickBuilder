@@ -24,7 +24,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Slopes, round parts and mesh bodies (e.g. joints) in part definitions.
 - [ ] A manu for browing brick block library, with a treeview, a thumbnail preview for the brick blocks, and mark-as-favorite function. 
 - [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.
-- [ ] Half-offset placement: a toggle that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell. (The model already supports half-offset positions.)
+- [x] Half-offset placement: a toggle (H) that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell.
 - [ ] Parts list (bill of materials): count of each part per color, e.g. for finding kits that contain them on nanoblock.info.
 - [ ] Highlight parts that aren't connected to anything (e.g. placed against a side face, which is allowed while designing).
 

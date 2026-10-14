@@ -134,8 +134,8 @@ def intersect_aabb(ray: Ray, box_min: glm.vec3, box_max: glm.vec3) -> Optional[T
 
     return t_min, normal
 
-def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optional[glm.vec3], Optional[glm.ivec3]]:
-    # Returns (hit part, face normal, cell just outside the hit face)
+def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optional[glm.vec3], Optional[glm.vec3]]:
+    # Returns (hit part, face normal, hit point); see model.placement_target for where to place
     closest_t = 100000.0
     hit_part = None
     hit_normal = None
@@ -152,10 +152,6 @@ def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optio
                 hit_normal = normal
 
     if hit_part:
-        # The neighbor is the cell under the hit point, nudged just past the face. For a
-        # multi-cell part that's the cell next to the spot that was clicked.
-        hit_point = ray.origin + ray.direction * closest_t
-        neighbor = model.profile.world_to_cell(hit_point + hit_normal * 0.01)
-        return hit_part, hit_normal, neighbor
+        return hit_part, hit_normal, ray.origin + ray.direction * closest_t
 
     return None, None, None

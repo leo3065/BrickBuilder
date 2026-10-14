@@ -3,11 +3,12 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent, QWheelEvent
 import OpenGL.GL as gl
 import glm
+import math
 from typing import Optional, Tuple
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.history import History
-from brickbuilder.core.model import Model, Sub, anchor_cells, default_anchor_index, origin_for_anchor
+from brickbuilder.core.model import Model, Sub, anchor_cells, default_anchor_index, origin_for_anchor, placement_target
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
@@ -41,6 +42,11 @@ class Viewport(QOpenGLWidget):
         self.ghost_pos: Optional[Sub] = None
         self.ghost_valid = False
         self.hover_pos = None # last mouse position over the viewport, for refreshing the ghost
+        # Half-offset placement: snap to half-cells in XY, plus a keyboard nudge (in sub-cells)
+        # that's kept until the cursor moves to a different target
+        self.half_snap = False
+        self.nudge = (0, 0)
+        self._nudge_base = None
 
         self.selected_part_id: Optional[int] = None
 
@@ -210,29 +216,54 @@ class Viewport(QOpenGLWidget):
         ray = picking.get_mouse_ray(mouse_x, mouse_y, self.width(), self.height(), self.camera)
 
         # Check model intersection first
-        hit, normal, neighbor = picking.intersect_model(ray, self.model)
+        hit, normal, point = picking.intersect_model(ray, self.model)
 
-        cell = None
+        target = None
         if hit:
-            # Snap to the cell next to the hit face
-            cell = neighbor
+            # Snap to the cell against the hit face
+            target = placement_target(self.profile, point, normal, self.half_snap)
         elif ray.direction.z < -1e-6:
             # Check ground plane (Z=0) intersection ONLY if looking down
             # Normal (0,0,1), Point (0,0,0)
             t = picking.intersect_plane(ray, glm.vec3(0, 0, 1), glm.vec3(0, 0, 0))
             if t:
-                hit_point = ray.origin + ray.direction * t
                 # Layer 0 sits on the Z=0 grid
-                x, y = self.profile.world_to_cell_xy(hit_point)
-                cell = (x, y, 0)
+                target = placement_target(self.profile, ray.origin + ray.direction * t,
+                                          glm.vec3(0, 0, 1), self.half_snap)
 
-        # The cell under the cursor is where the part's anchor cell goes
+        # A keyboard nudge applies to the spot it was made at; moving elsewhere drops it
+        if target != self._nudge_base:
+            self._nudge_base = target
+            self.nudge = (0, 0)
+
+        # The target cell is where the part's anchor cell goes
         self.ghost_pos = None
         self.ghost_valid = False
-        if cell is not None:
+        if target is not None:
+            target = (target[0] + self.nudge[0], target[1] + self.nudge[1], target[2])
             anchor = anchor_cells(self.current_part)[self.current_anchor]
-            self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, self.profile.cell_to_sub(cell))
+            self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, target)
             self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns)
+
+    def set_half_snap(self, on: bool):
+        self.half_snap = on
+        self.refresh_ghost()
+
+    def nudge_ghost(self, screen_dx: int, screen_dy: int):
+        """Move the preview one sub-cell (half a cell) along the world axis that best matches the
+        screen direction (right = +screen_dx, up = +screen_dy) from the current view."""
+        # Screen-right and screen-up (away from the viewer) projected onto the ground plane
+        right = glm.vec2(-math.sin(self.camera.yaw), math.cos(self.camera.yaw))
+        up = glm.vec2(-math.cos(self.camera.yaw), -math.sin(self.camera.yaw))
+        # Right gets the closer world axis (X on a tie), up gets the other one
+        if abs(right.x) >= abs(right.y):
+            right_axis, up_axis = (int(math.copysign(1, right.x)), 0), (0, int(math.copysign(1, up.y)))
+        else:
+            right_axis, up_axis = (0, int(math.copysign(1, right.y))), (int(math.copysign(1, up.x)), 0)
+        dx = right_axis[0] * screen_dx + up_axis[0] * screen_dy
+        dy = right_axis[1] * screen_dx + up_axis[1] * screen_dy
+        self.nudge = (self.nudge[0] + dx, self.nudge[1] + dy)
+        self.refresh_ghost()
 
     def leaveEvent(self, event):
         self.hover_pos = None

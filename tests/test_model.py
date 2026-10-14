@@ -6,6 +6,7 @@ import pytest
 
 from brickbuilder.core import picking
 from brickbuilder.core.model import (Model, ModelError, anchor_cells, default_anchor_index, footprint, origin_for_anchor,
+                                     placement_target,
                                      v1_color_to_palette)
 from brickbuilder.core.parts import load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
@@ -186,16 +187,36 @@ def test_sample_saves_load(model, sample):
     assert model.parts
 
 
-def test_picking_multicell_part_neighbor(model, library):
+def test_picking_multicell_part_target(model, library, profile):
     model.add_part(part(library, "2x4"), (0, 0, 0), 0, "red")  # cells x 0..1, y 0..3
-    # Straight down onto the cell (1, 2): neighbor is the cell above that spot
+    # Straight down onto cell (1, 2): the target is the cell above that spot
     ray = picking.Ray(glm.vec3(4.0, 8.5, 100), glm.vec3(0, 0, -1))
-    hit, normal, neighbor = picking.intersect_model(ray, model)
-    assert hit is not None and neighbor == glm.ivec3(1, 2, 1)
-    # From the +X side at cell y=3: neighbor is the cell beside it
+    hit, normal, point = picking.intersect_model(ray, model)
+    assert hit is not None
+    assert placement_target(profile, point, normal, half=False) == profile.cell_to_sub((1, 2, 1))
+    # From the +X side at cell y=3: the cell beside it
     ray = picking.Ray(glm.vec3(100, 12.0, 1.0), glm.vec3(-1, 0, 0))
-    hit, normal, neighbor = picking.intersect_model(ray, model)
-    assert neighbor == glm.ivec3(2, 3, 0)
+    hit, normal, point = picking.intersect_model(ray, model)
+    assert placement_target(profile, point, normal, half=False) == profile.cell_to_sub((2, 3, 0))
+
+
+@pytest.mark.parametrize("point, normal, half, expected", [
+    # Ground: whole cells vs half-cell steps (cell 0 spans x -2..2; centres every 2 mm when half)
+    ((1.1, 0.0, 0.0), (0, 0, 1), False, (0, 0, 0)),
+    ((1.1, 0.0, 0.0), (0, 0, 1), True, (1, 0, 0)),     # centre at x=2 is nearest
+    ((0.9, 0.0, 0.0), (0, 0, 1), True, (0, 0, 0)),     # centre at x=0 is nearest
+    ((-3.2, 5.3, 0.0), (0, 0, 1), True, (-2, 3, 0)),   # nearest centres: x=-4, y=6
+    # -X side face of a part whose face is at x=-2: flush against it, whole or half in Y
+    ((-2.0, 4.4, 1.0), (-1, 0, 0), False, (-2, 2, 0)),
+    ((-2.0, 4.4, 1.0), (-1, 0, 0), True, (-2, 2, 0)),
+    ((-2.0, 5.1, 1.0), (-1, 0, 0), True, (-2, 3, 0)),
+    # Bottom face: one layer below
+    ((0.0, 0.0, 0.0), (0, 0, -1), True, (0, 0, -1)),
+    # +X face of a half-offset part (face at x=0, mid-cell): flush at sub-cell 1; Z stays whole
+    ((0.0, 0.0, 4.0), (1, 0, 0), True, (1, 0, 1)),
+])
+def test_placement_target(profile, point, normal, half, expected):
+    assert placement_target(profile, glm.vec3(*point), glm.vec3(*normal), half) == expected
 
 
 def test_picking_hits_part_at_origin(model, library):

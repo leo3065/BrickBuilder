@@ -91,6 +91,23 @@ class MainWindow(QMainWindow):
         anchor_back_action.triggered.connect(lambda: self.cycle_anchor(-1))
         edit_menu.addAction(anchor_back_action)
 
+        edit_menu.addSeparator()
+
+        # Half-offset placement
+        self.half_snap_action = QAction("Half-Cell Snap", self)
+        self.half_snap_action.setCheckable(True)
+        self.half_snap_action.setShortcut("H")
+        self.half_snap_action.toggled.connect(self.set_half_snap)
+        edit_menu.addAction(self.half_snap_action)
+
+        nudge_menu = edit_menu.addMenu("Nudge Preview Half a Cell")
+        for label, key, dx, dy in (("Left", "Left", -1, 0), ("Right", "Right", 1, 0),
+                                   ("Up (away)", "Up", 0, 1), ("Down (toward you)", "Down", 0, -1)):
+            action = QAction(label, self)
+            action.setShortcut(key)
+            action.triggered.connect(lambda _=False, dx=dx, dy=dy: self.nudge(dx, dy))
+            nudge_menu.addAction(action)
+
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
         help_action = QAction("Controls", self)
@@ -135,6 +152,9 @@ class MainWindow(QMainWindow):
         toolbar.addAction(erase_action)
         self.erase_action = erase_action
 
+        toolbar.addSeparator()
+        toolbar.addAction(self.half_snap_action)
+
     def set_tool(self, tool: Tool, action: QAction):
         # Uncheck others
         for a in [self.place_action, self.select_action, self.paint_action, self.erase_action]:
@@ -175,6 +195,14 @@ class MainWindow(QMainWindow):
         self.viewport.rotate_current_part(quarter_turns)
         self.update_status()
 
+    def set_half_snap(self, on: bool):
+        self.viewport.set_half_snap(on)
+        self.update_status()
+
+    def nudge(self, dx: int, dy: int):
+        self.viewport.nudge_ghost(dx, dy)
+        self.update_status()
+
     def cycle_anchor(self, step: int):
         self.viewport.cycle_anchor(step)
         self.update_status()
@@ -184,7 +212,8 @@ class MainWindow(QMainWindow):
         anchors = len(anchor_cells(vp.current_part))
         self.statusBar().showMessage(
             f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
-            f"   (Space: rotate, A: anchor cell; Shift reverses)")
+            f"{'  ·  half-cell snap' if vp.half_snap else ''}"
+            f"   (Space: rotate, A: anchor cell, Shift reverses; H: half-cell snap, arrows: nudge)")
 
     def create_color_dock(self):
         dock = QDockWidget("Colors", self)
@@ -280,7 +309,8 @@ class MainWindow(QMainWindow):
         <br>
         <b>Tools:</b><br>
         - Place (Q): Left Click to place the part chosen in the Parts list.<br>
-          Space / Shift+Space rotates it. A / Shift+A picks which of its cells (starts at the<br>
+          Space / Shift+Space rotates it. H toggles half-cell snapping; arrow keys nudge<br>
+          the preview half a cell. A / Shift+A picks which of its cells (starts at the<br>
           cell nearest the centre) sits under the cursor. Red preview = it would overlap.<br>
           (Ctrl + Left Click removes in Place mode)<br>
         - Select (W): Click to select brick.<br>

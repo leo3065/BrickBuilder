@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 import json
+import math
 import os
 import glm
 from brickbuilder.core.parts import PartDef
@@ -53,6 +54,28 @@ def footprint(profile: Profile, part: PartDef, pos: Sub, turns: int) -> List[Sub
 def anchor_cells(part: PartDef) -> List[Tuple[int, int, int]]:
     """Cells of a part that can be held under the cursor when placing: its bottom layer."""
     return [c for c in part.cells if c[2] == 0]
+
+
+def placement_target(profile: Profile, point: glm.vec3, normal: glm.vec3, half: bool) -> Sub:
+    """Sub-grid min corner of the cell to place against a face (or the ground).
+
+    `point` is where the cursor ray hit, `normal` the face's axis-aligned outward normal.
+    Along the normal the cell sits flush against the face; along the other axes it's the cell
+    whose centre is nearest the hit point, snapped to whole cells, or to half-cell steps in XY
+    when `half` is on (half-offset placement).
+    """
+    p = profile.world_to_sub(point)
+    out = []
+    for axis in range(3):
+        size = profile.subdiv[axis]
+        n = normal[axis]
+        if abs(n) > 0.5:
+            face = math.floor(p[axis] + 0.5)  # faces lie on sub-grid lines
+            out.append(face if n > 0 else face - size)
+        else:
+            step = 1 if (half and axis < 2) else size
+            out.append(math.floor((p[axis] - size / 2) / step + 0.5) * step)
+    return (out[0], out[1], out[2])
 
 
 def default_anchor_index(part: PartDef) -> int:

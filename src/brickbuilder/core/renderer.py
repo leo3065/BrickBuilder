@@ -3,11 +3,19 @@ import glm
 import numpy as np
 import math
 
+STUD_SEGMENTS = 16
+
 class Renderer:
     def __init__(self):
-        pass
+        # Display lists for a stud (fill, rim outline), keyed by (diameter, height), and one
+        # compiled list per placed part, keyed by everything that affects its look.
+        # They belong to the GL context, so initialize() drops them.
+        self._stud_lists = {}
+        self._part_lists = {}
 
     def initialize(self):
+        self._stud_lists = {}
+        self._part_lists = {}
         gl.glClearColor(0.2, 0.2, 0.2, 1.0)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_LIGHTING)
@@ -19,8 +27,8 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost_box, width, height, selected_box=None, show_grid=True, show_gizmo=True, section_z=None):
-        # ghost_box / selected_box: world-space (min, max) corners, or None
+    def render(self, camera, model, profile, ghost, width, height, selected_box=None, show_grid=True, show_gizmo=True, section_z=None):
+        # ghost: (box, stud positions, valid) or None; boxes are world-space (min, max) corners
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
@@ -58,8 +66,8 @@ class Renderer:
         # Render Bricks (one box per placed part; boxes come from the model's sub-grid mapping)
         self.render_bricks(model, profile)
 
-        if ghost_box:
-            self.render_ghost(ghost_box)
+        if ghost:
+            self.render_ghost(profile, *ghost)
 
         if selected_box:
             self.render_selection(selected_box)
@@ -228,41 +236,114 @@ class Renderer:
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glPolygonOffset(1.0, 1.0)
         
-        gl.glBegin(gl.GL_QUADS)
+        # Each part is compiled once into a display list (body, studs, outlines) and only
+        # recompiled when something about it changes; per frame it's one call per part.
+        # Offset fill only affects filled polygons, so the outlines in the lists stay in front.
+        live = {}
         for placed in model.parts.values():
-            rgb = profile.palette[placed.color].rgb
-            gl.glColor3f(rgb.x, rgb.y, rgb.z)
-            self.draw_box(*placed.box)
-        gl.glEnd()
-        
+            key = (placed.id, placed.part.id, placed.pos, placed.turns, placed.color)
+            display_list = self._part_lists.pop(key, None)
+            if display_list is None:
+                display_list = self.compile_part(placed, profile)
+            live[key] = display_list
+            gl.glCallList(display_list)
+        # Whatever is left belongs to parts that were removed or changed
+        for display_list in self._part_lists.values():
+            gl.glDeleteLists(display_list, 1)
+        self._part_lists = live
+
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
-        
-        # Draw outlines
+
+    def compile_part(self, placed, profile):
+        stud_fill, stud_rim = self.stud_lists(profile)
+        display_list = gl.glGenLists(1)
+        gl.glNewList(display_list, gl.GL_COMPILE)
+
+        rgb = profile.palette[placed.color].rgb
+        gl.glColor3f(rgb.x, rgb.y, rgb.z)
+        gl.glBegin(gl.GL_QUADS)
+        self.draw_box(*placed.box)
+        gl.glEnd()
+        self.call_at(stud_fill, placed.studs)
+
+        # Outlines
         gl.glDisable(gl.GL_LIGHTING)
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
         gl.glLineWidth(2.0)
-        gl.glBegin(gl.GL_QUADS)
         gl.glColor3f(0.0, 0.0, 0.0)
-        for placed in model.parts.values():
-            self.draw_box(*placed.box)
+        gl.glBegin(gl.GL_QUADS)
+        self.draw_box(*placed.box)
         gl.glEnd()
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
         gl.glLineWidth(1.0)
+        self.call_at(stud_rim, placed.studs)
         gl.glEnable(gl.GL_LIGHTING)
 
-    def render_ghost(self, box):
+        gl.glEndList()
+        return display_list
+
+    def render_ghost(self, profile, box, studs, valid):
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-        
-        # Ghost also needs to be visible over grid/other stuff, maybe disable depth test?
-        # Or just draw as is.
-        
+
+        # A blocked placement is drawn on top of everything, so the overlap is visible
+        if not valid:
+            gl.glDisable(gl.GL_DEPTH_TEST)
+
+        if valid:
+            gl.glColor4f(0.0, 1.0, 0.0, 0.5) # Semi-transparent green
+        else:
+            gl.glColor4f(1.0, 0.15, 0.1, 0.5) # Semi-transparent red: would overlap
         gl.glBegin(gl.GL_QUADS)
-        gl.glColor4f(0.0, 1.0, 0.0, 0.5) # Semi-transparent green
         self.draw_box(*box)
         gl.glEnd()
-        
+        self.call_at(self.stud_lists(profile)[0], studs)
+
+        gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_BLEND)
+
+    def call_at(self, display_list, positions):
+        for p in positions:
+            gl.glPushMatrix()
+            gl.glTranslatef(p.x, p.y, p.z)
+            gl.glCallList(display_list)
+            gl.glPopMatrix()
+
+    def stud_lists(self, profile):
+        # Unit stud at the origin: cylinder from z=0 up to the stud height, open at the bottom
+        key = (profile.stud.diameter, profile.stud.height)
+        if key not in self._stud_lists:
+            r, h = profile.stud.diameter / 2, profile.stud.height
+            ring = [(math.cos(2 * math.pi * i / STUD_SEGMENTS), math.sin(2 * math.pi * i / STUD_SEGMENTS))
+                    for i in range(STUD_SEGMENTS)]
+
+            fill = gl.glGenLists(2)
+            rim = fill + 1
+
+            gl.glNewList(fill, gl.GL_COMPILE)
+            gl.glBegin(gl.GL_QUAD_STRIP)
+            for c, s in ring + ring[:1]:
+                gl.glNormal3f(c, s, 0.0)
+                gl.glVertex3f(r * c, r * s, 0.0)
+                gl.glVertex3f(r * c, r * s, h)
+            gl.glEnd()
+            gl.glBegin(gl.GL_TRIANGLE_FAN)
+            gl.glNormal3f(0.0, 0.0, 1.0)
+            gl.glVertex3f(0.0, 0.0, h)
+            for c, s in ring + ring[:1]:
+                gl.glVertex3f(r * c, r * s, h)
+            gl.glEnd()
+            gl.glEndList()
+
+            gl.glNewList(rim, gl.GL_COMPILE)
+            gl.glBegin(gl.GL_LINE_LOOP)
+            for c, s in ring:
+                gl.glVertex3f(r * c, r * s, h)
+            gl.glEnd()
+            gl.glEndList()
+
+            self._stud_lists[key] = (fill, rim)
+        return self._stud_lists[key]
 
     def draw_box(self, lo, hi):
         # Axis-aligned box between world-space corners lo (min) and hi (max)

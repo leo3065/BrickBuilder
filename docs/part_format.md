@@ -1,7 +1,7 @@
 # Profiles, part definitions and the part library — design
 
 Status: **draft; implemented so far: profile + palette (step 1), box parts, placed-part model,
-save v2 (step 2a).** Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"`,
+save v2 (step 2a), part picker, rotation, studs, overlap preview (step 2b).** Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"`,
 `size`, optional `at`, `studs = "top" | "none"`); id and category come from the file path. Decisions agreed so far are marked ✅; open points ❓.
 
 ## Goals

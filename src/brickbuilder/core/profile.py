@@ -26,6 +26,7 @@ class PaletteColor:
     name: str
     rgb: glm.vec3       # 0..1
     clear: bool = False # translucent; rendered opaque for now
+    alpha: float = 1.0  # opacity for when translucency is rendered
 
 
 @dataclass(frozen=True)
@@ -109,11 +110,16 @@ def _parse_palette(data: Dict[str, Any]) -> Dict[str, PaletteColor]:
     for color_id, entry in data.items():
         if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
             raise ProfileError(f"palette.{color_id} needs a 'name'")
+        clear = bool(entry.get("clear", False))
+        alpha = entry.get("alpha", 0.75 if clear else 1.0)
+        if not isinstance(alpha, (int, float)) or isinstance(alpha, bool) or not 0.0 < alpha <= 1.0:
+            raise ProfileError(f"palette.{color_id}.alpha must be a number in (0, 1]")
         palette[color_id] = PaletteColor(
             id=color_id,
             name=entry["name"],
             rgb=_parse_rgb(color_id, entry.get("rgb")),
-            clear=bool(entry.get("clear", False)),
+            clear=clear,
+            alpha=float(alpha),
         )
     return palette
 

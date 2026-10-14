@@ -17,9 +17,9 @@ A Python-based GUI program for building and designing 3D brick models.
 - [ ] Exporting and importing color palettes.
 - [ ] Allowing semi-transparent brick blocks.
 - [ ] Customizable grid dimentions (default to wxdxh: 4mm x 4mm x 3mm).
-- [ ] Adding support for data-driven brick block shape and size definition.
+- [ ] Adding support for data-driven brick block shape and size definition. (Box-shaped parts done; see docs/part_format.md.)
 - [ ] A manu for browing brick block library, with a treeview, a thumbnail preview for the brick blocks, and mark-as-favorite function. 
-- [ ] Adding support for brick block rotation around its Z axis with 90 degrees increment.
+- [x] Adding support for brick block rotation around its Z axis with 90 degrees increment. (When placing; rotating an already placed brick isn't supported yet.)
 - [ ] Adding support half-brick offset brick placement that can be toggled on and off.
 
 ### Intermediate

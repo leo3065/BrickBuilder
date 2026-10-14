@@ -26,6 +26,8 @@ def test_builtin_profile(profile):
     assert len(profile.palette) == 45
     assert profile.palette["cobalt_blue"].name == "Cobalt Blue"
     assert profile.palette["clear_red"].clear and not profile.palette["red"].clear
+    assert profile.palette["clear_red"].alpha == 0.75 and profile.palette["red"].alpha == 1.0
+    assert profile.palette["clear"].alpha == 0.5 and tuple(profile.palette["clear"].rgb) == (1.0, 1.0, 1.0)
 
 
 def test_grid_to_world(profile):
@@ -44,6 +46,7 @@ def test_grid_to_world(profile):
     ({"palette": {}}, "palette"),
     ({"palette": {"red": {"name": "Red", "rgb": "red"}}}, "rrggbb"),
     ({"stud": {"height": 1}}, "stud.diameter"),
+    ({"palette": {"c": {"name": "C", "rgb": "#ffffff", "alpha": 1.5}}}, "alpha"),
 ])
 def test_bad_profiles_rejected(overrides, message):
     with pytest.raises(ProfileError, match=message):

@@ -68,6 +68,15 @@ def test_part_box_world_space(model, library):
     assert tuple(lo) == (-18.0, -2.0, 0.0) and tuple(hi) == (-2.0, 6.0, 3.125)
 
 
+def test_stud_positions_follow_rotation(model, library):
+    p = model.add_part(part(library, "1x2"), (0, 0, 0), 1, "red")
+    # Turned once: cells (-2, 0) and (-1, 0) -> stud centres at cell-space x -2 and -1, y 0
+    assert sorted(tuple(s) for s in p.studs) == [(-8.0, 0.0, 3.125), (-4.0, 0.0, 3.125)]
+    # Half-offset 1x1 one layer up: stud centre sits on the cell boundary
+    q = model.add_part(part(library, "1x1"), (1, 1, 1), 0, "red")
+    assert [tuple(s) for s in q.studs] == [(2.0, 2.0, 6.25)]
+
+
 def test_save_roundtrip_including_half_offset(model, library, profile, tmp_path):
     model.add_part(part(library, "2x4"), (0, 0, 0), 1, "cobalt_blue")
     model.add_part(part(library, "1x2"), (3, 1, 1), 0, "red")  # half-cell offset in X and Y
@@ -121,7 +130,8 @@ def test_v1_load(model):
 
 
 def test_v1_color_mapping_falls_back_to_nearest(profile):
-    assert v1_color_to_palette(profile, (1.0, 1.0, 1.0)) in {"white", "clear_white"}
+    # Nearest *opaque* color: v1 had no translucent bricks, even though "clear" is pure white
+    assert v1_color_to_palette(profile, (1.0, 1.0, 1.0)) == "white"
 
 
 @pytest.mark.parametrize("sample", sorted((REPO / "test_model").glob("*.json")), ids=lambda p: p.name)

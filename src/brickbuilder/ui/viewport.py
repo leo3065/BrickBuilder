@@ -29,8 +29,11 @@ class Viewport(QOpenGLWidget):
         self.current_turns = 0
         self.current_color = DEFAULT_COLOR if DEFAULT_COLOR in self.profile.palette else next(iter(self.profile.palette))
 
-        # Where the current part would go: sub-grid position of its origin, or None
+        # Where the current part would go: sub-grid position of its origin, or None.
+        # ghost_valid is False when it would overlap another part (drawn red, can't place).
         self.ghost_pos: Optional[Sub] = None
+        self.ghost_valid = False
+        self.hover_pos = None # last mouse position over the viewport, for refreshing the ghost
 
         self.selected_part_id: Optional[int] = None
 
@@ -51,11 +54,13 @@ class Viewport(QOpenGLWidget):
 
     def paintGL(self):
         pixel_ratio = self.devicePixelRatio()
-        ghost_box = None
+        ghost = None
         if self.ghost_pos is not None:
-            ghost_box = self.model.placement_box(self.current_part, self.ghost_pos, self.current_turns)
+            ghost = (self.model.placement_box(self.current_part, self.ghost_pos, self.current_turns),
+                     self.model.placement_studs(self.current_part, self.ghost_pos, self.current_turns),
+                     self.ghost_valid)
         selected = self.model.parts.get(self.selected_part_id) if self.selected_part_id is not None else None
-        self.renderer.render(self.camera, self.model, self.profile, ghost_box,
+        self.renderer.render(self.camera, self.model, self.profile, ghost,
                              int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
                              selected.box if selected else None)
 
@@ -76,6 +81,20 @@ class Viewport(QOpenGLWidget):
         # After loading a file: drop references into the old contents
         self.ghost_pos = None
         self.selected_part_id = None
+        self.update()
+
+    def set_current_part(self, part: PartDef):
+        self.current_part = part
+        self.refresh_ghost()
+
+    def rotate_current_part(self, quarter_turns: int):
+        # Turns about the part origin, which is the cell under the cursor, so the ghost stays put
+        self.current_turns = (self.current_turns + quarter_turns) % 4
+        self.refresh_ghost()
+
+    def refresh_ghost(self):
+        if self.current_tool == Tool.PLACE and self.hover_pos is not None:
+            self.update_ghost(self.hover_pos.x(), self.hover_pos.y())
         self.update()
 
     def set_current_color(self, color: str):
@@ -107,7 +126,7 @@ class Viewport(QOpenGLWidget):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             # Quick erase override in Place mode
             self._handle_erase_tool(ray)
-        elif self.ghost_pos is not None:
+        elif self.ghost_pos is not None and self.ghost_valid:
             self.model.add_part(self.current_part, self.ghost_pos, self.current_turns, self.current_color)
         # Refresh ghost immediately
         self.update_ghost(event.position().x(), event.position().y())
@@ -130,6 +149,7 @@ class Viewport(QOpenGLWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         current_pos = event.position()
+        self.hover_pos = current_pos
 
         # Tool-specific hover logic
         if self.current_tool == Tool.PLACE:
@@ -176,11 +196,16 @@ class Viewport(QOpenGLWidget):
 
         # The cell under the cursor is the part's origin cell
         self.ghost_pos = None
+        self.ghost_valid = False
         if cell is not None:
-            pos = self.profile.cell_to_sub(cell)
-            if self.model.can_place(self.current_part, pos, self.current_turns):
-                self.ghost_pos = pos
+            self.ghost_pos = self.profile.cell_to_sub(cell)
+            self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns)
 
+    def leaveEvent(self, event):
+        self.hover_pos = None
+        self.ghost_pos = None
+        self.update()
+        super().leaveEvent(event)
 
     def wheelEvent(self, event: QWheelEvent):
         delta = event.angleDelta().y()

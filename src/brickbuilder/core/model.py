@@ -25,6 +25,7 @@ class PlacedPart:
     frame: int              # 0 = root frame (the only one so far)
     subcells: Tuple[Sub, ...]
     box: Tuple[glm.vec3, glm.vec3]  # world AABB
+    studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
 
 
 def rotate_cell(x: int, y: int, turns: int) -> Tuple[int, int]:
@@ -46,6 +47,18 @@ def footprint(profile: Profile, part: PartDef, pos: Sub, turns: int) -> List[Sub
                 for k in range(nz):
                     out.append((bx + i, by + j, bz + k))
     return out
+
+
+def stud_positions(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
+    """World positions of a placed part's stud bases: centre of the top face of each stud cell."""
+    nx, ny, nz = profile.subdiv
+    out = []
+    for cx, cy, cz in part.studs:
+        rx, ry = rotate_cell(cx, cy, turns)
+        out.append(profile.sub_to_world((pos[0] + (rx + 0.5) * nx,
+                                         pos[1] + (ry + 0.5) * ny,
+                                         pos[2] + (cz + 1) * nz)))
+    return tuple(out)
 
 
 def subcells_box(profile: Profile, subcells: Iterable[Sub]) -> Tuple[glm.vec3, glm.vec3]:
@@ -79,8 +92,10 @@ def v1_color_to_palette(profile: Profile, rgb: Tuple[float, float, float]) -> st
     for known, color_id in _V1_COLORS.items():
         if color_id in profile.palette and all(abs(a - b) < 1e-3 for a, b in zip(known, rgb)):
             return color_id
+    # v1 had no translucent bricks, so prefer opaque colors
     target = glm.vec3(*rgb)
-    return min(profile.palette.values(), key=lambda c: glm.distance(c.rgb, target)).id
+    candidates = [c for c in profile.palette.values() if not c.clear] or list(profile.palette.values())
+    return min(candidates, key=lambda c: glm.distance(c.rgb, target)).id
 
 
 class Model:
@@ -99,6 +114,9 @@ class Model:
 
     def placement_box(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, glm.vec3]:
         return subcells_box(self.profile, footprint(self.profile, part, pos, turns))
+
+    def placement_studs(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
+        return stud_positions(self.profile, part, pos, turns)
 
     def part_at(self, sub: Sub) -> Optional[PlacedPart]:
         part_id = self.occupancy.get(sub)
@@ -120,7 +138,8 @@ class Model:
             raise ModelError(f"duplicate part id {part_id}")
         self._next_id = max(self._next_id, part_id + 1)
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, 0,
-                            tuple(cells), subcells_box(self.profile, cells))
+                            tuple(cells), subcells_box(self.profile, cells),
+                            stud_positions(self.profile, part, pos, turns))
         self.parts[part_id] = placed
         for s in cells:
             self.occupancy[s] = part_id

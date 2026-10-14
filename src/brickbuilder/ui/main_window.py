@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup
+from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QListWidget, QListWidgetItem
 from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
 from PySide6.QtCore import Qt, QSize
 from brickbuilder.ui.viewport import Viewport
@@ -15,7 +15,9 @@ class MainWindow(QMainWindow):
         
         self.create_menus()
         self.create_toolbar()
+        self.create_parts_dock()
         self.create_color_dock()
+        self.update_status()
 
     def create_menus(self) -> None:
         menu_bar = self.menuBar()
@@ -40,7 +42,20 @@ class MainWindow(QMainWindow):
         save_action.setShortcut(QKeySequence.Save)
         save_action.triggered.connect(self.save_file)
         file_menu.addAction(save_action)
-        
+
+        # Edit Menu
+        edit_menu = menu_bar.addMenu("Edit")
+
+        rotate_action = QAction("Rotate Part", self)
+        rotate_action.setShortcut("Space")
+        rotate_action.triggered.connect(lambda: self.rotate_part(1))
+        edit_menu.addAction(rotate_action)
+
+        rotate_back_action = QAction("Rotate Part Back", self)
+        rotate_back_action.setShortcut("Shift+Space")
+        rotate_back_action.triggered.connect(lambda: self.rotate_part(-1))
+        edit_menu.addAction(rotate_back_action)
+
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
         help_action = QAction("Controls", self)
@@ -93,6 +108,42 @@ class MainWindow(QMainWindow):
         action.setChecked(True) # Ensure clicked is checked
         self.viewport.set_tool(tool)
 
+    def create_parts_dock(self):
+        dock = QDockWidget("Parts", self)
+        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
+
+        self.parts_list = QListWidget()
+        # No keyboard focus, so Space always reaches the Rotate shortcut
+        self.parts_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        for part in self.viewport.library.values():
+            item = QListWidgetItem(part.name)
+            item.setData(Qt.ItemDataRole.UserRole, part.id)
+            tip = part.id if not part.ldraw else f"{part.id}  (LDraw {part.ldraw})"
+            item.setToolTip(tip)
+            self.parts_list.addItem(item)
+            if part is self.viewport.current_part:
+                self.parts_list.setCurrentItem(item)
+        self.parts_list.currentItemChanged.connect(self.on_part_selected)
+
+        dock.setWidget(self.parts_list)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+
+    def on_part_selected(self, item, _previous=None):
+        if item is None:
+            return
+        self.viewport.set_current_part(self.viewport.library[item.data(Qt.ItemDataRole.UserRole)])
+        # Picking a part means you want to place it
+        self.set_tool(Tool.PLACE, self.place_action)
+        self.update_status()
+
+    def rotate_part(self, quarter_turns: int):
+        self.viewport.rotate_current_part(quarter_turns)
+        self.update_status()
+
+    def update_status(self):
+        part = self.viewport.current_part
+        self.statusBar().showMessage(f"{part.name}  ·  rotated {self.viewport.current_turns * 90}°   (Space / Shift+Space to rotate)")
+
     def create_color_dock(self):
         dock = QDockWidget("Colors", self)
         dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.BottomDockWidgetArea)
@@ -114,6 +165,8 @@ class MainWindow(QMainWindow):
             btn = QPushButton()
             btn.setFixedSize(32, 32)
             btn.setCheckable(True)
+            # No keyboard focus, so Space rotates instead of clicking the focused swatch
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
             # Convert glm to CSS color
             r = int(color.rgb.x * 255)
@@ -184,7 +237,8 @@ class MainWindow(QMainWindow):
         - Zoom: Scroll Wheel<br>
         <br>
         <b>Tools:</b><br>
-        - Place (Q): Left Click to place brick.<br>
+        - Place (Q): Left Click to place the part chosen in the Parts list.<br>
+          Space / Shift+Space rotates it. Red preview = it would overlap.<br>
           (Ctrl + Left Click removes in Place mode)<br>
         - Select (W): Click to select brick.<br>
         - Paint (E): Click to color brick.<br>

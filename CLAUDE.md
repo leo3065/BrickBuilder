@@ -57,11 +57,12 @@ src/brickbuilder/
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, footprint/rotation, save v2 (+ v1 load)
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
-  core/renderer.py   Immediate-mode GL: grid, cubes + outlines, ghost, selection, axis gizmo,
-                     optional Z clip plane (section_z)
+  core/renderer.py   Legacy GL: grid, parts (one cached display list per part: box, studs,
+                     outlines), ghost, selection, axis gizmo, optional Z clip plane (section_z)
   core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE
-  ui/main_window.py  Menus, tool toolbar (Q/W/E/R), color dock, file dialogs, unsaved prompt
-  ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview
+  ui/main_window.py  Menus (Edit > Rotate: Space / Shift+Space), tool toolbar (Q/W/E/R), parts +
+                     color docks, status bar, file dialogs, unsaved prompt
+  ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview (red = overlap)
   profiles/*.toml    Built-in system profiles (nanoblock.toml, incl. 45-color palette)
   parts/<profile>/<Category>/<name>.toml   Built-in parts; id = "<profile>:<file stem>"
 tests/               pytest suite
@@ -95,8 +96,10 @@ tests/               pytest suite
 - Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
   a global floor meaningless and building from the top is legitimate. "Shift all" is planned.
 - `resizeGL` divides by height (crash at 0).
-- **Place tool always uses `brick_1x1`, turn 0** (build step 2b adds a part picker, rotate
-  key, red ghost on overlap). Half-offset placement exists in the model but has no UI.
+- **Placement anchor is always the part origin**: the cell under the cursor becomes the origin
+  cell, so e.g. a 1×3 on a 1×1 can't be centred. Planned: a key to cycle which cell is under
+  the cursor, then arrow-key half-cell nudging (which also gives half-offset placement a UI;
+  the model already supports it).
 - Palette RGB values are eyeballed approximations; clear colors render opaque.
 - README still describes a generic "brick building app" with "standard brick colors";
   should eventually state the Nanoblock-first / system-agnostic scope above.
@@ -108,10 +111,12 @@ tests/               pytest suite
 - No `closeEvent`, so closing the window skips the unsaved-changes prompt.
 - Selection in SELECT mode is display-only; `set_current_color` has a stub for
   repainting the selection.
-- Picking iterates every part (fine at small scale); rendering is immediate mode
-  every frame.
-- Bodies render as full boxes: profile `clearance`, `body_height` and studs (`PartDef.studs`
-  is computed) aren't drawn yet — studs come in step 2b. `grid_rotation` is unused.
+- Picking iterates every part (fine at small scale); the renderer calls one cached display
+  list per part each frame (VBOs/shaders are still the longer-term plan).
+- Bodies render as full boxes with studs; profile `clearance`, `body_height` aren't used yet.
+  `grid_rotation` is unused. Measured: 1000 parts / 8000 studs ≈ 25 ms per frame, ~350 ms
+  to compile all lists on first draw after loading. Display lists are keyed by
+  (id, part, pos, turns, color) — anything else that changes a part's look must join the key.
 
 ## Architectural pressure from upcoming features
 Done in step 2a: placed parts with part id, origin, quarter turns and a sub-cell occupancy

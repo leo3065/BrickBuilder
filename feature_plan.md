@@ -1,11 +1,13 @@
 # BrickBuilder
-A Python-based GUI program for building and designing 3D brick models.
+A Python-based GUI program for designing 3D models in Nanoblock-style micro bricks. Nanoblock is the only system with a part library and palette, but grid sizes, parts and colors come from data, so other similar systems can be added without code changes (see `docs/part_format.md`).
 
 ## Feature plan
 ### Basic
-- [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Cooridnate system: +X is Right, +Y is Forward, +Z is Up.
-- [x] Building using 1x1x1 brick blocks (use cube shape for now) that snaps to grid, including adding, removing, and moving blocks (moving not implemented yet). When adding, the new block will be placed on the face of the selected block, or on the grid if no block is selected. Keep the outline of the model clean.
+- [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Coordinate system: +X is Right, +Y is Forward, +Z is Up.
+- [x] Building with parts that snap to the grid, including adding and removing them. When adding, the new part goes against the face under the cursor, or on the grid if nothing is under the cursor. Keep the outline of the model clean.
 - [x] A save/load function to save the current model and load a saved model.
+- [ ] Save (to the current file) as well as Save As, and the unsaved-changes prompt when closing the window.
+- [ ] Undo/redo.
 - [ ] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.
 - [x] When in placing mode, showing a preview of the brick block to be placed.
 - [x] Allowing selecing the color of the brick blocks, both before building and after building.
@@ -13,24 +15,24 @@ A Python-based GUI program for building and designing 3D brick models.
 - [ ] Multi-select function for various operations, such as moving, removing, and color changing. 
 - [ ] Moving and rotating already placed parts (pick a part up, keep its color, put it down elsewhere or turned).
 - [ ] Shifting all bricks (or a selection) by whole cells in any direction at once, e.g. to make room below a model that was built from the top down.
-- [x] Adding a color palette manu for brick colors.
-- [ ] Ability to add custom colors to the palette.
-- [ ] Exporting and importing color palettes.
-- [ ] Allowing semi-transparent brick blocks.
-- [ ] Customizable grid dimentions (default to wxdxh: 4mm x 4mm x 3mm).
-- [ ] Adding support for data-driven brick block shape and size definition. (Box-shaped parts done; see docs/part_format.md.)
+- [x] Adding a color palette menu for brick colors.
+- [ ] Custom colors in a separate user palette file (with stable ids so saves keep working), which can be exported and imported to share them.
+- [ ] Allowing semi-transparent brick blocks. (Data is ready: palette colors are flagged `clear` and carry an `alpha`.)
+- [x] Grid dimensions come from a system profile; Nanoblock is 4 × 4 × 3.125 mm (measured stacking pitch). A UI for switching profiles is deliberately deferred until there's a second system.
+- [x] Adding support for data-driven part shape and size definition: box-shaped parts (see `docs/part_format.md`).
+- [ ] Slopes, round parts and mesh bodies (e.g. joints) in part definitions.
 - [ ] A manu for browing brick block library, with a treeview, a thumbnail preview for the brick blocks, and mark-as-favorite function. 
-- [x] Adding support for brick block rotation around its Z axis with 90 degrees increment. (When placing; rotating an already placed brick isn't supported yet.)
-- [ ] Adding support half-brick offset brick placement that can be toggled on and off.
+- [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.
+- [ ] Half-offset placement: a toggle that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell. (The model already supports half-offset positions.)
+- [ ] Parts list (bill of materials): count of each part per color, e.g. for finding kits that contain them on nanoblock.info.
+- [ ] Highlight parts that aren't connected to anything (e.g. placed against a side face, which is allowed while designing).
 
 ### Intermediate
-- [ ] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). New blocks built on the rotated block will snap to the same grid as the rotated block.
+- [ ] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it.
 - [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
-- [ ] Allowing snapping a block to the same grid as another block.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
-- [ ] Add a view option that highlights the colliding blocks.
-- [ ] Allowing rotating 2 blocks around their Z axis to the same grid with minimal rotation.
-- [ ] Allowing free rotating 2 ball joint blocks to the same grid with minimal rotation.
+- [ ] Add a view option that highlights colliding parts in different frames (rotated parts, joints). Within one frame, overlaps are already refused when placing and loading.
+- [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation.
 
 ### Advanced
 - [ ] Exporting the model for the current view as an image, both raster and vector formats.

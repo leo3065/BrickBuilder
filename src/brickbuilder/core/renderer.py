@@ -2,6 +2,7 @@ import OpenGL.GL as gl
 import glm
 import numpy as np
 import math
+from brickbuilder.core.geometry import face_normal
 
 STUD_SEGMENTS = 16
 
@@ -27,8 +28,8 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_box=None, show_grid=True, show_gizmo=True, section_z=None):
-        # ghost: (box, stud positions, valid) or None; boxes are world-space (min, max) corners
+    def render(self, camera, model, profile, ghost, width, height, selected_solids=None, show_grid=True, show_gizmo=True, section_z=None):
+        # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
@@ -69,8 +70,8 @@ class Renderer:
         if ghost:
             self.render_ghost(profile, *ghost)
 
-        if selected_box:
-            self.render_selection(selected_box)
+        if selected_solids:
+            self.render_selection(selected_solids)
 
         if section_z is not None:
             gl.glDisable(gl.GL_CLIP_PLANE0)
@@ -79,20 +80,14 @@ class Renderer:
         if show_gizmo:
             self.draw_orientation_gizmo(camera, width, height)
 
-    def render_selection(self, box):
-        # Draw a wireframe box around the selected brick
+    def render_selection(self, solids):
+        # Draw a wireframe around the selected part
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
         
         gl.glLineWidth(3.0)
-        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
-        
-        gl.glBegin(gl.GL_QUADS)
         gl.glColor3f(1.0, 1.0, 0.0) # Yellow
-        self.draw_box(*box)
-        gl.glEnd()
-        
-        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+        self.draw_edges(solids)
         gl.glLineWidth(1.0)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_LIGHTING)
@@ -261,20 +256,14 @@ class Renderer:
 
         rgb = profile.palette[placed.color].rgb
         gl.glColor3f(rgb.x, rgb.y, rgb.z)
-        gl.glBegin(gl.GL_QUADS)
-        self.draw_box(*placed.box)
-        gl.glEnd()
+        self.draw_faces(placed.solids)
         self.call_at(stud_fill, placed.studs)
 
         # Outlines
         gl.glDisable(gl.GL_LIGHTING)
-        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
         gl.glLineWidth(2.0)
         gl.glColor3f(0.0, 0.0, 0.0)
-        gl.glBegin(gl.GL_QUADS)
-        self.draw_box(*placed.box)
-        gl.glEnd()
-        gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+        self.draw_edges(placed.solids)
         gl.glLineWidth(1.0)
         self.call_at(stud_rim, placed.studs)
         gl.glEnable(gl.GL_LIGHTING)
@@ -282,7 +271,7 @@ class Renderer:
         gl.glEndList()
         return display_list
 
-    def render_ghost(self, profile, box, studs, valid):
+    def render_ghost(self, profile, solids, studs, valid):
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
@@ -294,13 +283,30 @@ class Renderer:
             gl.glColor4f(0.0, 1.0, 0.0, 0.5) # Semi-transparent green
         else:
             gl.glColor4f(1.0, 0.15, 0.1, 0.5) # Semi-transparent red: would overlap
-        gl.glBegin(gl.GL_QUADS)
-        self.draw_box(*box)
-        gl.glEnd()
+        self.draw_faces(solids)
         self.call_at(self.stud_lists(profile)[0], studs)
 
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_BLEND)
+
+    def draw_faces(self, solids):
+        # Filled convex faces with their normals (for lighting)
+        for solid in solids:
+            for face in solid:
+                n = face_normal(face)
+                gl.glBegin(gl.GL_POLYGON)
+                gl.glNormal3f(n.x, n.y, n.z)
+                for p in face:
+                    gl.glVertex3f(p.x, p.y, p.z)
+                gl.glEnd()
+
+    def draw_edges(self, solids):
+        for solid in solids:
+            for face in solid:
+                gl.glBegin(gl.GL_LINE_LOOP)
+                for p in face:
+                    gl.glVertex3f(p.x, p.y, p.z)
+                gl.glEnd()
 
     def call_at(self, display_list, positions):
         for p in positions:
@@ -344,53 +350,6 @@ class Renderer:
 
             self._stud_lists[key] = (fill, rim)
         return self._stud_lists[key]
-
-    def draw_box(self, lo, hi):
-        # Axis-aligned box between world-space corners lo (min) and hi (max)
-        x0, y0, z0 = lo.x, lo.y, lo.z
-        x1, y1, z1 = hi.x, hi.y, hi.z
-
-        # Top Face (+Z)
-        gl.glNormal3f(0.0, 0.0, 1.0)
-        gl.glVertex3f(x0, y0, z1)
-        gl.glVertex3f(x1, y0, z1)
-        gl.glVertex3f(x1, y1, z1)
-        gl.glVertex3f(x0, y1, z1)
-
-        # Bottom Face (-Z)
-        gl.glNormal3f(0.0, 0.0, -1.0)
-        gl.glVertex3f(x0, y0, z0)
-        gl.glVertex3f(x1, y0, z0)
-        gl.glVertex3f(x1, y1, z0)
-        gl.glVertex3f(x0, y1, z0)
-
-        # Front Face (-Y)
-        gl.glNormal3f(0.0, -1.0, 0.0)
-        gl.glVertex3f(x0, y0, z0)
-        gl.glVertex3f(x1, y0, z0)
-        gl.glVertex3f(x1, y0, z1)
-        gl.glVertex3f(x0, y0, z1)
-
-        # Back Face (+Y)
-        gl.glNormal3f(0.0, 1.0, 0.0)
-        gl.glVertex3f(x0, y1, z0)
-        gl.glVertex3f(x1, y1, z0)
-        gl.glVertex3f(x1, y1, z1)
-        gl.glVertex3f(x0, y1, z1)
-
-        # Left Face (-X)
-        gl.glNormal3f(-1.0, 0.0, 0.0)
-        gl.glVertex3f(x0, y0, z0)
-        gl.glVertex3f(x0, y1, z0)
-        gl.glVertex3f(x0, y1, z1)
-        gl.glVertex3f(x0, y0, z1)
-
-        # Right Face (+X)
-        gl.glNormal3f(1.0, 0.0, 0.0)
-        gl.glVertex3f(x1, y0, z0)
-        gl.glVertex3f(x1, y1, z0)
-        gl.glVertex3f(x1, y1, z1)
-        gl.glVertex3f(x1, y0, z1)
 
     def draw_origin_marker(self):
         # Draw a small pyramid/triangle at origin

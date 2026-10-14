@@ -1,0 +1,15 @@
+# One full cell; beside it an upper triangle 1 cell x 1 layer, full height next to the box.
+# The underside is open along the slope. Pairs with slope_1x2.
+name = "Inverted Slope 1×2"
+ldraw = "NB102B.dat"
+
+[[body]]
+shape = "box"
+size = [1, 1, 1]
+
+[[body]]
+shape = "wedge"
+size = [1, 1, 1]
+at = [0, 1, 0]
+keep = "upper"
+tall = "-y"

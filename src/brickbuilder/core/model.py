@@ -5,10 +5,14 @@ import json
 import math
 import os
 import glm
+from brickbuilder.core.geometry import (Cut, body_faces, compatible, part_regions, rotate_cut,
+                                        rotate_sub, transform_faces, translate_cut)
 from brickbuilder.core.parts import PartDef
 from brickbuilder.core.profile import Profile
 
 Sub = Tuple[int, int, int]  # sub-grid coordinate (profile.subdiv sub-cells per cell)
+Region = Tuple[Sub, Optional[Cut]]  # a sub-cell and how it's filled: None = full, or a wedge cut
+Solid = List[List[glm.vec3]]  # convex body as outward faces (world space)
 
 SAVE_VERSION = 2
 
@@ -25,30 +29,48 @@ class PlacedPart:
     turns: int              # quarter turns about +Z through the origin, 0..3
     color: str              # palette id
     frame: int              # 0 = root frame (the only one so far)
-    subcells: Tuple[Sub, ...]
+    regions: Tuple[Region, ...]     # sub-cells it occupies (fully, or partly for wedges)
     box: Tuple[glm.vec3, glm.vec3]  # world AABB
+    solids: Tuple[Solid, ...]       # world-space bodies, for rendering and picking
     studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
 
 
-def rotate_cell(x: int, y: int, turns: int) -> Tuple[int, int]:
-    """Rotate the cell whose min corner is (x, y) by quarter turns CCW about the origin corner."""
-    for _ in range(turns % 4):
-        x, y = -y - 1, x
-    return x, y
+# Rotating a cell's min corner is the same as rotating a sub-cell's (the origin is a corner)
+rotate_cell = rotate_sub
+
+# Per (part, subdiv, turns): regions relative to the part origin. Parts are immutable, so cache.
+_REGION_CACHE: Dict[Tuple[PartDef, Tuple[int, int, int], int], List[Region]] = {}
+_FACE_CACHE: Dict[Tuple[PartDef, Tuple[int, int, int]], List[list]] = {}
+
+
+def _turned_regions(profile: Profile, part: PartDef, turns: int) -> List[Region]:
+    key = (part, profile.subdiv, turns % 4)
+    if key not in _REGION_CACHE:
+        out = []
+        for (x, y, z), cut in part_regions(part.bodies, profile.subdiv):
+            rx, ry = rotate_sub(x, y, turns)
+            out.append(((rx, ry, z), rotate_cut(cut, turns) if cut else None))
+        _REGION_CACHE[key] = out
+    return _REGION_CACHE[key]
+
+
+def footprint_regions(profile: Profile, part: PartDef, pos: Sub, turns: int) -> List[Region]:
+    """Sub-cells a part occupies at sub-grid `pos`, turned `turns` times, with how each is filled."""
+    return [((x + pos[0], y + pos[1], z + pos[2]), translate_cut(cut, pos) if cut else None)
+            for (x, y, z), cut in _turned_regions(profile, part, turns)]
 
 
 def footprint(profile: Profile, part: PartDef, pos: Sub, turns: int) -> List[Sub]:
-    """Sub-cells a part occupies when its origin is at sub-grid `pos`, turned `turns` times."""
-    nx, ny, nz = profile.subdiv
-    out: List[Sub] = []
-    for cx, cy, cz in part.cells:
-        rx, ry = rotate_cell(cx, cy, turns)
-        bx, by, bz = pos[0] + rx * nx, pos[1] + ry * ny, pos[2] + cz * nz
-        for i in range(nx):
-            for j in range(ny):
-                for k in range(nz):
-                    out.append((bx + i, by + j, bz + k))
-    return out
+    """Sub-cells a part touches (fully or partly) at sub-grid `pos`, turned `turns` times."""
+    return [(x + pos[0], y + pos[1], z + pos[2]) for (x, y, z), _ in _turned_regions(profile, part, turns)]
+
+
+def part_solids(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[Solid, ...]:
+    """World-space bodies (outward faces) of a part placed at `pos`, turned `turns` times."""
+    key = (part, profile.subdiv)
+    if key not in _FACE_CACHE:
+        _FACE_CACHE[key] = [body_faces(b, profile.subdiv) for b in part.bodies]
+    return tuple(transform_faces(faces, turns, pos, profile.sub_to_world) for faces in _FACE_CACHE[key])
 
 
 def anchor_cells(part: PartDef) -> List[Tuple[int, int, int]]:
@@ -56,14 +78,26 @@ def anchor_cells(part: PartDef) -> List[Tuple[int, int, int]]:
     return [c for c in part.cells if c[2] == 0]
 
 
-def placement_target(profile: Profile, point: glm.vec3, normal: glm.vec3, half: bool) -> Sub:
+def placement_target(profile: Profile, point: glm.vec3, normal: glm.vec3, half: bool) -> Optional[Sub]:
     """Sub-grid min corner of the cell to place against a face (or the ground).
 
     `point` is where the cursor ray hit, `normal` the face's axis-aligned outward normal.
     Along the normal the cell sits flush against the face; along the other axes it's the cell
     whose centre is nearest the hit point, snapped to whole cells, or to half-cell steps in XY
     when `half` is on (half-offset placement).
+
+    A sloped face (normal not along an axis) targets the empty part of its own cell, the one
+    just outside the face: nothing attaches to a slope, but that's where a complementary wedge
+    goes (anything else won't fit there).
     """
+    if sum(1 for v in normal if abs(v) > 0.999) != 1:
+        p = profile.world_to_sub(point + normal * 0.05)
+        out = []
+        for axis in range(3):
+            size = profile.subdiv[axis]
+            step = 1 if (half and axis < 2) else size
+            out.append(math.floor((p[axis] - size / 2) / step + 0.5) * step)
+        return (out[0], out[1], out[2])
     p = profile.world_to_sub(point)
     out = []
     for axis in range(3):
@@ -153,24 +187,34 @@ class Model:
         self.profile = profile
         self.library = library
         self.parts: Dict[int, PlacedPart] = {}
-        self.occupancy: Dict[Sub, int] = {}  # sub-cell -> part id
+        # sub-cell -> [(part id, cut)]: more than one only where complementary wedges meet
+        self.occupancy: Dict[Sub, List[Tuple[int, Optional[Cut]]]] = {}
         self.modified = False
         self._next_id = 1
 
     # --- queries -------------------------------------------------------------------------
 
+    def _fits(self, regions: List[Region]) -> bool:
+        for sub, cut in regions:
+            for _, other in self.occupancy.get(sub, ()):
+                if not compatible(cut, other):
+                    return False
+        return True
+
     def can_place(self, part: PartDef, pos: Sub, turns: int) -> bool:
-        return not any(s in self.occupancy for s in footprint(self.profile, part, pos, turns))
+        return self._fits(footprint_regions(self.profile, part, pos, turns))
 
     def placement_box(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, glm.vec3]:
         return subcells_box(self.profile, footprint(self.profile, part, pos, turns))
 
+    def placement_solids(self, part: PartDef, pos: Sub, turns: int) -> Tuple[Solid, ...]:
+        return part_solids(self.profile, part, pos, turns)
+
     def placement_studs(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
         return stud_positions(self.profile, part, pos, turns)
 
-    def part_at(self, sub: Sub) -> Optional[PlacedPart]:
-        part_id = self.occupancy.get(sub)
-        return self.parts[part_id] if part_id is not None else None
+    def parts_at(self, sub: Sub) -> List[PlacedPart]:
+        return [self.parts[part_id] for part_id, _ in self.occupancy.get(sub, ())]
 
     # --- edits ---------------------------------------------------------------------------
 
@@ -179,8 +223,8 @@ class Model:
         """Place a part; returns None (and changes nothing) if it would overlap another part."""
         if color not in self.profile.palette:
             raise ModelError(f"unknown color {color!r}")
-        cells = footprint(self.profile, part, pos, turns)
-        if any(s in self.occupancy for s in cells):
+        regions = footprint_regions(self.profile, part, pos, turns)
+        if not self._fits(regions):
             return None
         if part_id is None:
             part_id = self._next_id
@@ -188,11 +232,12 @@ class Model:
             raise ModelError(f"duplicate part id {part_id}")
         self._next_id = max(self._next_id, part_id + 1)
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, 0,
-                            tuple(cells), subcells_box(self.profile, cells),
+                            tuple(regions), subcells_box(self.profile, (s for s, _ in regions)),
+                            part_solids(self.profile, part, pos, turns),
                             stud_positions(self.profile, part, pos, turns))
         self.parts[part_id] = placed
-        for s in cells:
-            self.occupancy[s] = part_id
+        for sub, cut in regions:
+            self.occupancy.setdefault(sub, []).append((part_id, cut))
         self.modified = True
         return placed
 
@@ -200,8 +245,12 @@ class Model:
         placed = self.parts.pop(part_id, None)
         if placed is None:
             return
-        for s in placed.subcells:
-            del self.occupancy[s]
+        for sub, _ in placed.regions:
+            remaining = [entry for entry in self.occupancy[sub] if entry[0] != part_id]
+            if remaining:
+                self.occupancy[sub] = remaining
+            else:
+                del self.occupancy[sub]
         self.modified = True
 
     def set_color(self, part_id: int, color: str) -> None:

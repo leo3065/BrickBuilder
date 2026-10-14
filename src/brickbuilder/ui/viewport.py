@@ -69,13 +69,13 @@ class Viewport(QOpenGLWidget):
         pixel_ratio = self.devicePixelRatio()
         ghost = None
         if self.ghost_pos is not None:
-            ghost = (self.model.placement_box(self.current_part, self.ghost_pos, self.current_turns),
+            ghost = (self.model.placement_solids(self.current_part, self.ghost_pos, self.current_turns),
                      self.model.placement_studs(self.current_part, self.ghost_pos, self.current_turns),
                      self.ghost_valid)
         selected = self.model.parts.get(self.selected_part_id) if self.selected_part_id is not None else None
         self.renderer.render(self.camera, self.model, self.profile, ghost,
                              int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
-                             selected.box if selected else None)
+                             selected.solids if selected else None)
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool

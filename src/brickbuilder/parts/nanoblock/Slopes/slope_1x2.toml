@@ -1,0 +1,15 @@
+# 1x2x1 base; on one cell a lower triangle 1 cell x 1 layer, its vertical face at the part's
+# centre, so the slope faces away from the centre. Pairs with slope_inverted_1x2.
+name = "Slope 1×2"
+ldraw = "NB102A.dat"
+
+[[body]]
+shape = "box"
+size = [1, 2, 1]
+
+[[body]]
+shape = "wedge"
+size = [1, 1, 1]
+at = [0, 0, 1]
+keep = "lower"
+tall = "+y"

@@ -1,8 +1,10 @@
 # Profiles, part definitions and the part library — design
 
-Status: **draft; implemented so far: profile + palette (step 1), box parts, placed-part model,
-save v2 (step 2a), part picker, rotation, studs, overlap preview (step 2b).** Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"`,
-`size`, optional `at`, `studs = "top" | "none"`); id and category come from the file path. Decisions agreed so far are marked ✅; open points ❓.
+Status: **draft; implemented so far: profile + palette, box and wedge (slope) bodies, placed-part
+model with exact slope occupancy, save v2, part picker, rotation, studs, anchors, half-offset
+placement.** Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"` with
+`size`, optional `at`, `studs = "top" | "none"`; or `shape = "wedge"` with `keep` and `tall`
+too); id and category come from the file path.
 
 ## Goals
 - Nanoblock is the only system we author parts for, but nothing system-specific lives in
@@ -129,15 +131,16 @@ antistud sockets under its whole footprint, including under the slope, and a stu
 into the hollow. If studs are ever collision-checked, that underside counts as open.
 
 Occupancy is tracked per **sub-cell** of the profile's `subdiv` grid (so half-offset parts work).
-Boxes fill whole sub-cells. **Slope occupancy (planned) ✅:** each body is a box optionally cut by the
+Boxes fill whole sub-cells. **Slope occupancy ✅ (implemented):** each body is a box optionally cut by the
 triangle's diagonal plane, stored exactly with integer sub-grid coefficients. Each sub-cell a part
 touches is *full*, *empty* (not registered) or *partial* (cut by the plane: stores the plane and the
 kept side), decided by testing the sub-cell's 8 corners. Two occupants may share a sub-cell only if
 **neither is full and both are cut by the same plane on opposite sides**: exactly the two-colour
 upper/lower triangle pairs that sets use for patterns. Any other partial combination counts as an
 overlap (conservative; an exact convex-intersection test can replace this rule later without
-changing the data). Picking must test the real wedge (ray vs box + one plane), not the bounding
-box, so the empty half can be pointed at; sloped faces are not placement targets.
+changing the data). Picking tests the real wedge (ray vs convex solid), not the bounding box. ✅ Pointing at a
+sloped face targets the empty part of that face's own cell: nothing attaches to a slope, but that's
+where a complementary wedge goes (anything else is refused there by the occupancy rule).
 
 **Reference:** `D:\Nanoblocks\LDrawData` (unofficial LDraw Nanoblock library, CCAL 2.0). Use it for
 **shapes and the part list**, not dimensions: it assumes 10 LDU per pitch and 7.5 per layer

@@ -55,7 +55,7 @@ def test_bad_profiles_rejected(overrides, message):
 
 def test_starter_library():
     lib = load_builtin_library("nanoblock")
-    sizes = sorted(k.split("_")[1] for k in lib)
+    sizes = sorted(k.split("_")[1] for k, p in lib.items() if p.category == "Bricks")
     assert sizes == sorted(["1x1", "1x2", "1x3", "1x4", "1x6", "2x2", "2x3", "2x4", "2x6", "2x8"])
     b = lib["nanoblock:brick_2x4"]
     assert b.name == "Brick 2×4" and b.category == "Bricks" and b.ldraw == "NB204.dat"
@@ -68,7 +68,7 @@ def test_part_validation():
         part_from_dict("t:p", "", {"name": "P", "params": {}, "body": []})
     with pytest.raises(PartError, match="unknown keys"):
         part_from_dict("t:p", "", {"name": "P", "colour": 1, "body": [{"shape": "box", "size": [1, 1, 1]}]})
-    with pytest.raises(PartError, match="only 'box'"):
+    with pytest.raises(PartError, match="unsupported shape"):
         part_from_dict("t:p", "", {"name": "P", "body": [{"shape": "slope", "size": [1, 2, 1]}]})
     with pytest.raises(PartError, match="origin"):
         part_from_dict("t:p", "", {"name": "P", "body": [{"shape": "box", "size": [1, 1, 1], "at": [1, 0, 0]}]})

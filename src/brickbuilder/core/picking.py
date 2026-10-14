@@ -2,6 +2,7 @@ import glm
 import math
 from typing import Optional, Tuple
 from brickbuilder.core.camera import Camera
+from brickbuilder.core.geometry import ray_convex
 from brickbuilder.core.model import Model, PlacedPart
 
 class Ray:
@@ -142,14 +143,17 @@ def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optio
 
     # Optimization: Grid traversal is better, but iterating all parts is okay for start < 1000 parts
     for placed in model.parts.values():
-        # Same box the renderer draws (parts are boxes so far)
-        result = intersect_aabb(ray, *placed.box)
-        if result:
-            t, normal = result
-            if t < closest_t:
-                closest_t = t
-                hit_part = placed
-                hit_normal = normal
+        # Cheap reject on the bounding box, then the real bodies (wedges have sloped faces)
+        if not intersect_aabb(ray, *placed.box):
+            continue
+        for solid in placed.solids:
+            result = ray_convex(ray.origin, ray.direction, solid)
+            if result:
+                t, normal = result
+                if t < closest_t:
+                    closest_t = t
+                    hit_part = placed
+                    hit_normal = normal
 
     if hit_part:
         return hit_part, hit_normal, ray.origin + ray.direction * closest_t

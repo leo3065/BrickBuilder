@@ -90,7 +90,7 @@ def test_overlap_refused_and_occupancy(model, library):
     # Half-cell offset overlapping the 2x4's edge is refused too
     assert not model.can_place(part(library, "1x1"), (3, -1, 0), 0)
     model.remove_part(a.id)
-    assert len(model.occupancy) == 4 and model.part_at((0, 0, 0)) is None
+    assert len(model.occupancy) == 4 and model.parts_at((0, 0, 0)) == []
 
 
 def test_part_box_world_space(model, library):

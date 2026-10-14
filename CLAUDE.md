@@ -53,7 +53,9 @@ Koraidon/Miraidon sets (regular + sloped bricks bracing beyond the joints).
 src/brickbuilder/
   main.py            QApplication + QSurfaceFormat (Compatibility profile, GL 2.1)
   core/profile.py    Profile (TOML loader, palette) + sub_to_world(): the one grid -> world mapping
-  core/parts.py      PartDef + built-in library loader (box bodies only so far)
+  core/parts.py      PartDef + built-in library loader (box and wedge bodies)
+  core/geometry.py   Exact sub-grid geometry: Body, wedge Cut planes, per-sub-cell regions,
+                     sharing rule (`compatible`), faces, ray vs convex solid
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, footprint/rotation, save v2 (+ v1 load)
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/camera.py     Orbit camera, orthographic projection, Z-up
@@ -79,8 +81,12 @@ tests/               pytest suite
   half-cells in XY for Nanoblock). `Profile.sub_to_world()` is the only place the grid ->
   world mapping is defined (`cell_box()` builds on it) — never re-derive it.
 - A placed part's `pos` is the sub-grid position of its **origin** (min corner, bottom) and
-  `turns` rotates CCW about that corner (`model.rotate_cell`). Parts are only boxes so far,
-  so `PlacedPart.box` (a world AABB) is what's rendered and picked.
+  `turns` rotates CCW about that corner (`model.rotate_cell`). Parts are bodies (boxes and
+  wedges); `PlacedPart.solids` (world faces) is what's rendered and picked, `box` is only the
+  bounding AABB.
+- Occupancy is `sub-cell -> [(part id, Cut | None)]`: None = full. Two parts share a sub-cell
+  only if both are cut by the same plane on opposite sides (complementary slopes). Cuts are
+  integer and canonical (`geometry.make_cut`) so they compare exactly; keep it that way.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
   in save files, separate from their display `name`.
 - **Edits from the UI go through `Viewport.history`** (add_part / remove_part / set_color), never
@@ -118,10 +124,11 @@ tests/               pytest suite
   repainting the selection.
 - Picking iterates every part (fine at small scale); the renderer calls one cached display
   list per part each frame (VBOs/shaders are still the longer-term plan).
-- Bodies render as full boxes with studs; profile `clearance`, `body_height` aren't used yet.
-  `grid_rotation` is unused. Measured: 1000 parts / 8000 studs ≈ 25 ms per frame, ~350 ms
-  to compile all lists on first draw after loading. Display lists are keyed by
-  (id, part, pos, turns, color) — anything else that changes a part's look must join the key.
+- Profile `clearance`, `body_height` aren't used yet. A part with several bodies (e.g. slope =
+  box + wedge) shows outline seams where coplanar faces of its bodies meet.
+  Compiling face normals in Python makes the first draw slower (~700 ms for 1000 bricks).
+- `grid_rotation` is unused. Measured: 1000 parts / 8000 studs ≈ 25 ms per frame. Display lists
+  are keyed by (id, part, pos, turns, color) — anything else that changes a part's look must join the key.
 
 ## Architectural pressure from upcoming features
 Done in step 2a: placed parts with part id, origin, quarter turns and a sub-cell occupancy

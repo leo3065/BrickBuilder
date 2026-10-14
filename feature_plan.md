@@ -11,6 +11,7 @@ A Python-based GUI program for building and designing 3D brick models.
 - [x] Allowing selecing the color of the brick blocks, both before building and after building.
 - [ ] Allowing section view of the model, especially viewing blocks under a selected layer. Makes it easy to go though layers.
 - [ ] Multi-select function for various operations, such as moving, removing, and color changing. 
+- [ ] Moving and rotating already placed parts (pick a part up, keep its color, put it down elsewhere or turned).
 - [ ] Shifting all bricks (or a selection) by whole cells in any direction at once, e.g. to make room below a model that was built from the top down.
 - [x] Adding a color palette manu for brick colors.
 - [ ] Ability to add custom colors to the palette.

@@ -6,7 +6,7 @@ import glm
 from typing import Optional, Tuple
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
-from brickbuilder.core.model import Model, Sub
+from brickbuilder.core.model import Model, Sub, anchor_cells, default_anchor_index, origin_for_anchor
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
@@ -27,6 +27,7 @@ class Viewport(QOpenGLWidget):
         self.current_tool = Tool.PLACE
         self.current_part: PartDef = self.library[f"{self.profile.id}:{DEFAULT_PART}"]
         self.current_turns = 0
+        self.current_anchor = default_anchor_index(self.current_part) # index into anchor_cells(current_part)
         self.current_color = DEFAULT_COLOR if DEFAULT_COLOR in self.profile.palette else next(iter(self.profile.palette))
 
         # Where the current part would go: sub-grid position of its origin, or None.
@@ -85,11 +86,17 @@ class Viewport(QOpenGLWidget):
 
     def set_current_part(self, part: PartDef):
         self.current_part = part
+        self.current_anchor = default_anchor_index(part)
         self.refresh_ghost()
 
     def rotate_current_part(self, quarter_turns: int):
-        # Turns about the part origin, which is the cell under the cursor, so the ghost stays put
+        # The anchor cell stays on the cell under the cursor, so the part turns around it
         self.current_turns = (self.current_turns + quarter_turns) % 4
+        self.refresh_ghost()
+
+    def cycle_anchor(self, step: int):
+        # Choose which cell of the part sits under the cursor (e.g. end / middle / end of a 1x3)
+        self.current_anchor = (self.current_anchor + step) % len(anchor_cells(self.current_part))
         self.refresh_ghost()
 
     def refresh_ghost(self):
@@ -194,11 +201,12 @@ class Viewport(QOpenGLWidget):
                 x, y = self.profile.world_to_cell_xy(hit_point)
                 cell = (x, y, 0)
 
-        # The cell under the cursor is the part's origin cell
+        # The cell under the cursor is where the part's anchor cell goes
         self.ghost_pos = None
         self.ghost_valid = False
         if cell is not None:
-            self.ghost_pos = self.profile.cell_to_sub(cell)
+            anchor = anchor_cells(self.current_part)[self.current_anchor]
+            self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, self.profile.cell_to_sub(cell))
             self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns)
 
     def leaveEvent(self, event):

@@ -170,8 +170,11 @@ Model        # parts: dict[id, PlacedPart]; occupancy: dict[sub-cell, part id]
 ```
 - Connections aren't stored while everything is on one frame: they can be re-derived from
   geometry. Stored edges arrive with joints.
-- Placing: the cell under the cursor is the part's **origin cell**, so rotating (which pivots
-  on the origin) keeps the ghost under the cursor. Overlap is refused and the ghost turns red.
+- Placing: the cell under the cursor is where the part's **anchor cell** goes. The anchor is
+  one of the part's bottom-layer cells, cycled with A / Shift+A (e.g. end / middle / end of a
+  1×3); it starts at the cell nearest the centre (ties: +X, then +Y, in part coordinates). Rotation keeps the anchor cell under the cursor. This is
+  purely an editor aid: data still stores the origin, and rotation pivots on the origin.
+  Overlap is refused and the ghost turns red.
 - ✅ **Side-face placement is allowed**, even though such a part isn't held by anything.
   Checking for unconnected parts comes later.
 - ✅ **No hard floor at layer 0.** A global floor makes no sense for parts in other frames, and

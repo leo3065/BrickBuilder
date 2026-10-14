@@ -60,7 +60,7 @@ src/brickbuilder/
   core/renderer.py   Legacy GL: grid, parts (one cached display list per part: box, studs,
                      outlines), ghost, selection, axis gizmo, optional Z clip plane (section_z)
   core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE
-  ui/main_window.py  Menus (Edit > Rotate: Space / Shift+Space), tool toolbar (Q/W/E/R), parts +
+  ui/main_window.py  Menus (Edit > Rotate: Space / Shift+Space, anchor: A / Shift+A), tool toolbar (Q/W/E/R), parts +
                      color docks, status bar, file dialogs, unsaved prompt
   ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview (red = overlap)
   profiles/*.toml    Built-in system profiles (nanoblock.toml, incl. 45-color palette)
@@ -96,10 +96,9 @@ tests/               pytest suite
 - Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
   a global floor meaningless and building from the top is legitimate. "Shift all" is planned.
 - `resizeGL` divides by height (crash at 0).
-- **Placement anchor is always the part origin**: the cell under the cursor becomes the origin
-  cell, so e.g. a 1×3 on a 1×1 can't be centred. Planned: a key to cycle which cell is under
-  the cursor, then arrow-key half-cell nudging (which also gives half-offset placement a UI;
-  the model already supports it).
+- Placement: the cell under the cursor is where the part's **anchor cell** goes (A / Shift+A
+  cycles bottom-layer cells, default nearest the centre; `model.origin_for_anchor`). Not yet: arrow-key half-cell nudging,
+  which would also give half-offset placement a UI (the model already supports it).
 - Palette RGB values are eyeballed approximations; clear colors render opaque.
 - README still describes a generic "brick building app" with "standard brick colors";
   should eventually state the Nanoblock-first / system-agnostic scope above.

@@ -3,6 +3,7 @@ from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
 from PySide6.QtCore import Qt, QSize
 from brickbuilder.ui.viewport import Viewport
 from brickbuilder.core.tools import Tool
+from brickbuilder.core.model import anchor_cells
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -55,6 +56,16 @@ class MainWindow(QMainWindow):
         rotate_back_action.setShortcut("Shift+Space")
         rotate_back_action.triggered.connect(lambda: self.rotate_part(-1))
         edit_menu.addAction(rotate_back_action)
+
+        anchor_action = QAction("Next Anchor Cell", self)
+        anchor_action.setShortcut("A")
+        anchor_action.triggered.connect(lambda: self.cycle_anchor(1))
+        edit_menu.addAction(anchor_action)
+
+        anchor_back_action = QAction("Previous Anchor Cell", self)
+        anchor_back_action.setShortcut("Shift+A")
+        anchor_back_action.triggered.connect(lambda: self.cycle_anchor(-1))
+        edit_menu.addAction(anchor_back_action)
 
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
@@ -140,9 +151,16 @@ class MainWindow(QMainWindow):
         self.viewport.rotate_current_part(quarter_turns)
         self.update_status()
 
+    def cycle_anchor(self, step: int):
+        self.viewport.cycle_anchor(step)
+        self.update_status()
+
     def update_status(self):
-        part = self.viewport.current_part
-        self.statusBar().showMessage(f"{part.name}  ·  rotated {self.viewport.current_turns * 90}°   (Space / Shift+Space to rotate)")
+        vp = self.viewport
+        anchors = len(anchor_cells(vp.current_part))
+        self.statusBar().showMessage(
+            f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
+            f"   (Space: rotate, A: anchor cell; Shift reverses)")
 
     def create_color_dock(self):
         dock = QDockWidget("Colors", self)
@@ -238,7 +256,8 @@ class MainWindow(QMainWindow):
         <br>
         <b>Tools:</b><br>
         - Place (Q): Left Click to place the part chosen in the Parts list.<br>
-          Space / Shift+Space rotates it. Red preview = it would overlap.<br>
+          Space / Shift+Space rotates it. A / Shift+A picks which of its cells (starts at the<br>
+          cell nearest the centre) sits under the cursor. Red preview = it would overlap.<br>
           (Ctrl + Left Click removes in Place mode)<br>
         - Select (W): Click to select brick.<br>
         - Paint (E): Click to color brick.<br>

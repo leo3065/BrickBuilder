@@ -49,6 +49,32 @@ def footprint(profile: Profile, part: PartDef, pos: Sub, turns: int) -> List[Sub
     return out
 
 
+def anchor_cells(part: PartDef) -> List[Tuple[int, int, int]]:
+    """Cells of a part that can be held under the cursor when placing: its bottom layer."""
+    return [c for c in part.cells if c[2] == 0]
+
+
+def default_anchor_index(part: PartDef) -> int:
+    """Index into anchor_cells(part) of the cell nearest the centre of the bottom layer.
+    Ties go to the cell further along +X, then +Y (part coordinates, before turning)."""
+    cells = anchor_cells(part)
+    cx = sum(c[0] + 0.5 for c in cells) / len(cells)
+    cy = sum(c[1] + 0.5 for c in cells) / len(cells)
+    def key(i):
+        x, y, _ = cells[i]
+        return ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2, -x, -y)
+    return min(range(len(cells)), key=key)
+
+
+def origin_for_anchor(profile: Profile, anchor: Tuple[int, int, int], turns: int, target: Sub) -> Sub:
+    """Origin position that puts the part's `anchor` cell (after turning) on the cell whose
+    min-corner sub-cell is `target`. This is an editor convenience: the saved position is still
+    the part origin."""
+    nx, ny, nz = profile.subdiv
+    rx, ry = rotate_cell(anchor[0], anchor[1], turns)
+    return (target[0] - rx * nx, target[1] - ry * ny, target[2] - anchor[2] * nz)
+
+
 def stud_positions(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
     """World positions of a placed part's stud bases: centre of the top face of each stud cell."""
     nx, ny, nz = profile.subdiv

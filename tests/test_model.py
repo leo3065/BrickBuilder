@@ -5,7 +5,8 @@ import glm
 import pytest
 
 from brickbuilder.core import picking
-from brickbuilder.core.model import Model, ModelError, footprint, v1_color_to_palette
+from brickbuilder.core.model import (Model, ModelError, anchor_cells, default_anchor_index, footprint, origin_for_anchor,
+                                     v1_color_to_palette)
 from brickbuilder.core.parts import load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 
@@ -47,6 +48,36 @@ def test_footprint_rotates_about_origin_corner(profile, library, turns, expected
     subs = footprint(profile, part(library, "1x2"), (0, 0, 0), turns)
     assert len(subs) == 2 * 4  # 2 cells x (2x2x1 sub-cells)
     assert cells_of(profile, subs) == expected
+
+
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+@pytest.mark.parametrize("anchor_index", [0, 1, 2])
+def test_anchor_cell_stays_on_target(profile, library, turns, anchor_index):
+    # Whatever the rotation, the chosen anchor cell of a 1x3 lands on the target cell (5, -3, 2)
+    p = part(library, "1x3")
+    anchor = anchor_cells(p)[anchor_index]
+    target = profile.cell_to_sub((5, -3, 2))
+    pos = origin_for_anchor(profile, anchor, turns, target)
+    cells = cells_of(profile, footprint(profile, p, pos, turns))
+    assert (5, -3, 2) in cells and len(cells) == 3
+
+
+def test_anchor_cells_order_for_1x3(library):
+    # End, middle, other end: cycling goes along the brick
+    assert anchor_cells(part(library, "1x3")) == [(0, 0, 0), (0, 1, 0), (0, 2, 0)]
+
+
+@pytest.mark.parametrize("size, expected", [
+    ("1x1", (0, 0, 0)),
+    ("1x2", (0, 1, 0)),   # tie -> +Y
+    ("1x3", (0, 1, 0)),   # true middle
+    ("2x2", (1, 1, 0)),   # four-way tie -> +X, then +Y
+    ("2x3", (1, 1, 0)),   # middle row, tie in X -> +X
+    ("2x4", (1, 2, 0)),
+])
+def test_default_anchor_is_nearest_centre(library, size, expected):
+    p = part(library, size)
+    assert anchor_cells(p)[default_anchor_index(p)] == expected
 
 
 def test_overlap_refused_and_occupancy(model, library):

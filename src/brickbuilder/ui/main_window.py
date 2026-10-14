@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QListWidget, QListWidgetItem
+from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QTreeWidget, QTreeWidgetItem
 from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
 from PySide6.QtCore import Qt, QSize
 from pathlib import Path
@@ -167,15 +167,28 @@ class MainWindow(QMainWindow):
         dock = QDockWidget("Parts", self)
         dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
 
-        self.parts_list = QListWidget()
+        # Grouped by category, i.e. the library's folders (Bricks, Slopes, ...); nested folders
+        # become nested groups, so new kinds of parts get their own group just by their folder
+        self.parts_list = QTreeWidget()
+        self.parts_list.setHeaderHidden(True)
         # No keyboard focus, so Space always reaches the Rotate shortcut
         self.parts_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        groups = {}
+        def group_item(category: str):
+            if category not in groups:
+                parent_path, _, label = category.rpartition("/")
+                parent = group_item(parent_path) if parent_path else self.parts_list.invisibleRootItem()
+                node = QTreeWidgetItem(parent, [label])
+                node.setFlags(Qt.ItemFlag.ItemIsEnabled)  # a header, not a selectable part
+                node.setExpanded(True)
+                groups[category] = node
+            return groups[category]
         for part in self.viewport.library.values():
-            item = QListWidgetItem(part.name)
-            item.setData(Qt.ItemDataRole.UserRole, part.id)
+            parent = group_item(part.category) if part.category else self.parts_list.invisibleRootItem()
+            item = QTreeWidgetItem(parent, [part.name])
+            item.setData(0, Qt.ItemDataRole.UserRole, part.id)
             tip = part.id if not part.ldraw else f"{part.id}  (LDraw {part.ldraw})"
-            item.setToolTip(tip)
-            self.parts_list.addItem(item)
+            item.setToolTip(0, tip)
             if part is self.viewport.current_part:
                 self.parts_list.setCurrentItem(item)
         self.parts_list.currentItemChanged.connect(self.on_part_selected)
@@ -184,9 +197,10 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
     def on_part_selected(self, item, _previous=None):
-        if item is None:
-            return
-        self.viewport.set_current_part(self.viewport.library[item.data(Qt.ItemDataRole.UserRole)])
+        part_id = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        if part_id is None:
+            return  # a group header
+        self.viewport.set_current_part(self.viewport.library[part_id])
         # Picking a part means you want to place it
         self.set_tool(Tool.PLACE, self.place_action)
         self.update_status()

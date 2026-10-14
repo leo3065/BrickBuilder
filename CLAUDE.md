@@ -64,8 +64,8 @@ src/brickbuilder/
                      outlines), ghost, selection, axis gizmo, optional Z clip plane (section_z)
   core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE
   ui/main_window.py  Menus (Edit > Undo/Redo, Rotate: Space / Shift+Space, anchor: A / Shift+A,
-                     Half-Cell Snap: H, nudge: arrows), tool toolbar (Q/W/E/R), parts +
-                     color docks, status bar, Save/Save As (current file + title marker), close prompt
+                     Half-Cell Snap: H, nudge: arrows), tool toolbar (Q/W/E/R), parts tree
+                     (grouped by category folder) + color docks, status bar, Save/Save As (current file + title marker), close prompt
   ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview (red = overlap)
   profiles/*.toml    Built-in system profiles (nanoblock.toml, incl. 45-color palette)
   parts/<profile>/<Category>/<name>.toml   Built-in parts; id = "<profile>:<file stem>"

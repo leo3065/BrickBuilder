@@ -5,6 +5,7 @@ wedges compare exactly equal. See docs/part_format.md ("Slope occupancy").
 """
 import math
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import glm
@@ -248,3 +249,189 @@ def ray_convex(origin: glm.vec3, direction: glm.vec3, faces: Sequence[Sequence[g
     if enter_normal is None:
         return None  # ray starts inside
     return t_enter, enter_normal
+
+
+# --- outline of a whole part (no seams between its bodies) -------------------------------
+#
+# A part is filled body by body, but its outline has to follow the merged shape: no line where
+# two bodies' faces lie in one plane (e.g. a slope's box and wedge side faces), and none around
+# faces hidden inside the part. Worked out once per part type, exactly, on the sub-grid:
+#   1. split the part into sub-cell pieces (a unit cube, or a cube cut by a wedge plane);
+#   2. drop piece faces that the neighbouring piece covers (inside the part);
+#   3. per plane, keep only the parts of polygon edges covered by exactly one face (odd count):
+#      edges between coplanar faces cancel out, the merged face's boundary remains.
+
+FPoint = Tuple[Fraction, Fraction, Fraction]
+
+
+def _clip(poly: List[FPoint], cut: Cut) -> List[FPoint]:
+    """Sutherland-Hodgman: the part of a convex polygon the cut keeps (value <= 0)."""
+    out: List[FPoint] = []
+    for i, p in enumerate(poly):
+        q = poly[(i + 1) % len(poly)]
+        vp, vq = cut.value(*p), cut.value(*q)
+        if vp <= 0:
+            out.append(p)
+        if (vp < 0 < vq) or (vq < 0 < vp):
+            t = vp / (vp - vq)
+            out.append(tuple(p[k] + (q[k] - p[k]) * t for k in range(3)))
+    return out
+
+
+def _cube_faces(sub: Int3) -> Dict[Tuple[int, int], List[FPoint]]:
+    """Faces of the unit cube at `sub`, keyed by (axis, outward sign)."""
+    x, y, z = (Fraction(v) for v in sub)
+    return {
+        (2, -1): [(x, y, z), (x + 1, y, z), (x + 1, y + 1, z), (x, y + 1, z)],
+        (2, 1): [(x, y, z + 1), (x + 1, y, z + 1), (x + 1, y + 1, z + 1), (x, y + 1, z + 1)],
+        (0, -1): [(x, y, z), (x, y + 1, z), (x, y + 1, z + 1), (x, y, z + 1)],
+        (0, 1): [(x + 1, y, z), (x + 1, y + 1, z), (x + 1, y + 1, z + 1), (x + 1, y, z + 1)],
+        (1, -1): [(x, y, z), (x + 1, y, z), (x + 1, y, z + 1), (x, y, z + 1)],
+        (1, 1): [(x, y + 1, z), (x + 1, y + 1, z), (x + 1, y + 1, z + 1), (x, y + 1, z + 1)],
+    }
+
+
+def _cap(sub: Int3, cut: Cut) -> List[FPoint]:
+    """The cut plane's polygon inside the cube at `sub`, in order around its centre."""
+    corners = [tuple(Fraction(sub[k] + d[k]) for k in range(3)) for d in _CORNERS]
+    pts = {c for c in corners if cut.value(*c) == 0}
+    for i, p in enumerate(corners):
+        for q in corners[i + 1:]:
+            if sum(1 for k in range(3) if p[k] != q[k]) != 1:
+                continue  # only cube edges
+            vp, vq = cut.value(*p), cut.value(*q)
+            if (vp < 0 < vq) or (vq < 0 < vp):
+                t = vp / (vp - vq)
+                pts.add(tuple(p[k] + (q[k] - p[k]) * t for k in range(3)))
+    pts = list(pts)
+    if len(pts) < 3:
+        return []
+    # Sort by angle in the plane (floats only for sorting; the points stay exact)
+    n = cut.plane[:3]
+    cx, cy, cz = (sum(float(p[k]) for p in pts) / len(pts) for k in range(3))
+    helper = [0.0, 0.0, 0.0]
+    helper[(next(k for k in range(3) if n[k] != 0) + 1) % 3] = 1.0
+    w = (n[1] * helper[2] - n[2] * helper[1], n[2] * helper[0] - n[0] * helper[2],
+         n[0] * helper[1] - n[1] * helper[0])
+    u = (w[1] * n[2] - w[2] * n[1], w[2] * n[0] - w[0] * n[2], w[0] * n[1] - w[1] * n[0])
+
+    def angle(p):
+        d = (float(p[0]) - cx, float(p[1]) - cy, float(p[2]) - cz)
+        return math.atan2(sum(d[k] * w[k] for k in range(3)), sum(d[k] * u[k] for k in range(3)))
+    return sorted(pts, key=angle)
+
+
+def _inside(poly: List[FPoint], container: List[FPoint], axis: int) -> bool:
+    """Is convex `poly` within convex `container`? Both lie in a plane normal to `axis`."""
+    i, j = [k for k in range(3) if k != axis]
+
+    def cross(o, a, b):
+        return (a[i] - o[i]) * (b[j] - o[j]) - (a[j] - o[j]) * (b[i] - o[i])
+    n = len(container)
+    turn = [cross(container[k], container[(k + 1) % n], container[(k + 2) % n]) for k in range(n)]
+    signs = {1 if t > 0 else -1 for t in turn if t != 0}
+    if len(signs) != 1:
+        return False
+    s = signs.pop()
+    return all(s * cross(container[k], container[(k + 1) % n], p) >= 0 for p in poly for k in range(n))
+
+
+def _area_positive(poly: List[FPoint]) -> bool:
+    if len(poly) < 3:
+        return False
+    n = _newell([tuple(float(v) for v in p) for p in poly])
+    return abs(n[0]) + abs(n[1]) + abs(n[2]) > 1e-12
+
+
+def _primitive(v: Sequence[Fraction]) -> Int3:
+    """Integer direction with no common factor and a canonical sign."""
+    den = math.lcm(*(f.denominator for f in v))
+    ints = [int(f * den) for f in v]
+    g = math.gcd(math.gcd(abs(ints[0]), abs(ints[1])), abs(ints[2]))
+    ints = [k // g for k in ints]
+    if next(k for k in ints if k != 0) < 0:
+        ints = [-k for k in ints]
+    return (ints[0], ints[1], ints[2])
+
+
+def part_outline(bodies: Sequence[Body], subdiv: Int3) -> List[Tuple[Vec3, Vec3]]:
+    """Outline segments of a part's merged shape, in part sub-grid coordinates (before turning)."""
+    regions = dict(part_regions(bodies, subdiv))
+    # 1. piece faces
+    pieces: Dict[Int3, Dict[object, List[FPoint]]] = {}
+    for sub, cut in regions.items():
+        faces: Dict[object, List[FPoint]] = {}
+        for key, poly in _cube_faces(sub).items():
+            if cut is not None:
+                poly = _clip(poly, cut)
+            if _area_positive(poly):
+                faces[key] = poly
+        if cut is not None:
+            cap = _cap(sub, cut)
+            if _area_positive(cap):
+                faces["cap"] = cap
+        pieces[sub] = faces
+    # 2. visible faces, grouped by plane
+    groups: Dict[object, List[List[FPoint]]] = {}
+    for sub, faces in pieces.items():
+        for key, poly in faces.items():
+            if key == "cap":
+                cut = regions[sub]
+                groups.setdefault(("cap", cut.plane, cut.side), []).append(poly)
+                continue
+            axis, sign = key
+            neighbour = list(sub)
+            neighbour[axis] += sign
+            other = pieces.get(tuple(neighbour), {}).get((axis, -sign))
+            if other is not None and _inside(poly, other, axis):
+                continue  # covered by the neighbouring piece: inside the part
+            groups.setdefault((axis, sign, sub[axis] + (1 if sign > 0 else 0)), []).append(poly)
+    # 3. per plane, the edge portions covered an odd number of times
+    result: Dict[Tuple[FPoint, FPoint], None] = {}
+    for polys in groups.values():
+        lines: Dict[object, list] = {}
+        for poly in polys:
+            for k, p in enumerate(poly):
+                q = poly[(k + 1) % len(poly)]
+                if p == q:
+                    continue
+                d = _primitive([q[m] - p[m] for m in range(3)])
+                # All points of a line share cross(d, p); dot(d, p) is the position along it
+                key = (d, (d[1] * p[2] - d[2] * p[1], d[2] * p[0] - d[0] * p[2], d[0] * p[1] - d[1] * p[0]))
+                tp = sum(d[m] * p[m] for m in range(3))
+                tq = sum(d[m] * q[m] for m in range(3))
+                lines.setdefault(key, []).append((min(tp, tq), max(tp, tq), p))
+        for (d, _), spans in lines.items():
+            ts = sorted({t for a, b, _ in spans for t in (a, b)})
+            start = end = None
+            for t0, t1 in zip(ts, ts[1:]):
+                if sum(1 for a, b, _ in spans if a <= t0 and t1 <= b) % 2 == 1:
+                    start = t0 if start is None else start
+                    end = t1
+                elif start is not None:
+                    result[_segment(spans[0][2], d, start, end)] = None
+                    start = None
+            if start is not None:
+                result[_segment(spans[0][2], d, start, end)] = None
+    return [(tuple(float(v) for v in a), tuple(float(v) for v in b)) for a, b in result]
+
+
+def _segment(p: FPoint, d: Int3, t0: Fraction, t1: Fraction) -> Tuple[FPoint, FPoint]:
+    """The points at positions t0 and t1 along the line through p with direction d."""
+    norm2 = sum(c * c for c in d)
+    tp = sum(d[m] * p[m] for m in range(3))
+    a, b = (tuple(p[m] + d[m] * (t - tp) / norm2 for m in range(3)) for t in (t0, t1))
+    return (a, b) if a <= b else (b, a)
+
+
+def transform_segments(segments, turns: int, pos: Int3, to_world) -> List[Tuple[glm.vec3, glm.vec3]]:
+    """Like transform_faces, for outline segments."""
+    out = []
+    for seg in segments:
+        ends = []
+        for x, y, z in seg:
+            for _ in range(turns % 4):
+                x, y = -y, x
+            ends.append(to_world((x + pos[0], y + pos[1], z + pos[2])))
+        out.append((ends[0], ends[1]))
+    return out

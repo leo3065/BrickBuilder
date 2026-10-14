@@ -28,7 +28,7 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_solids=None, show_grid=True, show_gizmo=True, section_z=None):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=None, show_grid=True, show_gizmo=True, section_z=None):
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
@@ -70,8 +70,8 @@ class Renderer:
         if ghost:
             self.render_ghost(profile, *ghost)
 
-        if selected_solids:
-            self.render_selection(selected_solids)
+        if selected_edges:
+            self.render_selection(selected_edges)
 
         if section_z is not None:
             gl.glDisable(gl.GL_CLIP_PLANE0)
@@ -80,14 +80,14 @@ class Renderer:
         if show_gizmo:
             self.draw_orientation_gizmo(camera, width, height)
 
-    def render_selection(self, solids):
-        # Draw a wireframe around the selected part
+    def render_selection(self, edges):
+        # Draw the outline of the selected part
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
         
         gl.glLineWidth(3.0)
         gl.glColor3f(1.0, 1.0, 0.0) # Yellow
-        self.draw_edges(solids)
+        self.draw_segments(edges)
         gl.glLineWidth(1.0)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_LIGHTING)
@@ -225,51 +225,53 @@ class Renderer:
         gl.glVertex3f(center.x - hs, center.y - hs, center.z)
 
     def render_bricks(self, model, profile):
-        # Draw outlines first or last? 
-        # Trick: Draw filled polys with offset (pushes them back), then lines (at normal depth).
-        
-        gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
-        gl.glPolygonOffset(1.0, 1.0)
-        
-        # Each part is compiled once into a display list (body, studs, outlines) and only
-        # recompiled when something about it changes; per frame it's one call per part.
-        # Offset fill only affects filled polygons, so the outlines in the lists stay in front.
+        # Each part is compiled once into two display lists, its fill and its outline, and only
+        # recompiled when something about it changes. All fills are drawn first (offset back),
+        # then all outlines: if a part's outline were drawn with its fill, a part drawn later
+        # could paint over it where the two touch (e.g. the diagonal between paired slopes).
         live = {}
         for placed in model.parts.values():
             key = (placed.id, placed.part.id, placed.pos, placed.turns, placed.color)
-            display_list = self._part_lists.pop(key, None)
-            if display_list is None:
-                display_list = self.compile_part(placed, profile)
-            live[key] = display_list
-            gl.glCallList(display_list)
+            lists = self._part_lists.pop(key, None)
+            if lists is None:
+                lists = self.compile_part(placed, profile)
+            live[key] = lists
         # Whatever is left belongs to parts that were removed or changed
-        for display_list in self._part_lists.values():
-            gl.glDeleteLists(display_list, 1)
+        for fill, outline in self._part_lists.values():
+            gl.glDeleteLists(fill, 2)
         self._part_lists = live
 
+        gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+        gl.glPolygonOffset(1.0, 1.0)
+        for fill, _ in live.values():
+            gl.glCallList(fill)
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+
+        gl.glDisable(gl.GL_LIGHTING)
+        for _, outline in live.values():
+            gl.glCallList(outline)
+        gl.glEnable(gl.GL_LIGHTING)
 
     def compile_part(self, placed, profile):
         stud_fill, stud_rim = self.stud_lists(profile)
-        display_list = gl.glGenLists(1)
-        gl.glNewList(display_list, gl.GL_COMPILE)
+        fill = gl.glGenLists(2)
+        outline = fill + 1
 
+        gl.glNewList(fill, gl.GL_COMPILE)
         rgb = profile.palette[placed.color].rgb
         gl.glColor3f(rgb.x, rgb.y, rgb.z)
         self.draw_faces(placed.solids)
         self.call_at(stud_fill, placed.studs)
+        gl.glEndList()
 
-        # Outlines
-        gl.glDisable(gl.GL_LIGHTING)
+        gl.glNewList(outline, gl.GL_COMPILE)
         gl.glLineWidth(2.0)
         gl.glColor3f(0.0, 0.0, 0.0)
-        self.draw_edges(placed.solids)
+        self.draw_segments(placed.edges)
         gl.glLineWidth(1.0)
         self.call_at(stud_rim, placed.studs)
-        gl.glEnable(gl.GL_LIGHTING)
-
         gl.glEndList()
-        return display_list
+        return fill, outline
 
     def render_ghost(self, profile, solids, studs, valid):
         gl.glEnable(gl.GL_BLEND)
@@ -300,13 +302,12 @@ class Renderer:
                     gl.glVertex3f(p.x, p.y, p.z)
                 gl.glEnd()
 
-    def draw_edges(self, solids):
-        for solid in solids:
-            for face in solid:
-                gl.glBegin(gl.GL_LINE_LOOP)
-                for p in face:
-                    gl.glVertex3f(p.x, p.y, p.z)
-                gl.glEnd()
+    def draw_segments(self, segments):
+        gl.glBegin(gl.GL_LINES)
+        for a, b in segments:
+            gl.glVertex3f(a.x, a.y, a.z)
+            gl.glVertex3f(b.x, b.y, b.z)
+        gl.glEnd()
 
     def call_at(self, display_list, positions):
         for p in positions:

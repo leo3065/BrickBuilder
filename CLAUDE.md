@@ -55,7 +55,7 @@ src/brickbuilder/
   core/profile.py    Profile (TOML loader, palette) + sub_to_world(): the one grid -> world mapping
   core/parts.py      PartDef + built-in library loader (box and wedge bodies)
   core/geometry.py   Exact sub-grid geometry: Body, wedge Cut planes, per-sub-cell regions,
-                     sharing rule (`compatible`), faces, ray vs convex solid
+                     sharing rule (`compatible`), faces, ray vs convex solid, seamless outline
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, footprint/rotation, save v2 (+ v1 load)
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/camera.py     Orbit camera, orthographic projection, Z-up
@@ -124,9 +124,10 @@ tests/               pytest suite
   repainting the selection.
 - Picking iterates every part (fine at small scale); the renderer calls one cached display
   list per part each frame (VBOs/shaders are still the longer-term plan).
-- Profile `clearance`, `body_height` aren't used yet. A part with several bodies (e.g. slope =
-  box + wedge) shows outline seams where coplanar faces of its bodies meet.
-  Compiling face normals in Python makes the first draw slower (~700 ms for 1000 bricks).
+- Profile `clearance`, `body_height` aren't used yet. Outlines come from the merged shape
+  (`geometry.part_outline`, once per part type), so multi-body parts have no seams. Each part
+  has two display lists: all fills are drawn first, then all outlines (drawing them together
+  let later parts paint over earlier outlines). First draw of 1000 bricks ≈ 550 ms.
 - `grid_rotation` is unused. Measured: 1000 parts / 8000 studs ≈ 25 ms per frame. Display lists
   are keyed by (id, part, pos, turns, color) — anything else that changes a part's look must join the key.
 

@@ -5,8 +5,9 @@ import json
 import math
 import os
 import glm
-from brickbuilder.core.geometry import (Cut, body_faces, compatible, part_regions, rotate_cut,
-                                        rotate_sub, transform_faces, translate_cut)
+from brickbuilder.core.geometry import (Cut, body_faces, compatible, part_outline, part_regions,
+                                        rotate_cut, rotate_sub, transform_faces, transform_segments,
+                                        translate_cut)
 from brickbuilder.core.parts import PartDef
 from brickbuilder.core.profile import Profile
 
@@ -32,6 +33,7 @@ class PlacedPart:
     regions: Tuple[Region, ...]     # sub-cells it occupies (fully, or partly for wedges)
     box: Tuple[glm.vec3, glm.vec3]  # world AABB
     solids: Tuple[Solid, ...]       # world-space bodies, for rendering and picking
+    edges: Tuple[Tuple[glm.vec3, glm.vec3], ...]  # outline of the merged shape (no seams)
     studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
 
 
@@ -41,6 +43,7 @@ rotate_cell = rotate_sub
 # Per (part, subdiv, turns): regions relative to the part origin. Parts are immutable, so cache.
 _REGION_CACHE: Dict[Tuple[PartDef, Tuple[int, int, int], int], List[Region]] = {}
 _FACE_CACHE: Dict[Tuple[PartDef, Tuple[int, int, int]], List[list]] = {}
+_OUTLINE_CACHE: Dict[Tuple[PartDef, Tuple[int, int, int]], list] = {}
 
 
 def _turned_regions(profile: Profile, part: PartDef, turns: int) -> List[Region]:
@@ -71,6 +74,14 @@ def part_solids(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[
     if key not in _FACE_CACHE:
         _FACE_CACHE[key] = [body_faces(b, profile.subdiv) for b in part.bodies]
     return tuple(transform_faces(faces, turns, pos, profile.sub_to_world) for faces in _FACE_CACHE[key])
+
+
+def part_edges(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[Tuple[glm.vec3, glm.vec3], ...]:
+    """World-space outline of a placed part's merged shape (computed once per part type)."""
+    key = (part, profile.subdiv)
+    if key not in _OUTLINE_CACHE:
+        _OUTLINE_CACHE[key] = part_outline(part.bodies, profile.subdiv)
+    return tuple(transform_segments(_OUTLINE_CACHE[key], turns, pos, profile.sub_to_world))
 
 
 def anchor_cells(part: PartDef) -> List[Tuple[int, int, int]]:
@@ -234,6 +245,7 @@ class Model:
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, 0,
                             tuple(regions), subcells_box(self.profile, (s for s, _ in regions)),
                             part_solids(self.profile, part, pos, turns),
+                            part_edges(self.profile, part, pos, turns),
                             stud_positions(self.profile, part, pos, turns))
         self.parts[part_id] = placed
         for sub, cut in regions:

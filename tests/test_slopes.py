@@ -2,7 +2,7 @@ import glm
 import pytest
 
 from brickbuilder.core import picking
-from brickbuilder.core.geometry import Body, classify, compatible, part_regions, wedge_cut
+from brickbuilder.core.geometry import Body, classify, compatible, part_outline, part_regions, wedge_cut
 from brickbuilder.core.model import Model, placement_target
 from brickbuilder.core.parts import PartError, load_builtin_library, part_from_dict
 from brickbuilder.core.profile import load_builtin_profile
@@ -79,6 +79,28 @@ def test_slope_parts_cells_and_studs(library):
 def test_bad_wedges_rejected(body, message):
     with pytest.raises(PartError, match=message):
         part_from_dict("t:w", "", {"name": "W", "body": [body]})
+
+
+# --- outline (no seams between a part's bodies) ---------------------------------------------
+
+@pytest.mark.parametrize("name, edges", [
+    ("brick_1x1", 12), ("brick_2x8", 12),          # half-cell pieces merge back into one box
+    ("slope_1x2", 18), ("slope_1x2x2", 18),        # hexagonal side profile: 6 + 6 + 6
+    ("slope_inverted_1x2", 12),                    # box and wedge tops merge into one flat top
+    ("slope_inverted_1x2x2", 18),
+])
+def test_outline_follows_the_merged_shape(profile, library, name, edges):
+    assert len(part_outline(lib(library, name).bodies, profile.subdiv)) == edges
+
+
+def test_no_seam_between_box_and_wedge(profile, library):
+    segs = part_outline(lib(library, "slope_1x2").bodies, profile.subdiv)
+    # On the side face x=0, the box top edge under the triangle (y 0..2 sub-cells at z=1) is a seam
+    def on_seam(a, b):
+        return all(p[0] == 0 and p[2] == 1 and 0 <= p[1] <= 2 for p in (a, b)) and a != b
+    assert not any(on_seam(a, b) for a, b in segs)
+    # ...while the real edge where the flat top starts (y 2..4 at z=1) is still there
+    assert ((0.0, 2.0, 1.0), (0.0, 4.0, 1.0)) in segs
 
 
 # --- occupancy: the pairs from real sets ----------------------------------------------------

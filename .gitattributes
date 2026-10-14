@@ -1,0 +1,6 @@
+* text=auto
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ico binary

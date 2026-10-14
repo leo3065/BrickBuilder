@@ -166,7 +166,7 @@ Taken with calipers. ✅ = consistent, ❓ = needs a recheck.
 | single body height | 3.05 ✅ | 5.05 total incl. stud − 2.00 stud; ~0.075 seating gap per layer |
 | stud | Ø2.65 × 2.00, solid ✅ | |
 | wall, 1×N / 2×N | 0.85 / 0.95 | |
-| 1×1 inner opening | 2.2 | consistent with walls (0.85+2.2+0.85 = 3.9 ≈ pitch − gap). Magnifier photo: **round bore + square pocket** (a circle cuts the square's corners), so the 2.2 is likely the deeper square pocket, not the stud grip. Depths unknown |
+| 1×1 inner opening | 2.2 ❓ | consistent with walls (0.85+2.2+0.85 = 3.9 ≈ pitch − gap). Magnifier photos: a **round counterbore at the mouth**, then a deeper **square cavity whose corners are clipped by the circle**. Best guess: the stud grips in the round bore and 2.2 is the deeper square. To confirm: round bore diameter + depth (caliper depth rod). Parked: rendering only |
 | 1×N underside | hollow | |
 | 2×N underside | double ribs along long axis; 2×2 photo shows a centre bar with two round holes | wall→rib gap 2.15 ❓ (< stud Ø, measure at the bottom edge); ribs+gap 1.70; ribs recessed 0.75 from bottom edge |
 

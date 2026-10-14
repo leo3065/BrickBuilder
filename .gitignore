@@ -63,3 +63,6 @@ venv.bak/
 # Project specific
 # Ignore test models if strictly local junk
 test_model/
+
+# Editor workspace
+*.code-workspace

@@ -76,8 +76,6 @@ src/brickbuilder/
   ghost to `z = -1`. Undecided whether layer 0 should be a hard floor.
 - `resizeGL` divides by height (crash at 0); after a Ctrl+click erase in Place mode the
   ghost is stale until the mouse moves; load ignores `version`.
-- `__pycache__/*.pyc` files are tracked in git (committed before `.gitignore`); untrack
-  with `git rm -r --cached` when convenient.
 - README still describes a generic "brick building app" with "standard brick colors";
   should eventually state the Nanoblock-first / system-agnostic scope above.
 - README/help say **Alt+Left orbit** and **Shift+Alt+Left pan**; the viewport only

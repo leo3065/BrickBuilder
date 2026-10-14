@@ -7,17 +7,19 @@ class Camera:
         
     def reset(self):
         self.target = glm.vec3(0.0, 0.0, 0.0)
-        self.distance = 50.0 # Keep camera far enough back
+        # World units are mm. Orthographic, so distance only needs to keep the model
+        # in front of the near plane.
+        self.distance = 1000.0
         self.yaw = -math.pi / 4  # 45 degrees
         self.pitch = math.pi / 6 # 30 degrees
-        self.scale = 20.0
+        self.scale = 80.0 # visible height in mm
         
         # Up vector for the world (Z-up)
         self.world_up = glm.vec3(0.0, 0.0, 1.0) # Z is up
         
         self.aspect_ratio = 16/9
         self.near_plane = 0.1
-        self.far_plane = 500.0
+        self.far_plane = 5000.0
         
     def get_view_matrix(self):
         x = self.distance * math.cos(self.pitch) * math.cos(self.yaw)
@@ -51,10 +53,10 @@ class Camera:
         self.pitch = max(-limit, min(limit, self.pitch))
 
     def zoom(self, delta):
-        # For ortho, zoom means changing the scale (view size)
-        sensitivity = 2.0
-        self.scale -= delta * sensitivity
-        self.scale = max(0.1, min(self.scale, 500.0))
+        # For ortho, zoom means changing the scale (view size).
+        # Multiplicative, so each wheel notch feels the same at any zoom level.
+        self.scale *= math.exp(-delta * 0.2)
+        self.scale = max(1.0, min(self.scale, 2000.0))
 
     def pan(self, dx, dy):
         # Calculate right and up vectors relative to camera

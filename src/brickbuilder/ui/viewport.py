@@ -7,6 +7,7 @@ from typing import Optional
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.model import Model
+from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
 from brickbuilder.core.tools import Tool
 from brickbuilder.core.colors import COLORS, DEFAULT_COLOR
@@ -17,6 +18,7 @@ class Viewport(QOpenGLWidget):
         self.renderer = Renderer()
         self.camera = Camera()
         self.model = Model()
+        self.profile = load_builtin_profile()
         
         self.current_tool = Tool.PLACE
         self.current_color = DEFAULT_COLOR
@@ -43,7 +45,7 @@ class Viewport(QOpenGLWidget):
 
     def paintGL(self):
         pixel_ratio = self.devicePixelRatio()
-        self.renderer.render(self.camera, self.model, self.ghost_position, int(self.width() * pixel_ratio), int(self.height() * pixel_ratio), self.selected_brick_pos)
+        self.renderer.render(self.camera, self.model, self.profile, self.ghost_position, int(self.width() * pixel_ratio), int(self.height() * pixel_ratio), self.selected_brick_pos)
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
@@ -87,7 +89,7 @@ class Viewport(QOpenGLWidget):
         if self.ghost_position:
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                  # Quick erase override in Place mode
-                hit_pos, _, _ = picking.intersect_model(ray, self.model)
+                hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
                 if hit_pos:
                    self.model.remove_brick(hit_pos)
             else:
@@ -96,11 +98,11 @@ class Viewport(QOpenGLWidget):
                 self.update_ghost(event.position().x(), event.position().y())
 
     def _handle_select_tool(self, ray):
-        hit_pos, _, _ = picking.intersect_model(ray, self.model)
+        hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
         self.selected_brick_pos = hit_pos
 
     def _handle_paint_tool(self, ray):
-        hit_pos, _, _ = picking.intersect_model(ray, self.model)
+        hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
         if hit_pos:
             brick = self.model.get_brick(hit_pos)
             if brick:
@@ -108,7 +110,7 @@ class Viewport(QOpenGLWidget):
                 self.model.modified = True
 
     def _handle_erase_tool(self, ray):
-        hit_pos, _, _ = picking.intersect_model(ray, self.model)
+        hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
         if hit_pos:
             self.model.remove_brick(hit_pos)
 
@@ -142,7 +144,7 @@ class Viewport(QOpenGLWidget):
         ray = picking.get_mouse_ray(mouse_x, mouse_y, self.width(), self.height(), self.camera)
         
         # Check model intersection first
-        hit_pos, normal, neighbor = picking.intersect_model(ray, self.model)
+        hit_pos, normal, neighbor = picking.intersect_model(ray, self.model, self.profile)
         
         if neighbor:
             # Snap to neighbor
@@ -153,23 +155,8 @@ class Viewport(QOpenGLWidget):
             t = picking.intersect_plane(ray, glm.vec3(0, 0, 1), glm.vec3(0, 0, 0))
             if t:
                 hit_point = ray.origin + ray.direction * t
-                # Round to nearest int
-                x = round(hit_point.x)
-                y = round(hit_point.y)
-                # Z should be 0, but for brick center Z=0 means it goes from -0.5 to 0.5. 
-                # If we want it ON the grid, center Z=0.5.
-                # Let's assume Grid is at Z=0, and Bricks sit ON TOP.
-                # So first layer center Z=0.5 (index 0?)
-                # If grid is visual guide at Z=0. 
-                # Let's say brick index (x,y,z) is center (x, y, z+0.5).
-                # Wait, earlier I said center at integer coordinates.
-                # If grid is Z=0, and we want bricks on top, then index Z=0 should mean center Z=0.5 visually?
-                # Or we just use Z=0 as center, so it sinks half way.
-                # User requirement: "placed on the face of the selected block, or on the grid".
-                # Usually on grid means sitting on it.
-                # So Z index 0 center = (x, y, 0.5).
-                
-                # Let's adjust rendering later. For now logic: index 0.
+                # Layer 0 sits on the Z=0 grid (see Profile.cell_box)
+                x, y = self.profile.world_to_cell_xy(hit_point)
                 self.ghost_position = glm.ivec3(x, y, 0)
             else:
                 self.ghost_position = None

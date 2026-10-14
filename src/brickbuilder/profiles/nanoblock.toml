@@ -1,0 +1,19 @@
+# Nanoblock system profile. Values measured with calipers; see docs/part_format.md.
+id = "nanoblock"
+name = "Nanoblock"
+cell = [4.0, 4.0, 3.125]      # mm: stud pitch X/Y, stacking pitch Z (studs excluded)
+subdiv = [2, 2, 1]            # placement sub-grid per cell: half-cells in XY
+grid_rotation = 90.0          # rotations that keep a part on its frame's grid
+clearance = 0.05              # cosmetic seam between bodies
+body_height = 3.05            # rendering only; stacking pitch minus seating gap
+
+[stud]
+diameter = 2.65
+height = 2.00
+hollow_diameter = 0.0         # solid
+
+[socket_types]
+stud     = { mates = ["antistud"], dof = "fixed" }
+antistud = { mates = ["stud"],     dof = "fixed" }
+ball     = { mates = ["cup"],      dof = "spherical" }
+cup      = { mates = ["ball"],     dof = "spherical" }

@@ -51,6 +51,7 @@ Koraidon/Miraidon sets (regular + sloped bricks bracing beyond the joints).
 src/brickbuilder/
   main.py            QApplication + QSurfaceFormat (Compatibility profile, GL 2.1)
   core/brick.py      Brick(position: ivec3, color: vec3)
+  core/profile.py    Profile (TOML loader) + cell_box(): the one cell-index -> world mapping
   core/model.py      Model: dict[(x,y,z)] -> Brick, modified flag, JSON save/load (version 1)
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
@@ -60,14 +61,17 @@ src/brickbuilder/
   core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE
   ui/main_window.py  Menus, tool toolbar (Q/W/E/R), color dock, file dialogs, unsaved prompt
   ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview
+  profiles/*.toml    Built-in system profiles (nanoblock.toml), loaded via importlib.resources
 ```
 
 ## Conventions & invariants
 - World axes: **+X right, +Y forward, +Z up.**
-- Grid units are currently abstract 1.0 cubes (not yet scaled to 4×4×3).
-- Brick index `(x, y, z)` occupies X∈[x-0.5, x+0.5], Y∈[y-0.5, y+0.5], **Z∈[z, z+1]**.
-  The renderer applies `glTranslatef(0,0,0.5)` around brick drawing and `picking.py`
-  hard-codes the matching AABB — change both together, or better, centralize it.
+- **World units are mm.** Cell size comes from the active profile (`Viewport.profile`,
+  currently always the built-in Nanoblock one); camera defaults are mm-scaled.
+- Brick index `(x, y, z)` occupies `[x-0.5, x+0.5]·cell.x`, `[y-0.5, y+0.5]·cell.y`,
+  **`[z, z+1]·cell.z`**. `Profile.cell_box()` is the only place this is defined;
+  renderer, picking and ghost placement all go through it — never re-derive it.
+- Renderer loads `Camera.get_projection_matrix()`, the same matrix picking inverts.
 - Ground placement only happens when the ray points downward; layer 0 sits on the grid.
 - Save format: `{"version": 1, "bricks": [{x,y,z,r,g,b}, ...]}` with float RGB.
   Bump `version` and keep a loader path for v1 when the schema changes.
@@ -77,8 +81,6 @@ src/brickbuilder/
 - **6-view / isometric / 30° rotation buttons** were ticked in `feature_plan.md` but never
   existed in any commit (`git log -S isometric` only hits the plan). Now unticked.
 - **Moving bricks** is listed in the done "building" item but isn't implemented.
-- `Camera.get_projection_matrix()` (used by picking) and the renderer's own `glOrtho`
-  call (`renderer.py:33`) duplicate the projection — keep them in sync or unify.
 - Nothing stops bricks below the grid: looking up at a layer-0 bottom face snaps the
   ghost to `z = -1`. Undecided whether layer 0 should be a hard floor.
 - `resizeGL` divides by height (crash at 0); after a Ctrl+click erase in Place mode the
@@ -95,6 +97,9 @@ src/brickbuilder/
   repainting the selection.
 - Picking iterates every brick (fine at small scale); rendering is immediate mode
   every frame.
+- Bodies render as full cells: profile `clearance`, `body_height` and studs aren't drawn
+  yet (studs come with part definitions, build step 2). `subdiv` / `grid_rotation` are
+  loaded but unused.
 
 ## Architectural pressure from upcoming features
 The `dict[(x,y,z)] -> Brick` model assumes one brick = one cell on one global grid.
@@ -105,8 +110,7 @@ Planned features break that:
   than float positions.
 - fine Z rotation (UI-snapped, default 7.5°), ball joints and per-part grids → bricks belong to a
   "grid frame" (transform); the global grid becomes just the root frame.
-- non-cube cells (4×4×3) → a single place for cell-to-world scale used by renderer,
-  picking and camera, sourced from the system profile.
+- ~~non-cube cells~~ done: `Profile.cell_box()` (build step 1).
 - Prefer migrating to VBOs/shaders before mesh-heavy features (slopes, imported parts).
 Raise these trade-offs with the user before restructuring; don't silently rewrite.
 

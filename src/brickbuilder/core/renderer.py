@@ -19,19 +19,16 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, ghost_position, width, height, selected_brick_pos=None, show_grid=True, show_gizmo=True, section_z=None):
+    def render(self, camera, model, profile, ghost_position, width, height, selected_brick_pos=None, show_grid=True, show_gizmo=True, section_z=None):
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
         proj = camera.get_projection_matrix()
 
-        w = camera.scale * camera.aspect_ratio
-        h = camera.scale
-        
+        # Same projection matrix that picking inverts
         gl.glMatrixMode(gl.GL_PROJECTION)
-        gl.glLoadIdentity()
-        gl.glOrtho(-w/2, w/2, -h/2, h/2, camera.near_plane, camera.far_plane)
-        
+        gl.glLoadTransposeMatrixf(np.array(proj, dtype=np.float32).flatten())
+
         gl.glMatrixMode(gl.GL_MODELVIEW)
         gl.glLoadTransposeMatrixf(np.array(view, dtype=np.float32).flatten())
         
@@ -54,23 +51,18 @@ class Renderer:
         
         gl.glDisable(gl.GL_LIGHTING)
         if show_grid:
-            self.draw_grid()
+            self.draw_grid(profile)
         gl.glEnable(gl.GL_LIGHTING)
-        
-        # Render Bricks
-        gl.glPushMatrix()
-        gl.glTranslatef(0, 0, 0.5)
-        
-        self.render_bricks(model)
-        
+
+        # Render Bricks (cell index -> world box via profile.cell_box)
+        self.render_bricks(model, profile)
+
         if ghost_position:
-            self.render_ghost(ghost_position)
-            
+            self.render_ghost(ghost_position, profile)
+
         if selected_brick_pos:
-            self.render_selection(selected_brick_pos)
-            
-        gl.glPopMatrix()
-        
+            self.render_selection(selected_brick_pos, profile)
+
         if section_z is not None:
             gl.glDisable(gl.GL_CLIP_PLANE0)
         
@@ -78,7 +70,7 @@ class Renderer:
         if show_gizmo:
             self.draw_orientation_gizmo(camera, width, height)
 
-    def render_selection(self, pos):
+    def render_selection(self, pos, profile):
         # Draw a wireframe box around the selected brick
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
@@ -88,7 +80,7 @@ class Renderer:
         
         gl.glBegin(gl.GL_QUADS)
         gl.glColor3f(1.0, 1.0, 0.0) # Yellow
-        self.draw_cube(pos.x, pos.y, pos.z)
+        self.draw_box(*profile.cell_box(pos))
         gl.glEnd()
         
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
@@ -228,7 +220,7 @@ class Renderer:
         gl.glVertex3f(center.x + hs, center.y + hs, center.z)
         gl.glVertex3f(center.x - hs, center.y - hs, center.z)
 
-    def render_bricks(self, model):
+    def render_bricks(self, model, profile):
         # Draw outlines first or last? 
         # Trick: Draw filled polys with offset (pushes them back), then lines (at normal depth).
         
@@ -239,7 +231,7 @@ class Renderer:
         for brick in model.get_all_bricks():
             pos = brick.position
             gl.glColor3f(brick.color.x, brick.color.y, brick.color.z)
-            self.draw_cube(pos.x, pos.y, pos.z)
+            self.draw_box(*profile.cell_box(pos))
         gl.glEnd()
         
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
@@ -252,13 +244,13 @@ class Renderer:
         gl.glColor3f(0.0, 0.0, 0.0)
         for brick in model.get_all_bricks():
             pos = brick.position
-            self.draw_cube(pos.x, pos.y, pos.z)
+            self.draw_box(*profile.cell_box(pos))
         gl.glEnd()
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
         gl.glLineWidth(1.0)
         gl.glEnable(gl.GL_LIGHTING)
 
-    def render_ghost(self, pos):
+    def render_ghost(self, pos, profile):
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         
@@ -267,57 +259,57 @@ class Renderer:
         
         gl.glBegin(gl.GL_QUADS)
         gl.glColor4f(0.0, 1.0, 0.0, 0.5) # Semi-transparent green
-        self.draw_cube(pos.x, pos.y, pos.z)
+        self.draw_box(*profile.cell_box(pos))
         gl.glEnd()
         
         gl.glDisable(gl.GL_BLEND)
 
-    def draw_cube(self, x, y, z):
-        # Center at x,y,z (which are integers usually), size 1.0
-        # Vertices relative to center
-        r = 0.5
-        
-        # Top Face (z+r)
+    def draw_box(self, lo, hi):
+        # Axis-aligned box between world-space corners lo (min) and hi (max)
+        x0, y0, z0 = lo.x, lo.y, lo.z
+        x1, y1, z1 = hi.x, hi.y, hi.z
+
+        # Top Face (+Z)
         gl.glNormal3f(0.0, 0.0, 1.0)
-        gl.glVertex3f(x-r, y-r, z+r)
-        gl.glVertex3f(x+r, y-r, z+r)
-        gl.glVertex3f(x+r, y+r, z+r)
-        gl.glVertex3f(x-r, y+r, z+r)
-        
-        # Bottom Face (z-r)
+        gl.glVertex3f(x0, y0, z1)
+        gl.glVertex3f(x1, y0, z1)
+        gl.glVertex3f(x1, y1, z1)
+        gl.glVertex3f(x0, y1, z1)
+
+        # Bottom Face (-Z)
         gl.glNormal3f(0.0, 0.0, -1.0)
-        gl.glVertex3f(x-r, y-r, z-r)
-        gl.glVertex3f(x+r, y-r, z-r)
-        gl.glVertex3f(x+r, y+r, z-r)
-        gl.glVertex3f(x-r, y+r, z-r)
-        
-        # Front Face (y-r)
+        gl.glVertex3f(x0, y0, z0)
+        gl.glVertex3f(x1, y0, z0)
+        gl.glVertex3f(x1, y1, z0)
+        gl.glVertex3f(x0, y1, z0)
+
+        # Front Face (-Y)
         gl.glNormal3f(0.0, -1.0, 0.0)
-        gl.glVertex3f(x-r, y-r, z-r)
-        gl.glVertex3f(x+r, y-r, z-r)
-        gl.glVertex3f(x+r, y-r, z+r)
-        gl.glVertex3f(x-r, y-r, z+r)
-        
-        # Back Face (y+r)
+        gl.glVertex3f(x0, y0, z0)
+        gl.glVertex3f(x1, y0, z0)
+        gl.glVertex3f(x1, y0, z1)
+        gl.glVertex3f(x0, y0, z1)
+
+        # Back Face (+Y)
         gl.glNormal3f(0.0, 1.0, 0.0)
-        gl.glVertex3f(x-r, y+r, z-r)
-        gl.glVertex3f(x+r, y+r, z-r)
-        gl.glVertex3f(x+r, y+r, z+r)
-        gl.glVertex3f(x-r, y+r, z+r)
-        
-        # Left Face (x-r)
+        gl.glVertex3f(x0, y1, z0)
+        gl.glVertex3f(x1, y1, z0)
+        gl.glVertex3f(x1, y1, z1)
+        gl.glVertex3f(x0, y1, z1)
+
+        # Left Face (-X)
         gl.glNormal3f(-1.0, 0.0, 0.0)
-        gl.glVertex3f(x-r, y-r, z-r)
-        gl.glVertex3f(x-r, y+r, z-r)
-        gl.glVertex3f(x-r, y+r, z+r)
-        gl.glVertex3f(x-r, y-r, z+r)
-        
-        # Right Face (x+r)
+        gl.glVertex3f(x0, y0, z0)
+        gl.glVertex3f(x0, y1, z0)
+        gl.glVertex3f(x0, y1, z1)
+        gl.glVertex3f(x0, y0, z1)
+
+        # Right Face (+X)
         gl.glNormal3f(1.0, 0.0, 0.0)
-        gl.glVertex3f(x+r, y-r, z-r)
-        gl.glVertex3f(x+r, y+r, z-r)
-        gl.glVertex3f(x+r, y+r, z+r)
-        gl.glVertex3f(x+r, y-r, z+r)
+        gl.glVertex3f(x1, y0, z0)
+        gl.glVertex3f(x1, y1, z0)
+        gl.glVertex3f(x1, y1, z1)
+        gl.glVertex3f(x1, y0, z1)
 
     def draw_origin_marker(self):
         # Draw a small pyramid/triangle at origin
@@ -340,28 +332,27 @@ class Renderer:
         gl.glEnd()
 
 
-    def draw_grid(self):
+    def draw_grid(self, profile):
         gl.glBegin(gl.GL_LINES)
         gl.glColor3f(0.5, 0.5, 0.5)
-        
-        size = 20
-        step = 1
-        
-        # Grid on XY plane (Z=0)
-        # Shift lines by 0.5 to align with block edges (since blocks are centered at integers)
+
+        size = 20 # cells
+
+        # Grid on XY plane (Z=0), lines on cell edges (cells are centered on integer indices)
+        cx, cy = profile.cell.x, profile.cell.y
         offset = 0.5
-        
-        for i in range(-size, size + 1, step):
+
+        for i in range(-size, size + 1):
             val = float(i) - offset
-            
+
             # Lines along Y
-            gl.glVertex3f(val, float(-size) - offset, 0.0)
-            gl.glVertex3f(val, float(size) - offset, 0.0)
-            
+            gl.glVertex3f(val * cx, (-size - offset) * cy, 0.0)
+            gl.glVertex3f(val * cx, (size - offset) * cy, 0.0)
+
             # Lines along X
-            gl.glVertex3f(float(-size) - offset, val, 0.0)
-            gl.glVertex3f(float(size) - offset, val, 0.0)
-            
+            gl.glVertex3f((-size - offset) * cx, val * cy, 0.0)
+            gl.glVertex3f((size - offset) * cx, val * cy, 0.0)
+
         gl.glEnd()
 
     def draw_axis(self):

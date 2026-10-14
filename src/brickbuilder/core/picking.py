@@ -3,6 +3,7 @@ import math
 from typing import Optional, Tuple
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.model import Model
+from brickbuilder.core.profile import Profile
 
 class Ray:
     def __init__(self, origin: glm.vec3, direction: glm.vec3):
@@ -134,23 +135,17 @@ def intersect_aabb(ray: Ray, box_min: glm.vec3, box_max: glm.vec3) -> Optional[T
 
     return t_min, normal
 
-def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[glm.ivec3], Optional[glm.vec3], Optional[glm.ivec3]]:
+def intersect_model(ray: Ray, model: Model, profile: Profile) -> Tuple[Optional[glm.ivec3], Optional[glm.vec3], Optional[glm.ivec3]]:
     # Returns (intersected_brick_pos, intersection_normal, neighbor_pos)
     closest_t = 100000.0
     hit_brick = None
     hit_normal = None
-    
+
     # Optimization: Grid traversal is better, but iterating all bricks is okay for start < 1000 bricks
     for brick in model.get_all_bricks():
-        # AABB: Brick is at brick.position (integer), size 1x1x1
-        # Renderer shifts bricks by (0, 0, 0.5), so the visual center is at z+0.5.
-        # This means the vertical range is [z, z+1].
-        # X and Y are still centered at integer coordinates: [x-0.5, x+0.5].
-        
-        pos = glm.vec3(brick.position)
-        box_min = pos + glm.vec3(-0.5, -0.5, 0.0)
-        box_max = pos + glm.vec3(0.5, 0.5, 1.0)
-        
+        # Same box the renderer draws
+        box_min, box_max = profile.cell_box(brick.position)
+
         result = intersect_aabb(ray, box_min, box_max)
         if result:
             t, normal = result

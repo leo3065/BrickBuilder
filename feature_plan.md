@@ -22,7 +22,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Grid dimensions come from a system profile; Nanoblock is 4 × 4 × 3.125 mm (measured stacking pitch). A UI for switching profiles is deliberately deferred until there's a second system.
 - [x] Adding support for data-driven part shape and size definition: box-shaped parts (see `docs/part_format.md`).
 - [x] Slopes in part definitions (wedge bodies, with complementary slopes sharing cells). Starter set: 1×2 and 1×2×2, normal and inverted.
-- [ ] More slope parts (1×3, 2×2, 2×3, 2×4 slopes…): shapes to confirm against real parts.
+- [x] More slope parts: 1×3, 2×2, 2×3 and 2×4 slopes (nanoblock.info "Slope 1" shapes), confirmed against real parts.
 - [ ] Round parts and mesh bodies (e.g. joints) in part definitions.
 - [ ] A manu for browing brick block library, with a treeview, a thumbnail preview for the brick blocks, and mark-as-favorite function. 
 - [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.

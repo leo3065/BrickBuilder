@@ -69,6 +69,11 @@ def test_slope_parts_cells_and_studs(library):
     assert lib(library, "slope_1x2x2").cells == ((0, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 2))
     assert lib(library, "slope_inverted_1x2").studs == ((0, 0, 0), (0, 1, 0))
     assert lib(library, "slope_inverted_1x2x2").studs == ((0, 0, 0), (0, 1, 1))
+    # Every flat top cell has a stud
+    assert lib(library, "slope_1x3").studs == ((0, 2, 0),)
+    assert lib(library, "slope_2x3").studs == ((0, 2, 0), (1, 2, 0))
+    assert lib(library, "slope_2x2").studs == ((0, 1, 0), (1, 1, 0))
+    assert lib(library, "slope_2x4").studs == tuple((x, 1, 0) for x in range(4))
 
 
 @pytest.mark.parametrize("body, message", [
@@ -88,6 +93,7 @@ def test_bad_wedges_rejected(body, message):
     ("slope_1x2", 18), ("slope_1x2x2", 18),        # hexagonal side profile: 6 + 6 + 6
     ("slope_inverted_1x2", 12),                    # box and wedge tops merge into one flat top
     ("slope_inverted_1x2x2", 18),
+    ("slope_1x3", 18), ("slope_2x3", 18), ("slope_2x2", 18), ("slope_2x4", 18),  # same profile, wider
 ])
 def test_outline_follows_the_merged_shape(profile, library, name, edges):
     assert len(part_outline(lib(library, name).bodies, profile.subdiv)) == edges

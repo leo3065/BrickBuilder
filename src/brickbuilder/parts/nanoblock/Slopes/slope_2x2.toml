@@ -1,0 +1,13 @@
+# Slope 1x2 repeated twice across: same side view, two studs on the flat row.
+name = "Slope 2×2"
+
+[[body]]
+shape = "box"
+size = [2, 2, 1]
+
+[[body]]
+shape = "wedge"
+size = [2, 1, 1]
+at = [0, 0, 1]
+keep = "lower"
+tall = "+y"

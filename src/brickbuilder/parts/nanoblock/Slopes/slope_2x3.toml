@@ -1,0 +1,14 @@
+# Slope 1x3 made 2 wide: same side view, two studs on the flat row.
+name = "Slope 2×3"
+ldraw = "NB203A.dat"
+
+[[body]]
+shape = "box"
+size = [2, 3, 1]
+
+[[body]]
+shape = "wedge"
+size = [2, 2, 1]
+at = [0, 0, 1]
+keep = "lower"
+tall = "+y"

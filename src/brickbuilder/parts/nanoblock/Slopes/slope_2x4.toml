@@ -1,0 +1,15 @@
+# Slope 1x2 repeated 4 times along the long side (the slope runs along the short side):
+# same side view as slope_1x2, four studs on the flat row.
+name = "Slope 2×4"
+ldraw = "NB204A.dat"
+
+[[body]]
+shape = "box"
+size = [4, 2, 1]
+
+[[body]]
+shape = "wedge"
+size = [4, 1, 1]
+at = [0, 0, 1]
+keep = "lower"
+tall = "+y"

@@ -1,0 +1,15 @@
+# 1x3x1 base; a lower triangle 2 cells x 1 layer over two cells, full height next to
+# the flat cell, which has a stud.
+name = "Slope 1×3"
+ldraw = "NB103A.dat"
+
+[[body]]
+shape = "box"
+size = [1, 3, 1]
+
+[[body]]
+shape = "wedge"
+size = [1, 2, 1]
+at = [0, 0, 1]
+keep = "lower"
+tall = "+y"

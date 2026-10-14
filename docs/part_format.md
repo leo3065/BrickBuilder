@@ -84,21 +84,38 @@ antistuds = "bottom"  # derive antistud sockets on every bottom cell
 cover irregular layouts later (single-stud parts such as NB102S/NB202S1).
 
 **Slope profile ✅:** seen from the side, a slope is a box (base) plus a right triangle sitting on
-it, extruded along the other horizontal axis. Studs aren't part of the outline. Parameters: base
-size, the triangle's run (cells) and rise (layers; can be fractional, e.g. NB10202A peaks at 2
-layers + stud height), and which way the vertical face points. A sketch, not final:
+it, extruded along the other horizontal axis. Studs aren't part of the outline. ✅ Ignoring studs,
+the triangle is always one of the two halves of an **m (cells) × n (layers) rectangle** cut along
+its diagonal, so its corners are whole numbers on the sub-grid. Parameters: base size, the
+triangle's run (m) and rise (n), and which way the vertical face points. Inverted slopes hang the
+triangle below instead. A sketch, not final:
 ```toml
 [[body]]
 shape = "slope"
 size = [1, 2, 1]        # base box
-rise = 1.0              # layers above the base
+rise = 1                # layers (n)
 run = [0, 1]            # the part of the base the triangle sits on (cell range along the slope axis)
 high_side = "+y"        # direction of the triangle's vertical face
 ```
+❓ The LDraw NB10202A (1×2×2 slope) peaks at 2 layers **+ a stud height**, which doesn't fit the
+rule. To check on a real part: total height ≈ 6.25 mm (fits; LDraw is drawn too tall) or ≈ 8.25 mm
+(needs an exception).
 
-Occupancy is tracked per **sub-cell** of the profile's `subdiv` grid (so half-offset parts work),
-but each part's shape fills whole cells. A slope fills every cell its outline touches. Finer
-occupancy can come later if collisions between slopes matter.
+**Connections ✅:** a normal slope's sloped top is solid: no studs, and nothing attaches to it. An
+**inverted slope's underside is open** (walls only on the sides, none along the slope), so it has
+antistud sockets under its whole footprint, including under the slope, and a stud from below fits
+into the hollow. If studs are ever collision-checked, that underside counts as open.
+
+Occupancy is tracked per **sub-cell** of the profile's `subdiv` grid (so half-offset parts work).
+Boxes fill whole sub-cells. **Slope occupancy (planned) ✅:** each body is a box optionally cut by the
+triangle's diagonal plane, stored exactly with integer sub-grid coefficients. Each sub-cell a part
+touches is *full*, *empty* (not registered) or *partial* (cut by the plane: stores the plane and the
+kept side), decided by testing the sub-cell's 8 corners. Two occupants may share a sub-cell only if
+**neither is full and both are cut by the same plane on opposite sides**: exactly the two-colour
+upper/lower triangle pairs that sets use for patterns. Any other partial combination counts as an
+overlap (conservative; an exact convex-intersection test can replace this rule later without
+changing the data). Picking must test the real wedge (ray vs box + one plane), not the bounding
+box, so the empty half can be pointed at; sloped faces are not placement targets.
 
 **Reference:** `D:\Nanoblocks\LDrawData` (unofficial LDraw Nanoblock library, CCAL 2.0). Use it for
 **shapes and the part list**, not dimensions: it assumes 10 LDU per pitch and 7.5 per layer

@@ -20,6 +20,9 @@ class MainWindow(QMainWindow):
         self.create_color_dock()
         self.update_status()
 
+        self.viewport.edited.connect(self.on_model_edited)
+        self.on_model_edited()
+
     def create_menus(self) -> None:
         menu_bar = self.menuBar()
         
@@ -46,6 +49,19 @@ class MainWindow(QMainWindow):
 
         # Edit Menu
         edit_menu = menu_bar.addMenu("Edit")
+
+        self.undo_action = QAction("Undo", self)
+        self.undo_action.setShortcuts(QKeySequence.Undo)
+        self.undo_action.triggered.connect(self.viewport.undo)
+        edit_menu.addAction(self.undo_action)
+
+        self.redo_action = QAction("Redo", self)
+        # Platform standard: on Windows Ctrl+Y and Ctrl+Shift+Z
+        self.redo_action.setShortcuts(QKeySequence.Redo)
+        self.redo_action.triggered.connect(self.viewport.redo)
+        edit_menu.addAction(self.redo_action)
+
+        edit_menu.addSeparator()
 
         rotate_action = QAction("Rotate Part", self)
         rotate_action.setShortcut("Space")
@@ -273,6 +289,11 @@ class MainWindow(QMainWindow):
         
         d.exec()
 
+    def on_model_edited(self):
+        history = self.viewport.history
+        self.undo_action.setEnabled(history.can_undo())
+        self.redo_action.setEnabled(history.can_redo())
+
     def check_unsaved_changes(self) -> bool:
         if self.viewport.model.modified:
             msg = QMessageBox()
@@ -292,7 +313,6 @@ class MainWindow(QMainWindow):
     def new_file(self) -> None:
         if self.check_unsaved_changes():
             self.viewport.reset_scene()
-            self.viewport.model.modified = False
 
     def open_file(self) -> None:
         if not self.check_unsaved_changes():
@@ -311,6 +331,7 @@ class MainWindow(QMainWindow):
         if filename:
             try:
                 self.viewport.model.save_to_file(filename)
+                self.viewport.history.mark_clean()
                 return True
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not save file:\n{e}")

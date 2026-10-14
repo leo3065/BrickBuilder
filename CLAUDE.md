@@ -55,6 +55,7 @@ src/brickbuilder/
   core/profile.py    Profile (TOML loader, palette) + sub_to_world(): the one grid -> world mapping
   core/parts.py      PartDef + built-in library loader (box bodies only so far)
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, footprint/rotation, save v2 (+ v1 load)
+  core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
   core/renderer.py   Legacy GL: grid, parts (one cached display list per part: box, studs,
@@ -81,6 +82,9 @@ tests/               pytest suite
   so `PlacedPart.box` (a world AABB) is what's rendered and picked.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
   in save files, separate from their display `name`.
+- **Edits from the UI go through `Viewport.history`** (add_part / remove_part / set_color), never
+  `Model` directly, or undo gets out of sync. One user action = one command (list of ops).
+  History also owns the modified flag (`mark_clean()` on save, `reset()` on new/open).
 - Renderer loads `Camera.get_projection_matrix()`, the same matrix picking inverts.
 - Ground placement only happens when the ray points downward; layer 0 sits on the grid.
 - Save format v2 (see `docs/part_format.md`): `{version, profile, frames, parts: [{id, part,

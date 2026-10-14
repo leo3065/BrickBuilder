@@ -1,11 +1,12 @@
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent, QWheelEvent
 import OpenGL.GL as gl
 import glm
 from typing import Optional, Tuple
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
+from brickbuilder.core.history import History
 from brickbuilder.core.model import Model, Sub, anchor_cells, default_anchor_index, origin_for_anchor
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
@@ -16,6 +17,9 @@ DEFAULT_PART = "brick_1x1"
 DEFAULT_COLOR = "red"
 
 class Viewport(QOpenGLWidget):
+    # Emitted after anything that may have changed the model (edits, undo/redo, load, new)
+    edited = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.renderer = Renderer()
@@ -23,6 +27,8 @@ class Viewport(QOpenGLWidget):
         self.profile = load_builtin_profile()
         self.library = load_builtin_library(self.profile.id)
         self.model = Model(self.profile, self.library)
+        # All edits go through the history so they can be undone
+        self.history = History(self.model)
 
         self.current_tool = Tool.PLACE
         self.current_part: PartDef = self.library[f"{self.profile.id}:{DEFAULT_PART}"]
@@ -73,16 +79,34 @@ class Viewport(QOpenGLWidget):
 
     def reset_scene(self):
         self.model.clear()
+        self.history.reset()
         self.camera.reset()
         self.ghost_pos = None
         self.selected_part_id = None
         self.update()
+        self.edited.emit()
 
     def model_replaced(self):
         # After loading a file: drop references into the old contents
+        self.history.reset()
         self.ghost_pos = None
         self.selected_part_id = None
         self.update()
+        self.edited.emit()
+
+    def undo(self):
+        if self.history.undo():
+            self._after_history_step()
+
+    def redo(self):
+        if self.history.redo():
+            self._after_history_step()
+
+    def _after_history_step(self):
+        if self.selected_part_id not in self.model.parts:
+            self.selected_part_id = None
+        self.refresh_ghost()
+        self.edited.emit()
 
     def set_current_part(self, part: PartDef):
         self.current_part = part
@@ -116,6 +140,7 @@ class Viewport(QOpenGLWidget):
         if event.buttons() & Qt.MouseButton.LeftButton:
             self._handle_left_click(event)
             self.update()
+            self.edited.emit()
 
     def _handle_left_click(self, event: QMouseEvent):
         ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera)
@@ -134,7 +159,7 @@ class Viewport(QOpenGLWidget):
             # Quick erase override in Place mode
             self._handle_erase_tool(ray)
         elif self.ghost_pos is not None and self.ghost_valid:
-            self.model.add_part(self.current_part, self.ghost_pos, self.current_turns, self.current_color)
+            self.history.add_part(self.current_part, self.ghost_pos, self.current_turns, self.current_color)
         # Refresh ghost immediately
         self.update_ghost(event.position().x(), event.position().y())
 
@@ -145,12 +170,12 @@ class Viewport(QOpenGLWidget):
     def _handle_paint_tool(self, ray):
         hit, _, _ = picking.intersect_model(ray, self.model)
         if hit:
-            self.model.set_color(hit.id, self.current_color)
+            self.history.set_color(hit.id, self.current_color)
 
     def _handle_erase_tool(self, ray):
         hit, _, _ = picking.intersect_model(ray, self.model)
         if hit:
-            self.model.remove_part(hit.id)
+            self.history.remove_part(hit.id)
             if hit.id == self.selected_part_id:
                 self.selected_part_id = None
 

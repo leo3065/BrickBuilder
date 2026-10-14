@@ -15,6 +15,8 @@ diamond blocks, other micro-bricks). Rule of thumb:
 - Don't hard-code Nanoblock numbers (4/4/3, 0.5 offset) in rendering/picking/model
   code; read them from the profile. The 7.5° rotation step is an arbitrary **editor snap
   setting**, not a system property — it doesn't belong in the profile.
+- Real Nanoblock part list (nanoblock.info names and block numbers, LDraw files, our part ids):
+  `docs/nanoblock_parts.md`. Check new parts against it.
 - Design for profiles / part definitions / library / save v2: `docs/part_format.md`
   (TOML, cell units, derived studs, sockets with DOF, frames). Parametric part families
   are deliberately deferred — `params` key reserved only.

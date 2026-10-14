@@ -4,9 +4,9 @@ A Python-based GUI program for building and designing 3D brick models.
 ## Feature plan
 ### Basic
 - [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Cooridnate system: +X is Right, +Y is Forward, +Z is Up.
-- [x] Building using 1x1x1 brick blocks (use cube shape for now) that snaps to grid, including adding, removing, and moving blocks. When adding, the new block will be placed on the face of the selected block, or on the grid if no block is selected. Keep the outline of the model clean.
+- [x] Building using 1x1x1 brick blocks (use cube shape for now) that snaps to grid, including adding, removing, and moving blocks (moving not implemented yet). When adding, the new block will be placed on the face of the selected block, or on the grid if no block is selected. Keep the outline of the model clean.
 - [x] A save/load function to save the current model and load a saved model.
-- [x] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.
+- [ ] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis.
 - [x] When in placing mode, showing a preview of the brick block to be placed.
 - [x] Allowing selecing the color of the brick blocks, both before building and after building.
 - [ ] Allowing section view of the model, especially viewing blocks under a selected layer. Makes it easy to go though layers.

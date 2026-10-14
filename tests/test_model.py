@@ -1,0 +1,148 @@
+import json
+from pathlib import Path
+
+import glm
+import pytest
+
+from brickbuilder.core import picking
+from brickbuilder.core.model import Model, ModelError, footprint, v1_color_to_palette
+from brickbuilder.core.parts import load_builtin_library
+from brickbuilder.core.profile import load_builtin_profile
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(scope="module")
+def profile():
+    return load_builtin_profile()
+
+
+@pytest.fixture(scope="module")
+def library():
+    return load_builtin_library("nanoblock")
+
+
+@pytest.fixture
+def model(profile, library):
+    return Model(profile, library)
+
+
+def part(library, size):
+    return library[f"nanoblock:brick_{size}"]
+
+
+def cells_of(profile, subcells):
+    """Collapse sub-cells back to whole cells (for readable assertions)."""
+    nx, ny, nz = profile.subdiv
+    return sorted({(x // nx, y // ny, z // nz) for x, y, z in subcells})
+
+
+@pytest.mark.parametrize("turns, expected", [
+    (0, [(0, 0, 0), (0, 1, 0)]),     # 1x2 along +Y
+    (1, [(-2, 0, 0), (-1, 0, 0)]),   # turned CCW about the origin corner: along -X
+    (2, [(-1, -2, 0), (-1, -1, 0)]),
+    (3, [(0, -1, 0), (1, -1, 0)]),
+])
+def test_footprint_rotates_about_origin_corner(profile, library, turns, expected):
+    subs = footprint(profile, part(library, "1x2"), (0, 0, 0), turns)
+    assert len(subs) == 2 * 4  # 2 cells x (2x2x1 sub-cells)
+    assert cells_of(profile, subs) == expected
+
+
+def test_overlap_refused_and_occupancy(model, library):
+    a = model.add_part(part(library, "2x4"), (0, 0, 0), 0, "red")
+    assert a is not None and len(model.occupancy) == 32
+    # 1x1 inside the 2x4's footprint, same layer -> refused; one layer up -> fine
+    assert model.add_part(part(library, "1x1"), (2, 4, 0), 0, "red") is None
+    assert model.add_part(part(library, "1x1"), (2, 4, 1), 0, "red") is not None
+    # Half-cell offset overlapping the 2x4's edge is refused too
+    assert not model.can_place(part(library, "1x1"), (3, -1, 0), 0)
+    model.remove_part(a.id)
+    assert len(model.occupancy) == 4 and model.part_at((0, 0, 0)) is None
+
+
+def test_part_box_world_space(model, library):
+    p = model.add_part(part(library, "2x4"), (0, 0, 0), 1, "red")
+    lo, hi = p.box
+    # Turned once: 4 cells along -X, 2 along +Y, origin corner at world (-2, -2, 0)
+    assert tuple(lo) == (-18.0, -2.0, 0.0) and tuple(hi) == (-2.0, 6.0, 3.125)
+
+
+def test_save_roundtrip_including_half_offset(model, library, profile, tmp_path):
+    model.add_part(part(library, "2x4"), (0, 0, 0), 1, "cobalt_blue")
+    model.add_part(part(library, "1x2"), (3, 1, 1), 0, "red")  # half-cell offset in X and Y
+    path = tmp_path / "m.json"
+    model.save_to_file(str(path))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["version"] == 2 and data["profile"] == "nanoblock"
+    assert data["parts"][1]["pos"] == [1.5, 0.5, 1]
+
+    loaded = Model(profile, library)
+    loaded.load_from_file(str(path))
+    assert loaded.to_dict() == model.to_dict()
+    assert not loaded.modified
+    # New ids continue after the loaded ones
+    assert loaded.add_part(part(library, "1x1"), (10, 10, 0), 0, "red").id == 3
+
+
+@pytest.mark.parametrize("mutate, message", [
+    (lambda d: d.update(version=99), "version"),
+    (lambda d: d.update(profile="lego"), "profile"),
+    (lambda d: d["parts"][0].update(part="nanoblock:nope"), "unknown part"),
+    (lambda d: d["parts"][0].update(color="chartreuse"), "unknown color"),
+    (lambda d: d["parts"][0].update(pos=[0.25, 0, 0]), "sub-grid"),
+    (lambda d: d["parts"][0].update(turns=4), "turns"),
+    (lambda d: d["parts"][1].update(pos=[0, 0, 0]), "overlaps"),
+    (lambda d: d["parts"][1].update(id=1), "duplicate"),
+    (lambda d: d.update(frames=[{"id": 0}, {"id": 1}]), "root frame"),
+])
+def test_bad_saves_rejected_and_model_untouched(model, library, mutate, message):
+    model.add_part(part(library, "1x1"), (0, 0, 0), 0, "red")
+    model.add_part(part(library, "1x1"), (0, 0, 1), 0, "red")
+    data = model.to_dict()
+    before = json.dumps(data)
+    mutate(data)
+    with pytest.raises(ModelError, match=message):
+        model.from_dict(data)
+    assert json.dumps(model.to_dict()) == before
+
+
+def test_v1_load(model):
+    v1 = {"version": 1, "bricks": [
+        {"x": 0, "y": 0, "z": 0, "r": 0.800000011920929, "g": 0.10000000149011612, "b": 0.10000000149011612},
+        {"x": 0, "y": 0, "z": 1, "r": 0.10000000149011612, "g": 0.30000001192092896, "b": 0.800000011920929},
+        {"x": 3, "y": -2, "z": 0, "r": 0.0, "g": 0.0, "b": 0.0},
+    ]}
+    model.from_dict(v1)
+    parts = sorted(model.parts.values(), key=lambda p: p.id)
+    assert [p.color for p in parts] == ["red", "cobalt_blue", "black"]  # last one: nearest match
+    assert all(p.part.id == "nanoblock:brick_1x1" for p in parts)
+    assert model.to_dict()["parts"][2]["pos"] == [3, -2, 0]
+
+
+def test_v1_color_mapping_falls_back_to_nearest(profile):
+    assert v1_color_to_palette(profile, (1.0, 1.0, 1.0)) in {"white", "clear_white"}
+
+
+@pytest.mark.parametrize("sample", sorted((REPO / "test_model").glob("*.json")), ids=lambda p: p.name)
+def test_sample_saves_load(model, sample):
+    model.load_from_file(str(sample))
+    assert model.parts
+
+
+def test_picking_multicell_part_neighbor(model, library):
+    model.add_part(part(library, "2x4"), (0, 0, 0), 0, "red")  # cells x 0..1, y 0..3
+    # Straight down onto the cell (1, 2): neighbor is the cell above that spot
+    ray = picking.Ray(glm.vec3(4.0, 8.5, 100), glm.vec3(0, 0, -1))
+    hit, normal, neighbor = picking.intersect_model(ray, model)
+    assert hit is not None and neighbor == glm.ivec3(1, 2, 1)
+    # From the +X side at cell y=3: neighbor is the cell beside it
+    ray = picking.Ray(glm.vec3(100, 12.0, 1.0), glm.vec3(-1, 0, 0))
+    hit, normal, neighbor = picking.intersect_model(ray, model)
+    assert neighbor == glm.ivec3(2, 3, 0)
+
+
+def test_picking_hits_part_at_origin(model, library):
+    model.add_part(part(library, "1x1"), (0, 0, 0), 0, "red")
+    hit, _, _ = picking.intersect_model(picking.Ray(glm.vec3(0, 0, 100), glm.vec3(0, 0, -1)), model)
+    assert hit is not None

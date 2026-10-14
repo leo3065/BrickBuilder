@@ -1,6 +1,8 @@
 # Profiles, part definitions and the part library — design
 
-Status: **draft / not implemented.** Decisions agreed so far are marked ✅; open points ❓.
+Status: **draft; implemented so far: profile + palette (step 1), box parts, placed-part model,
+save v2 (step 2a).** Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"`,
+`size`, optional `at`, `studs = "top" | "none"`); id and category come from the file path. Decisions agreed so far are marked ✅; open points ❓.
 
 ## Goals
 - Nanoblock is the only system we author parts for, but nothing system-specific lives in
@@ -74,12 +76,34 @@ antistuds = "bottom"  # derive antistud sockets on every bottom cell
 | shape      | purpose                                   | occupancy            |
 |------------|-------------------------------------------|----------------------|
 | `box`      | ordinary bricks                           | derived (all cells)  |
-| `slope`    | wedge; direction + rise/run               | derived (whole cells)|
+| `slope`    | box + right-triangle profile, extruded    | derived (whole cells)|
 | `cylinder` | round parts                               | derived (bounding cells) |
 | `mesh`     | escape hatch: `file = "ball.obj"`         | **must be declared** |
 
-Occupancy is whole cells for now (a slope occupies its full cells). Finer occupancy can come
-later if collisions between slopes matter.
+`studs` takes `"top"` or `"none"` (flat parts such as NB102F) in step 2. Explicit stud sockets
+cover irregular layouts later (single-stud parts such as NB102S/NB202S1).
+
+**Slope profile ✅:** seen from the side, a slope is a box (base) plus a right triangle sitting on
+it, extruded along the other horizontal axis. Studs aren't part of the outline. Parameters: base
+size, the triangle's run (cells) and rise (layers; can be fractional, e.g. NB10202A peaks at 2
+layers + stud height), and which way the vertical face points. A sketch, not final:
+```toml
+[[body]]
+shape = "slope"
+size = [1, 2, 1]        # base box
+rise = 1.0              # layers above the base
+run = [0, 1]            # the part of the base the triangle sits on (cell range along the slope axis)
+high_side = "+y"        # direction of the triangle's vertical face
+```
+
+Occupancy is tracked per **sub-cell** of the profile's `subdiv` grid (so half-offset parts work),
+but each part's shape fills whole cells. A slope fills every cell its outline touches. Finer
+occupancy can come later if collisions between slopes matter.
+
+**Reference:** `D:\Nanoblocks\LDrawData` (unofficial LDraw Nanoblock library, CCAL 2.0). Use it for
+**shapes and the part list**, not dimensions: it assumes 10 LDU per pitch and 7.5 per layer
+(nominal 4×4×3) and a Ø2.4 stud; our measured numbers win. Part files may cross-reference it,
+e.g. `ldraw = "NB102A.dat"`.
 
 ### Sockets
 ```toml
@@ -137,21 +161,50 @@ once the hand-written library shows real duplication pain.
 - Thumbnails are rendered and cached outside the library.
 - Favorites live in user settings, not in the library.
 
-## Save format v2 (sketch)
-```toml
-# JSON in practice, kept consistent with v1
-{ "version": 2, "profile": "nanoblock",
-  "frames": [{ "id": 0 }, { "id": 1, "parent": 0, "origin": [..], "rotation": [w, x, y, z] }],
-  "parts":  [{ "part": "nanoblock:brick_2x4", "frame": 0, "pos": [x, y, z],
-               "turns": 0, "color": "red" }] }
+## Runtime model (step 2) ✅
+```python
+PartDef      # from a part TOML: id, name, category, occupied cells, derived stud positions
+PlacedPart   # id (stable int), part, frame (0 = root), pos (SUB-GRID ints), turns (0..3), color (palette id)
+Model        # parts: dict[id, PlacedPart]; occupancy: dict[sub-cell, part id]
+             # add_part(...) -> id | None (refused on overlap), remove_part, part_at, can_place
 ```
-The v1 loader maps each v1 cube to a 1×1 brick in frame 0, with its RGB matched to the
-nearest palette color or added as a custom color.
+- Connections aren't stored while everything is on one frame: they can be re-derived from
+  geometry. Stored edges arrive with joints.
+- Placing: the cell under the cursor is the part's **origin cell**, so rotating (which pivots
+  on the origin) keeps the ghost under the cursor. Overlap is refused and the ghost turns red.
+- ✅ **Side-face placement is allowed**, even though such a part isn't held by anything.
+  Checking for unconnected parts comes later.
+- ✅ **No hard floor at layer 0.** A global floor makes no sense for parts in other frames, and
+  building down from the top is legitimate. The Z=0 grid is only a reference plane for ground
+  placement. Repositioning a whole build is a "shift all parts" operation instead.
+
+## Save format v2 ✅
+```json
+{
+  "version": 2,
+  "profile": "nanoblock",
+  "frames": [{ "id": 0 }],
+  "parts": [
+    { "id": 1, "part": "nanoblock:brick_2x4", "frame": 0,
+      "pos": [0, 0.5, 3], "turns": 1, "color": "red" }
+  ]
+}
+```
+- `pos` is in **cells** (0.5 allowed). On load it's multiplied by `subdiv` and must come out as
+  integers, so saves don't depend on `subdiv`.
+- Non-root frames will look like
+  `{ "id": 1, "parent": 0, "origin": [..], "rotation": [w, x, y, z] }`; step 2 only writes frame 0.
+- ✅ `color` is a **palette id**; the palette moves into the profile. The current placeholder
+  colors become the initial palette, so renaming them to official Nanoblock colors later needs
+  an id-mapping for older saves.
+- The v1 loader maps each v1 cube to `brick_1x1` in frame 0, with RGB matched to the palette
+  (exact for files saved from the current palette, otherwise nearest). Saving always writes v2.
 
 ## Build order
 1. Profile file + a single cell-to-world function used by the renderer, picking and camera →
    4×4×3 rendering.
 2. Parts limited to `box` with derived studs; occupancy map; placed-part model; save v2.
+   Starter set ✅: 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×6, 2×8.
 3. Library panel.
 4. Modifiers, slopes, mesh bodies, explicit sockets → frames, fine rotation, ball joints.
 

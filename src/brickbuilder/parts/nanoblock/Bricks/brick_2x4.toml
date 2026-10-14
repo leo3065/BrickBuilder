@@ -1,0 +1,6 @@
+name = "Brick 2×4"
+ldraw = "NB204.dat"
+
+[[body]]
+shape = "box"
+size = [2, 4, 1]

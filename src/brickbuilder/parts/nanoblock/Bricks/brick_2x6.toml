@@ -1,0 +1,5 @@
+name = "Brick 2×6"
+
+[[body]]
+shape = "box"
+size = [2, 6, 1]

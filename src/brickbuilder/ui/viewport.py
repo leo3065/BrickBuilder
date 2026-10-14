@@ -3,37 +3,43 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QMouseEvent, QWheelEvent
 import OpenGL.GL as gl
 import glm
-from typing import Optional
+from typing import Optional, Tuple
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
-from brickbuilder.core.model import Model
+from brickbuilder.core.model import Model, Sub
+from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
 from brickbuilder.core.tools import Tool
-from brickbuilder.core.colors import COLORS, DEFAULT_COLOR
+
+DEFAULT_PART = "brick_1x1"
+DEFAULT_COLOR = "red"
 
 class Viewport(QOpenGLWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.renderer = Renderer()
         self.camera = Camera()
-        self.model = Model()
         self.profile = load_builtin_profile()
-        
+        self.library = load_builtin_library(self.profile.id)
+        self.model = Model(self.profile, self.library)
+
         self.current_tool = Tool.PLACE
-        self.current_color = DEFAULT_COLOR
-        
-        self.ghost_position: Optional[glm.ivec3] = None
-        self.ghost_color = glm.vec3(0.0, 1.0, 0.0) # Green ghost
-        
-        self.selected_brick_pos: Optional[glm.ivec3] = None
-        
+        self.current_part: PartDef = self.library[f"{self.profile.id}:{DEFAULT_PART}"]
+        self.current_turns = 0
+        self.current_color = DEFAULT_COLOR if DEFAULT_COLOR in self.profile.palette else next(iter(self.profile.palette))
+
+        # Where the current part would go: sub-grid position of its origin, or None
+        self.ghost_pos: Optional[Sub] = None
+
+        self.selected_part_id: Optional[int] = None
+
         # Enable mouse tracking for hover effects if needed later
         self.setMouseTracking(True)
-        
+
         # Timer for continuous update if needed (or just update on events)
         # For smooth camera, might need timer or requestUpdate
-        
+
         self.last_mouse_pos = None
 
     def initializeGL(self):
@@ -45,30 +51,42 @@ class Viewport(QOpenGLWidget):
 
     def paintGL(self):
         pixel_ratio = self.devicePixelRatio()
-        self.renderer.render(self.camera, self.model, self.profile, self.ghost_position, int(self.width() * pixel_ratio), int(self.height() * pixel_ratio), self.selected_brick_pos)
+        ghost_box = None
+        if self.ghost_pos is not None:
+            ghost_box = self.model.placement_box(self.current_part, self.ghost_pos, self.current_turns)
+        selected = self.model.parts.get(self.selected_part_id) if self.selected_part_id is not None else None
+        self.renderer.render(self.camera, self.model, self.profile, ghost_box,
+                             int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
+                             selected.box if selected else None)
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
-        self.ghost_position = None
-        self.selected_brick_pos = None
+        self.ghost_pos = None
+        self.selected_part_id = None
         self.update()
 
     def reset_scene(self):
         self.model.clear()
         self.camera.reset()
-        self.ghost_position = None
-        self.selected_brick_pos = None
+        self.ghost_pos = None
+        self.selected_part_id = None
         self.update()
 
-    def set_current_color(self, color: glm.vec3):
+    def model_replaced(self):
+        # After loading a file: drop references into the old contents
+        self.ghost_pos = None
+        self.selected_part_id = None
+        self.update()
+
+    def set_current_color(self, color: str):
         self.current_color = color
         # If in Paint mode and something selected, paint it?
-        if self.current_tool == Tool.SELECT and self.selected_brick_pos:
+        if self.current_tool == Tool.SELECT and self.selected_part_id is not None:
              pass
 
     def mousePressEvent(self, event: QMouseEvent):
         self.last_mouse_pos = event.position()
-        
+
         if event.buttons() & Qt.MouseButton.LeftButton:
             self._handle_left_click(event)
             self.update()
@@ -86,42 +104,38 @@ class Viewport(QOpenGLWidget):
             self._handle_erase_tool(ray)
 
     def _handle_place_tool(self, event: QMouseEvent, ray):
-        if self.ghost_position:
-            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
-                 # Quick erase override in Place mode
-                hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
-                if hit_pos:
-                   self.model.remove_brick(hit_pos)
-            else:
-                self.model.add_brick(self.ghost_position, self.current_color)
-                # Refresh ghost immediately
-                self.update_ghost(event.position().x(), event.position().y())
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            # Quick erase override in Place mode
+            self._handle_erase_tool(ray)
+        elif self.ghost_pos is not None:
+            self.model.add_part(self.current_part, self.ghost_pos, self.current_turns, self.current_color)
+        # Refresh ghost immediately
+        self.update_ghost(event.position().x(), event.position().y())
 
     def _handle_select_tool(self, ray):
-        hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
-        self.selected_brick_pos = hit_pos
+        hit, _, _ = picking.intersect_model(ray, self.model)
+        self.selected_part_id = hit.id if hit else None
 
     def _handle_paint_tool(self, ray):
-        hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
-        if hit_pos:
-            brick = self.model.get_brick(hit_pos)
-            if brick:
-                brick.color = self.current_color
-                self.model.modified = True
+        hit, _, _ = picking.intersect_model(ray, self.model)
+        if hit:
+            self.model.set_color(hit.id, self.current_color)
 
     def _handle_erase_tool(self, ray):
-        hit_pos, _, _ = picking.intersect_model(ray, self.model, self.profile)
-        if hit_pos:
-            self.model.remove_brick(hit_pos)
+        hit, _, _ = picking.intersect_model(ray, self.model)
+        if hit:
+            self.model.remove_part(hit.id)
+            if hit.id == self.selected_part_id:
+                self.selected_part_id = None
 
     def mouseMoveEvent(self, event: QMouseEvent):
         current_pos = event.position()
-        
+
         # Tool-specific hover logic
         if self.current_tool == Tool.PLACE:
              self.update_ghost(current_pos.x(), current_pos.y())
         else:
-            self.ghost_position = None
+            self.ghost_pos = None
 
         if self.last_mouse_pos is not None:
              # Navigation stays same
@@ -137,31 +151,35 @@ class Viewport(QOpenGLWidget):
                     # Rotate
                     sensitivity = 0.01
                     self.camera.orbit(-delta.x() * sensitivity, -delta.y() * sensitivity)
-        
+
         self.update()
 
     def update_ghost(self, mouse_x, mouse_y):
         ray = picking.get_mouse_ray(mouse_x, mouse_y, self.width(), self.height(), self.camera)
-        
+
         # Check model intersection first
-        hit_pos, normal, neighbor = picking.intersect_model(ray, self.model, self.profile)
-        
-        if neighbor:
-            # Snap to neighbor
-            self.ghost_position = neighbor
+        hit, normal, neighbor = picking.intersect_model(ray, self.model)
+
+        cell = None
+        if hit:
+            # Snap to the cell next to the hit face
+            cell = neighbor
         elif ray.direction.z < -1e-6:
             # Check ground plane (Z=0) intersection ONLY if looking down
             # Normal (0,0,1), Point (0,0,0)
             t = picking.intersect_plane(ray, glm.vec3(0, 0, 1), glm.vec3(0, 0, 0))
             if t:
                 hit_point = ray.origin + ray.direction * t
-                # Layer 0 sits on the Z=0 grid (see Profile.cell_box)
+                # Layer 0 sits on the Z=0 grid
                 x, y = self.profile.world_to_cell_xy(hit_point)
-                self.ghost_position = glm.ivec3(x, y, 0)
-            else:
-                self.ghost_position = None
-        else:
-            self.ghost_position = None
+                cell = (x, y, 0)
+
+        # The cell under the cursor is the part's origin cell
+        self.ghost_pos = None
+        if cell is not None:
+            pos = self.profile.cell_to_sub(cell)
+            if self.model.can_place(self.current_part, pos, self.current_turns):
+                self.ghost_pos = pos
 
 
     def wheelEvent(self, event: QWheelEvent):

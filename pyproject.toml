@@ -13,3 +13,12 @@ dependencies = [
 
 [project.scripts]
 brickbuilder = "brickbuilder.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

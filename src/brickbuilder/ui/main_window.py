@@ -3,7 +3,6 @@ from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
 from PySide6.QtCore import Qt, QSize
 from brickbuilder.ui.viewport import Viewport
 from brickbuilder.core.tools import Tool
-from brickbuilder.core.colors import COLORS, DEFAULT_COLOR
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -105,45 +104,52 @@ class MainWindow(QMainWindow):
         
         row = 0
         col = 0
-        cols_per_row = 2
-        
+        cols_per_row = 5 # the Nanoblock palette has 45 colors
+
         self.color_buttons = {}
         self.color_group = QButtonGroup(self)
         self.color_group.setExclusive(True)
-        
-        for name, color in COLORS.items():
+
+        for color in self.viewport.profile.palette.values():
             btn = QPushButton()
-            btn.setFixedSize(40, 40)
+            btn.setFixedSize(32, 32)
             btn.setCheckable(True)
-            
+
             # Convert glm to CSS color
-            r = int(color.x * 255)
-            g = int(color.y * 255)
-            b = int(color.z * 255)
-            
+            r = int(color.rgb.x * 255)
+            g = int(color.rgb.y * 255)
+            b = int(color.rgb.z * 255)
+            fill = f"rgb({r}, {g}, {b})"
+            if color.clear:
+                # Clear (translucent) colors: diagonal split, solid top-left and see-through
+                # bottom-right (the dark dock background shows through)
+                fill = (f"qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+                        f"stop:0 rgb({r}, {g}, {b}), stop:0.5 rgb({r}, {g}, {b}), "
+                        f"stop:0.501 rgba({r}, {g}, {b}, 70), stop:1 rgba({r}, {g}, {b}, 70))")
+
             # Unchecked: Simple 1px black border
             # Checked: Cyan outer border, transparent padding (revealing dark bg -> inner border effect), content
             style = f"""
                 QPushButton {{
-                    background-color: rgb({r}, {g}, {b});
+                    background: {fill};
                     border: 1px solid black;
                     border-radius: 0px;
                 }}
                 QPushButton:checked {{
-                    background-color: rgb({r}, {g}, {b});
+                    background: {fill};
                     border: 2px solid #00FFFF; /* Cyan Outer */
-                    padding: 4px;              /* Thickness of "Inner" (gap) */
-                    background-clip: content-box; 
+                    padding: 3px;              /* Thickness of "Inner" (gap) */
+                    background-clip: content-box;
                 }}
             """
             btn.setStyleSheet(style)
-            btn.setToolTip(name)
-            
+            btn.setToolTip(color.name)
+
             # Connect click to set active color
-            btn.clicked.connect(lambda _, c=color: self.set_active_color(c))
-            
+            btn.clicked.connect(lambda _, c=color.id: self.set_active_color(c))
+
             self.color_group.addButton(btn)
-            self.color_buttons[tuple(color)] = btn
+            self.color_buttons[color.id] = btn
             
             layout.addWidget(btn, row, col)
             col += 1
@@ -156,16 +162,15 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         
         # Select default
-        self.set_active_color(DEFAULT_COLOR)
+        self.set_active_color(self.viewport.current_color)
 
-    def set_active_color(self, color):
-        self.viewport.set_current_color(color)
-        
+    def set_active_color(self, color_id: str):
+        self.viewport.set_current_color(color_id)
+
         # QButtonGroup handles the exclusivity and checking state visually via stylesheet
         # We just need to ensure the correct button is checked if set programmatically
-        c_tuple = tuple(color)
-        if c_tuple in self.color_buttons:
-            self.color_buttons[c_tuple].setChecked(True)
+        if color_id in self.color_buttons:
+            self.color_buttons[color_id].setChecked(True)
 
     def show_help(self):
         d = QDialog(self)
@@ -224,7 +229,7 @@ class MainWindow(QMainWindow):
         if filename:
             try:
                 self.viewport.model.load_from_file(filename)
-                self.viewport.update()
+                self.viewport.model_replaced()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Could not load file:\n{e}")
 

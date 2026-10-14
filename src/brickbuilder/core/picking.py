@@ -2,8 +2,7 @@ import glm
 import math
 from typing import Optional, Tuple
 from brickbuilder.core.camera import Camera
-from brickbuilder.core.model import Model
-from brickbuilder.core.profile import Profile
+from brickbuilder.core.model import Model, PlacedPart
 
 class Ray:
     def __init__(self, origin: glm.vec3, direction: glm.vec3):
@@ -135,38 +134,28 @@ def intersect_aabb(ray: Ray, box_min: glm.vec3, box_max: glm.vec3) -> Optional[T
 
     return t_min, normal
 
-def intersect_model(ray: Ray, model: Model, profile: Profile) -> Tuple[Optional[glm.ivec3], Optional[glm.vec3], Optional[glm.ivec3]]:
-    # Returns (intersected_brick_pos, intersection_normal, neighbor_pos)
+def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optional[glm.vec3], Optional[glm.ivec3]]:
+    # Returns (hit part, face normal, cell just outside the hit face)
     closest_t = 100000.0
-    hit_brick = None
+    hit_part = None
     hit_normal = None
 
-    # Optimization: Grid traversal is better, but iterating all bricks is okay for start < 1000 bricks
-    for brick in model.get_all_bricks():
-        # Same box the renderer draws
-        box_min, box_max = profile.cell_box(brick.position)
-
-        result = intersect_aabb(ray, box_min, box_max)
+    # Optimization: Grid traversal is better, but iterating all parts is okay for start < 1000 parts
+    for placed in model.parts.values():
+        # Same box the renderer draws (parts are boxes so far)
+        result = intersect_aabb(ray, *placed.box)
         if result:
             t, normal = result
             if t < closest_t:
                 closest_t = t
-                hit_brick = brick
+                hit_part = placed
                 hit_normal = normal
-                
-    if hit_brick:
-        # Determine neighbor pos
-        # normal should be mostly axis aligned
-        # e.g. (1, 0, 0) -> neighbor is pos + (1, 0, 0)
-        
-        # Snap normal to grid integer
-        nx, ny, nz = 0, 0, 0
-        if abs(hit_normal.x) > 0.9: nx = int(math.copysign(1, hit_normal.x))
-        if abs(hit_normal.y) > 0.9: ny = int(math.copysign(1, hit_normal.y))
-        if abs(hit_normal.z) > 0.9: nz = int(math.copysign(1, hit_normal.z))
-        
-        neighbor_pos = hit_brick.position + glm.ivec3(nx, ny, nz)
-        
-        return hit_brick.position, hit_normal, neighbor_pos
-        
+
+    if hit_part:
+        # The neighbor is the cell under the hit point, nudged just past the face. For a
+        # multi-cell part that's the cell next to the spot that was clicked.
+        hit_point = ray.origin + ray.direction * closest_t
+        neighbor = model.profile.world_to_cell(hit_point + hit_normal * 0.01)
+        return hit_part, hit_normal, neighbor
+
     return None, None, None

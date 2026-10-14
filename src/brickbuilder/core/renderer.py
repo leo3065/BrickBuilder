@@ -19,7 +19,8 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost_position, width, height, selected_brick_pos=None, show_grid=True, show_gizmo=True, section_z=None):
+    def render(self, camera, model, profile, ghost_box, width, height, selected_box=None, show_grid=True, show_gizmo=True, section_z=None):
+        # ghost_box / selected_box: world-space (min, max) corners, or None
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
@@ -54,14 +55,14 @@ class Renderer:
             self.draw_grid(profile)
         gl.glEnable(gl.GL_LIGHTING)
 
-        # Render Bricks (cell index -> world box via profile.cell_box)
+        # Render Bricks (one box per placed part; boxes come from the model's sub-grid mapping)
         self.render_bricks(model, profile)
 
-        if ghost_position:
-            self.render_ghost(ghost_position, profile)
+        if ghost_box:
+            self.render_ghost(ghost_box)
 
-        if selected_brick_pos:
-            self.render_selection(selected_brick_pos, profile)
+        if selected_box:
+            self.render_selection(selected_box)
 
         if section_z is not None:
             gl.glDisable(gl.GL_CLIP_PLANE0)
@@ -70,7 +71,7 @@ class Renderer:
         if show_gizmo:
             self.draw_orientation_gizmo(camera, width, height)
 
-    def render_selection(self, pos, profile):
+    def render_selection(self, box):
         # Draw a wireframe box around the selected brick
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
@@ -80,7 +81,7 @@ class Renderer:
         
         gl.glBegin(gl.GL_QUADS)
         gl.glColor3f(1.0, 1.0, 0.0) # Yellow
-        self.draw_box(*profile.cell_box(pos))
+        self.draw_box(*box)
         gl.glEnd()
         
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
@@ -228,10 +229,10 @@ class Renderer:
         gl.glPolygonOffset(1.0, 1.0)
         
         gl.glBegin(gl.GL_QUADS)
-        for brick in model.get_all_bricks():
-            pos = brick.position
-            gl.glColor3f(brick.color.x, brick.color.y, brick.color.z)
-            self.draw_box(*profile.cell_box(pos))
+        for placed in model.parts.values():
+            rgb = profile.palette[placed.color].rgb
+            gl.glColor3f(rgb.x, rgb.y, rgb.z)
+            self.draw_box(*placed.box)
         gl.glEnd()
         
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
@@ -242,15 +243,14 @@ class Renderer:
         gl.glLineWidth(2.0)
         gl.glBegin(gl.GL_QUADS)
         gl.glColor3f(0.0, 0.0, 0.0)
-        for brick in model.get_all_bricks():
-            pos = brick.position
-            self.draw_box(*profile.cell_box(pos))
+        for placed in model.parts.values():
+            self.draw_box(*placed.box)
         gl.glEnd()
         gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
         gl.glLineWidth(1.0)
         gl.glEnable(gl.GL_LIGHTING)
 
-    def render_ghost(self, pos, profile):
+    def render_ghost(self, box):
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         
@@ -259,7 +259,7 @@ class Renderer:
         
         gl.glBegin(gl.GL_QUADS)
         gl.glColor4f(0.0, 1.0, 0.0, 0.5) # Semi-transparent green
-        self.draw_box(*profile.cell_box(pos))
+        self.draw_box(*box)
         gl.glEnd()
         
         gl.glDisable(gl.GL_BLEND)

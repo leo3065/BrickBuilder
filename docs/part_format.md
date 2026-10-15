@@ -223,11 +223,17 @@ once the hand-written library shows real duplication pain.
   on load every contact is checked against it within tolerance.
 - ✅ **Snapping** (editor settings, not profile values), by default on, with a key to move freely:
   - sliding along a slot: half-cell steps (the sub-grid);
-  - turning about an axis (a stud, a hinge, the ball joint's roll): `rotation_snap` steps
-    (default 7.5°);
-  - ball joint swing inside the cone: two angles measured from the cup's axis (sideways and
-    up/down), each snapped. Their singular points are 90° off the axis, far outside the 30° cone,
-    so this behaves like a plain 2D grid; in the slot only the one angle along it is free;
+  - turning about an axis (a stud, a hinge): `rotation_snap` steps (default 7.5°);
+  - ball joints: three angles, each snapped like a rotation:
+    - **swing θ**: how far the arm tilts away from straight (cone: θ ≤ 30° in any direction;
+      slot: θ ≤ 90° only with φ along the slot, either way);
+    - **swing direction φ**: which way it tilts, around the cup's axis (the plane it swings in);
+    - **roll ψ**: about the ball part's own arm, applied before the swing so it doesn't change
+      when φ does.
+
+    At θ = 0, φ is meaningless; the editor keeps the last φ instead of jumping. Saves store the
+    joint as a rotation, and the editor converts it to θ, φ, ψ for display and dragging, so files
+    don't depend on this choice of angles;
   - later on top: "land on a grid", i.e. swing until a part on the moving side lines up with a
     nearby frame's grid (the Intermediate "same grid with minimal rotation" item).
 - ✅ **Frames don't have to form a tree.** A part can bridge two frames. The Koraidon/Miraidon

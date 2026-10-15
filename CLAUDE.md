@@ -91,7 +91,7 @@ tests/               pytest suite
   integer and canonical (`geometry.make_cut`) so they compare exactly; keep it that way.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
   in save files, separate from their display `name`. Ids are ASCII `[a-z0-9_]` (checked on load).
-  Renaming a part id: add the old one to `model.RENAMED_PARTS` so existing saves still load.
+  There's no translation for renamed ids: a save using an old id fails with "unknown part".
 - Slope naming: `slope_{footprint}_wedge_{run}x{rise}[_inverted]`, shown as
   "Slope 1×2 wedge 1×1 [inverted]" (run = cells along the slope, rise = layers).
 - **Edits from the UI go through `Viewport.history`** (add_part / remove_part / set_color), never

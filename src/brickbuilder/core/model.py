@@ -17,19 +17,6 @@ Solid = List[List[glm.vec3]]  # convex body as outward faces (world space)
 
 SAVE_VERSION = 2
 
-# Part ids that were renamed: old saves still load (the next save writes the new id)
-RENAMED_PARTS = {
-    "nanoblock:slope_1x2": "nanoblock:slope_1x2_wedge_1x1",
-    "nanoblock:slope_1x2x2": "nanoblock:slope_1x2_wedge_1x2",
-    "nanoblock:slope_1x3": "nanoblock:slope_1x3_wedge_2x1",
-    "nanoblock:slope_2x2": "nanoblock:slope_2x2_wedge_1x1",
-    "nanoblock:slope_2x3": "nanoblock:slope_2x3_wedge_2x1",
-    "nanoblock:slope_2x4": "nanoblock:slope_2x4_wedge_1x1",
-    "nanoblock:slope_inverted_1x2": "nanoblock:slope_1x2_wedge_1x1_inverted",
-    "nanoblock:slope_inverted_1x2x2": "nanoblock:slope_1x2_wedge_1x2_inverted",
-    "nanoblock:slope_1x2_wedge_1x1_reversed": "nanoblock:slope_1x2_wedge_1x1_inverted",
-    "nanoblock:slope_1x2_wedge_1x2_reversed": "nanoblock:slope_1x2_wedge_1x2_inverted",
-}
 
 
 class ModelError(ValueError):
@@ -371,8 +358,7 @@ class Model:
             where = f"parts[{n}]"
             if not isinstance(p, dict):
                 raise ModelError(f"{where}: must be an object")
-            part_id_in_file = p.get("part")
-            part = self.library.get(RENAMED_PARTS.get(part_id_in_file, part_id_in_file))
+            part = self.library.get(p.get("part"))
             if part is None:
                 raise ModelError(f"{where}: unknown part {p.get('part')!r}")
             if p.get("frame", 0) != 0:

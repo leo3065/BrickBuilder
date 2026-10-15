@@ -188,15 +188,6 @@ def test_slopes_save_and_load(model, profile, library, tmp_path):
     assert loaded.to_dict() == model.to_dict()
 
 
-def test_old_slope_ids_still_load(model, profile, library):
-    old = {"version": 2, "profile": "nanoblock", "frames": [{"id": 0}], "parts": [
-        {"id": 1, "part": "nanoblock:slope_1x2", "frame": 0, "pos": [0, 0, 0], "turns": 0, "color": "red"},
-        {"id": 2, "part": "nanoblock:slope_inverted_1x2", "frame": 0, "pos": [0, -1, 1], "turns": 0, "color": "white"},
-    ]}
-    model.from_dict(old)
-    assert [p["part"] for p in model.to_dict()["parts"]] == [
-        "nanoblock:slope_1x2_wedge_1x1", "nanoblock:slope_1x2_wedge_1x1_inverted"]
-
 
 def test_all_ids_are_plain_ascii(library, profile):
     from brickbuilder.core.parts import ID_PATTERN

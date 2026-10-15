@@ -36,6 +36,7 @@ class PlacedPart:
     solids: Tuple[Solid, ...]       # world-space bodies, for rendering and picking
     edges: Tuple[Tuple[glm.vec3, glm.vec3], ...]  # outline of the merged shape (no seams)
     studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
+    antistuds: Tuple[Tuple[glm.vec3, glm.vec3], ...] = ()  # world slots where a stud from below fits
 
 
 # Rotating a cell's min corner is the same as rotating a sub-cell's (the origin is a corner)
@@ -145,15 +146,24 @@ def origin_for_anchor(profile: Profile, anchor: Tuple[int, int, int], turns: int
     return (target[0] - rx * nx, target[1] - ry * ny, target[2] - anchor[2] * nz)
 
 
+def part_point_to_world(profile: Profile, point, pos: Sub, turns: int) -> glm.vec3:
+    """A point in part cells (x, y, z) -> world, for a part at `pos` turned `turns` times."""
+    nx, ny, nz = profile.subdiv
+    x, y, z = point
+    for _ in range(turns % 4):  # turn CCW about the origin corner
+        x, y = -y, x
+    return profile.sub_to_world((pos[0] + x * nx, pos[1] + y * ny, pos[2] + z * nz))
+
+
+def antistud_slots(profile: Profile, part: PartDef, pos: Sub, turns: int):
+    """World slots under a placed part where a stud from below fits."""
+    return tuple((part_point_to_world(profile, a, pos, turns), part_point_to_world(profile, b, pos, turns))
+                 for a, b in part.antistuds)
+
+
 def stud_positions(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
     """World positions of a placed part's stud bases (centre of each stud's bottom)."""
-    nx, ny, nz = profile.subdiv
-    out = []
-    for x, y, z in part.studs:
-        for _ in range(turns % 4):  # turn the point CCW about the origin corner
-            x, y = -y, x
-        out.append(profile.sub_to_world((pos[0] + x * nx, pos[1] + y * ny, pos[2] + z * nz)))
-    return tuple(out)
+    return tuple(part_point_to_world(profile, p, pos, turns) for p in part.studs)
 
 
 def subcells_box(profile: Profile, subcells: Iterable[Sub]) -> Tuple[glm.vec3, glm.vec3]:
@@ -202,6 +212,7 @@ class Model:
         self.occupancy: Dict[Sub, List[Tuple[int, Optional[Cut]]]] = {}
         self.modified = False
         self._next_id = 1
+        self._links = None  # cached connection graph, dropped on any add/remove
 
     # --- queries -------------------------------------------------------------------------
 
@@ -223,6 +234,14 @@ class Model:
 
     def placement_studs(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
         return stud_positions(self.profile, part, pos, turns)
+
+    def connections(self) -> Dict[int, set]:
+        """Part id -> ids of the parts it's connected to (a stud of one in a slot of the other).
+        Worked out from the parts, not stored; cached until the next add or remove."""
+        if self._links is None:
+            from brickbuilder.core.connections import find_connections
+            self._links = find_connections(self.profile, self.parts.values())
+        return self._links
 
     def parts_at(self, sub: Sub) -> List[PlacedPart]:
         return [self.parts[part_id] for part_id, _ in self.occupancy.get(sub, ())]
@@ -246,10 +265,12 @@ class Model:
                             tuple(regions), subcells_box(self.profile, (s for s, _ in regions)),
                             part_solids(self.profile, part, pos, turns),
                             part_edges(self.profile, part, pos, turns),
-                            stud_positions(self.profile, part, pos, turns))
+                            stud_positions(self.profile, part, pos, turns),
+                            antistud_slots(self.profile, part, pos, turns))
         self.parts[part_id] = placed
         for sub, cut in regions:
             self.occupancy.setdefault(sub, []).append((part_id, cut))
+        self._links = None
         self.modified = True
         return placed
 
@@ -263,6 +284,7 @@ class Model:
                 self.occupancy[sub] = remaining
             else:
                 del self.occupancy[sub]
+        self._links = None
         self.modified = True
 
     def set_color(self, part_id: int, color: str) -> None:
@@ -274,6 +296,7 @@ class Model:
             self.modified = True
 
     def clear(self) -> None:
+        self._links = None
         self.parts.clear()
         self.occupancy.clear()
         self._next_id = 1
@@ -328,6 +351,7 @@ class Model:
         else:
             raise ModelError(f"unsupported save version {version!r}")
         self.parts, self.occupancy, self._next_id = loaded.parts, loaded.occupancy, loaded._next_id
+        self._links = None
         self.modified = False
 
     def _load_v1(self, data: Dict[str, Any]) -> None:

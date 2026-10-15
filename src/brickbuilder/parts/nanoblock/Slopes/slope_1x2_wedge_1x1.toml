@@ -1,6 +1,6 @@
 # 1x2x1 base; on one cell a lower triangle 1 cell x 1 layer, its vertical face at the part's
-# centre, so the slope faces away from the centre. Pairs with slope_inverted_1x2.
-name = "Slope 1×2"
+# centre, so the slope faces away from the centre. Pairs with slope_1x2_wedge_1x1_reversed.
+name = "Slope 1×2 wedge 1×1"
 ldraw = "NB102A.dat"
 
 [[body]]

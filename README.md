@@ -11,8 +11,9 @@ data, not code, so other micro-brick systems could be added without changing the
 - **3D view** with orbit, pan and zoom, orthographic, Z up, and a grid on the ground plane.
 - **Parts** in groups:
   - **Bricks:** 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8.
-  - **Slopes:** 1×2, 1×2×2, 1×3, 2×2, 2×3, 2×4, plus the inverted 1×2 and 1×2×2. A slope and its
-    inverted partner can share a cell, as in two-colour patterns from real sets.
+  - **Slopes:** 1×2 (with a 1- or 2-layer wedge), 1×3, 2×2, 2×3 and 2×4, plus reversed versions of
+    the two 1×2 slopes. A slope and its reversed partner can share a cell, as in two-colour
+    patterns from real sets.
   - **Plates:** 10×10 and 20×20 base plates.
 - **Placement preview** that turns red when a part would overlap something.
 - **Rotation** in 90° steps, a choice of which cell of the part sits under the cursor, and

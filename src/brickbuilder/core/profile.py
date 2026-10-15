@@ -1,4 +1,5 @@
 import math
+import re
 import tomllib
 from dataclasses import dataclass, field
 from importlib import resources
@@ -11,6 +12,10 @@ DEFAULT_PROFILE_ID = "nanoblock"
 
 class ProfileError(ValueError):
     pass
+
+
+# Profile and colour ids are stable keys in save files: plain ASCII
+ID_PATTERN = re.compile(r"[a-z0-9_]+")
 
 
 @dataclass(frozen=True)
@@ -115,6 +120,8 @@ def _parse_rgb(color_id: str, value: Any) -> glm.vec3:
 def _parse_palette(data: Dict[str, Any]) -> Dict[str, PaletteColor]:
     palette: Dict[str, PaletteColor] = {}
     for color_id, entry in data.items():
+        if not ID_PATTERN.fullmatch(color_id):
+            raise ProfileError(f"palette id {color_id!r} may only use a-z, 0-9 and _")
         if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
             raise ProfileError(f"palette.{color_id} needs a 'name'")
         clear = bool(entry.get("clear", False))
@@ -135,6 +142,8 @@ def profile_from_dict(data: Dict[str, Any]) -> Profile:
     for key in ("id", "name"):
         if not isinstance(data.get(key), str):
             raise ProfileError(f"'{key}' must be a string")
+    if not ID_PATTERN.fullmatch(data["id"]):
+        raise ProfileError(f"profile id {data['id']!r} may only use a-z, 0-9 and _")
     cell = _vec(data, "cell", 3, float)
     subdiv = _vec(data, "subdiv", 3, int)
     if subdiv[0] != subdiv[1]:

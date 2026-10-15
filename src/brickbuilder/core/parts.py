@@ -3,6 +3,7 @@
 Library layout: parts/<profile id>/<category folders>/<name>.toml. A part's id is
 "<profile id>:<file stem>"; its category is the folder path below the profile folder.
 """
+import re
 import tomllib
 from dataclasses import dataclass
 from importlib import resources
@@ -16,6 +17,10 @@ Cell = Tuple[int, int, int]
 
 class PartError(ValueError):
     pass
+
+
+# Ids are stable keys in save files: plain ASCII, so they're safe in any file system or tool
+ID_PATTERN = re.compile(r"[a-z0-9_]+")
 
 
 @dataclass(frozen=True)
@@ -114,7 +119,10 @@ def _walk(folder: Traversable, category: List[str], profile_id: str, out: Dict[s
         if entry.is_dir():
             _walk(entry, category + [entry.name], profile_id, out)
         elif entry.name.endswith(".toml"):
-            part_id = f"{profile_id}:{entry.name[:-len('.toml')]}"
+            stem = entry.name[:-len(".toml")]
+            if not ID_PATTERN.fullmatch(stem):
+                raise PartError(f"part file {entry.name!r}: names may only use a-z, 0-9 and _ (they become ids)")
+            part_id = f"{profile_id}:{stem}"
             if part_id in out:
                 raise PartError(f"duplicate part id {part_id}")
             with entry.open("rb") as f:

@@ -90,7 +90,10 @@ tests/               pytest suite
   only if both are cut by the same plane on opposite sides (complementary slopes). Cuts are
   integer and canonical (`geometry.make_cut`) so they compare exactly; keep it that way.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
-  in save files, separate from their display `name`.
+  in save files, separate from their display `name`. Ids are ASCII `[a-z0-9_]` (checked on load).
+  Renaming a part id: add the old one to `model.RENAMED_PARTS` so existing saves still load.
+- Slope naming: `slope_{footprint}_wedge_{run}x{rise}[_reversed]`, shown as
+  "Slope 1×2 wedge 1×1 [reversed]" (run = cells along the slope, rise = layers).
 - **Edits from the UI go through `Viewport.history`** (add_part / remove_part / set_color), never
   `Model` directly, or undo gets out of sync. One user action = one command (list of ops).
   History also owns the modified flag (`mark_clean()` on save, `reset()` on new/open).

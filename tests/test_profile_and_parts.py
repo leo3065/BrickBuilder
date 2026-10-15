@@ -47,6 +47,8 @@ def test_grid_to_world(profile):
     ({"palette": {"red": {"name": "Red", "rgb": "red"}}}, "rrggbb"),
     ({"stud": {"height": 1}}, "stud.diameter"),
     ({"palette": {"c": {"name": "C", "rgb": "#ffffff", "alpha": 1.5}}}, "alpha"),
+    ({"palette": {"Blue×": {"name": "B", "rgb": "#0000ff"}}}, "a-z"),
+    ({"id": "Nano block"}, "a-z"),
 ])
 def test_bad_profiles_rejected(overrides, message):
     with pytest.raises(ProfileError, match=message):

@@ -211,6 +211,36 @@ once the hand-written library shows real duplication pain.
   sockets still line up within tolerance?); the app does not solve for joint angles. v1 may
   only *create* tree-shaped frames, but nothing in the format should assume a tree.
 
+## Ball joints (planned)
+Parts: nanoblock.info JO-C (cup / socket) and JO-D (ball), each on a 1×2 or a 2×2, with the cup or
+ball on a side face. The Kawada manual calls them NAJO-C / NAJO-D.
+
+**Range of movement ✅ (from the real parts and the manual).** Hold the cup fixed and look at the
+ball side's arm direction `d`, relative to the cup's axis `a` (straight out of the cup) and its
+slot direction `s` (perpendicular to `a`, the side the cup's U-shaped slot opens toward):
+1. **Roll** about the arm itself: always free.
+2. **Cone:** any `d` within about **30°** of `a`, in any direction (limited by the cup's rim).
+3. **Slot:** `d` may also lie in the plane of `a` and `s`, tilted toward `s` by up to about **90°**,
+   with no sideways freedom there. ❓ assumed one-sided (toward the slot only).
+
+The slot is fixed to the cup part, so mounting the cup part on its side turns the 90° range from
+up/down into left/right (the manual's "横向き" 30° vs "縦向き" 90° pictures).
+
+Data: the limits belong to the socket type in the profile, e.g.
+`cup = { mates = ["ball"], dof = "spherical", cone = 30, slot = 90 }`; each part's `[[socket]]`
+gives the position, axis and slot direction. A connected ball gives its part its own grid frame
+(see "Layer 3"); poses are valid inside the cone or in the slot, and the UI's rotation snap applies
+to the joint angles too.
+
+**Dimensions ❓ (to measure):**
+- Straightened, the two parts' faces are exactly 2 cells (8 mm) apart ✅, but the pivot is not in
+  the middle. Pivot distance from the cup part's face = *a*, from the ball part's face = *b*
+  (*a* + *b* = 8 mm). Suggested measurement: bend 90° in the slot with a 2×2 ball part (arm from
+  the middle of a 2-cell face, so its near side face is 4 mm from the arm line), measure the gap
+  *g* from the cup part's face to that side face: *a* = *g* + 4 mm.
+- Height of the arm / cup above the brick's bottom (probably mid-height).
+- Ball diameter (drawing only).
+
 ## Library
 - A folder tree of part files; the folders are the categories. Ids are namespaced
   (`nanoblock:brick_2x4`).

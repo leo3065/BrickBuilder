@@ -13,7 +13,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Multi-select function for various operations, such as moving, removing, and color changing. 
 - [ ] Moving and rotating already placed parts (pick a part up, keep its color, put it down elsewhere or turned).
 - [ ] Shifting all bricks (or a selection) by whole cells in any direction at once, e.g. to make room below a model that was built from the top down.
-- [ ] Highlight parts that aren't connected to anything (e.g. placed against a side face, which is allowed while designing). Needs connections (Intermediate).
+- [x] Highlight parts that aren't connected to the main build (View > Highlight Unconnected Parts, U): parts outside the largest connected group get an orange outline.
 
 #### Files and settings
 - [x] A save/load function to save the current model and load a saved model.
@@ -46,7 +46,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Allowing semi-transparent brick blocks. (Data is ready: palette colors are flagged `clear` and carry an `alpha`.)
 
 ### Intermediate
-- [ ] Connections: work out which studs sit in which antistuds (deriving the ordinary bottom antistuds too) and keep them as a graph of part-to-part links. The base for highlighting unconnected parts, fine rotation and joints.
+- [x] Connections on one grid: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Still to extend for frames (rotated parts, joints).
 - [ ] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it.
 - [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)

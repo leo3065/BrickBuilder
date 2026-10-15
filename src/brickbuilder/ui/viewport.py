@@ -7,6 +7,7 @@ import math
 from typing import Optional, Tuple
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
+from brickbuilder.core.connections import groups
 from brickbuilder.core.history import History
 from brickbuilder.core.model import Model, Sub, anchor_cells, default_anchor_index, origin_for_anchor, placement_target
 from brickbuilder.core.parts import PartDef, load_builtin_library
@@ -45,6 +46,8 @@ class Viewport(QOpenGLWidget):
         # Half-offset placement: snap to half-cells in XY, plus a keyboard nudge (in sub-cells)
         # that's kept until the cursor moves to a different target
         self.half_snap = False
+        # Mark parts outside the largest connected group (View > Highlight Unconnected Parts)
+        self.highlight_unconnected = False
         self.nudge = (0, 0)
         self._nudge_base = None
 
@@ -75,7 +78,9 @@ class Viewport(QOpenGLWidget):
         selected = self.model.parts.get(self.selected_part_id) if self.selected_part_id is not None else None
         self.renderer.render(self.camera, self.model, self.profile, ghost,
                              int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
-                             selected.edges if selected else None)
+                             selected.edges if selected else None,
+                             highlighted=[self.model.parts[pid].edges for pid in self.unconnected_parts()]
+                             if self.highlight_unconnected else ())
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
@@ -244,6 +249,15 @@ class Viewport(QOpenGLWidget):
             anchor = anchor_cells(self.current_part)[self.current_anchor]
             self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, target)
             self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns)
+
+    def unconnected_parts(self):
+        """Ids of parts outside the largest connected group (empty when everything is one group)."""
+        found = groups(self.model.connections())
+        return set().union(*found[1:]) if len(found) > 1 else set()
+
+    def set_highlight_unconnected(self, on: bool):
+        self.highlight_unconnected = on
+        self.update()
 
     def set_half_snap(self, on: bool):
         self.half_snap = on

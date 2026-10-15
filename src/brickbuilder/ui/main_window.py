@@ -108,6 +108,15 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _=False, dx=dx, dy=dy: self.nudge(dx, dy))
             nudge_menu.addAction(action)
 
+        # View Menu
+        view_menu = menu_bar.addMenu("View")
+        self.highlight_action = QAction("Highlight Unconnected Parts", self)
+        self.highlight_action.setCheckable(True)
+        self.highlight_action.setShortcut("U")
+        self.highlight_action.setToolTip("Mark parts that aren't connected to the main build")
+        self.highlight_action.toggled.connect(self.toggle_highlight)
+        view_menu.addAction(self.highlight_action)
+
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
         help_action = QAction("Controls", self)
@@ -221,12 +230,20 @@ class MainWindow(QMainWindow):
         self.viewport.cycle_anchor(step)
         self.update_status()
 
+    def toggle_highlight(self, on: bool):
+        self.viewport.set_highlight_unconnected(on)
+        self.update_status()
+
     def update_status(self):
         vp = self.viewport
         anchors = len(anchor_cells(vp.current_part))
+        unconnected = ""
+        if vp.highlight_unconnected:
+            n = len(vp.unconnected_parts())
+            unconnected = f"  ·  {n} unconnected part{'s' if n != 1 else ''}"
         self.statusBar().showMessage(
             f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
-            f"{'  ·  half-cell snap' if vp.half_snap else ''}"
+            f"{'  ·  half-cell snap' if vp.half_snap else ''}{unconnected}"
             f"   (Space: rotate, A: anchor cell, Shift reverses; H: half-cell snap, arrows: nudge)")
 
     def create_color_dock(self):
@@ -331,6 +348,9 @@ class MainWindow(QMainWindow):
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>
         <br>
+        <b>View:</b><br>
+        - U: highlight parts not connected to the main build (in orange)<br>
+        <br>
         <b>Edit / File:</b><br>
         - Undo: Ctrl+Z; Redo: Ctrl+Y or Ctrl+Shift+Z<br>
         - New: Ctrl+N; Open: Ctrl+O; Save: Ctrl+S; Save As: Ctrl+Shift+S<br>
@@ -349,6 +369,7 @@ class MainWindow(QMainWindow):
         history = self.viewport.history
         self.undo_action.setEnabled(history.can_undo())
         self.redo_action.setEnabled(history.can_redo())
+        self.update_status()
         self.update_title()
 
     def update_title(self):

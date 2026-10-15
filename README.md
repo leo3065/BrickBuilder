@@ -22,6 +22,9 @@ data, not code, so other micro-brick systems could be added without changing the
   **half-offset placement**.
 - **The 45 official Nanoblock colours.** Colour names come from nanoblock.info; the RGB values
   are approximate.
+- **Connection check:** View > Highlight Unconnected Parts (U) marks parts that aren't held
+  by the main build. Undersides follow the real parts: a 1×N's hollow slot takes studs anywhere
+  along it, a 2×N has one slot per row, and so on.
 - **Undo/redo**, Save / Save As, and a prompt before closing with unsaved changes.
 
 See [`feature_plan.md`](feature_plan.md) for what's planned next.

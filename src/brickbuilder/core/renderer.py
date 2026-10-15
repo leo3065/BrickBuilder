@@ -28,7 +28,8 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_edges=None, show_grid=True, show_gizmo=True, section_z=None):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=None, show_grid=True, show_gizmo=True, section_z=None, highlighted=()):
+        # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
@@ -66,6 +67,9 @@ class Renderer:
 
         # Render Bricks (one box per placed part; boxes come from the model's sub-grid mapping)
         self.render_bricks(model, profile)
+
+        if highlighted:
+            self.render_highlight(highlighted)
 
         if ghost:
             self.render_ghost(profile, *ghost)
@@ -272,6 +276,18 @@ class Renderer:
         self.call_at(stud_rim, placed.studs)
         gl.glEndList()
         return fill, outline
+
+    def render_highlight(self, edge_lists):
+        # On top of the black outlines (same lines, so the depth test must let equal depths pass)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDepthFunc(gl.GL_LEQUAL)
+        gl.glLineWidth(4.0)
+        gl.glColor3f(1.0, 0.55, 0.0)
+        for edges in edge_lists:
+            self.draw_segments(edges)
+        gl.glLineWidth(1.0)
+        gl.glDepthFunc(gl.GL_LESS)
+        gl.glEnable(gl.GL_LIGHTING)
 
     def render_ghost(self, profile, solids, studs, valid):
         gl.glEnable(gl.GL_BLEND)

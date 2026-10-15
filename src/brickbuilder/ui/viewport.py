@@ -52,7 +52,10 @@ class Viewport(QOpenGLWidget):
         self.nudge = (0, 0)
         self._nudge_base = None
 
-        self.selected_part_id: Optional[int] = None
+        # Selected part ids (Select tool), and the box being dragged: (x0, y0, x1, y1) widget px
+        self.selection: set = set()
+        self.select_rect = None
+        self._press = None  # (position, modifiers) of a left press in the Select tool
 
         # Enable mouse tracking for hover effects if needed later
         self.setMouseTracking(True)
@@ -76,25 +79,30 @@ class Viewport(QOpenGLWidget):
             ghost = (self.model.placement_solids(self.current_part, self.ghost_pos, self.current_turns, self.ghost_frame),
                      self.model.placement_studs(self.current_part, self.ghost_pos, self.current_turns, self.ghost_frame),
                      self.ghost_valid)
-        selected = self.model.parts.get(self.selected_part_id) if self.selected_part_id is not None else None
+        rect = None
+        if self.select_rect:
+            rect = tuple(v * pixel_ratio for v in self.select_rect)
         self.renderer.render(self.camera, self.model, self.profile, ghost,
                              int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
-                             selected.edges if selected else None,
+                             [self.model.parts[pid].edges for pid in self.selection if pid in self.model.parts],
+                             select_rect=rect,
                              highlighted=[self.model.parts[pid].edges for pid in self.unconnected_parts()]
                              if self.highlight_unconnected else ())
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
         self.ghost_pos = None
-        self.selected_part_id = None
+        if tool != Tool.SELECT:
+            self.selection = set()
         self.update()
+        self.edited.emit()
 
     def reset_scene(self):
         self.model.clear()
         self.history.reset()
         self.camera.reset()
         self.ghost_pos = None
-        self.selected_part_id = None
+        self.selection = set()
         self.update()
         self.edited.emit()
 
@@ -102,7 +110,7 @@ class Viewport(QOpenGLWidget):
         # After loading a file: drop references into the old contents
         self.history.reset()
         self.ghost_pos = None
-        self.selected_part_id = None
+        self.selection = set()
         self.update()
         self.edited.emit()
 
@@ -115,8 +123,7 @@ class Viewport(QOpenGLWidget):
             self._after_history_step()
 
     def _after_history_step(self):
-        if self.selected_part_id not in self.model.parts:
-            self.selected_part_id = None
+        self.selection &= set(self.model.parts)
         self.refresh_ghost()
         self.edited.emit()
 
@@ -142,13 +149,46 @@ class Viewport(QOpenGLWidget):
 
     def set_current_color(self, color: str):
         self.current_color = color
-        # If in Paint mode and something selected, paint it?
-        if self.current_tool == Tool.SELECT and self.selected_part_id is not None:
-             pass
+        # Picking a colour in the Select tool recolours the selection (one undo step)
+        if self.current_tool == Tool.SELECT and self.selection:
+            self.history.set_colors(self.selection, color)
+            self.update()
+            self.edited.emit()
+
+    # --- selection ---------------------------------------------------------------------
+
+    def select_all(self):
+        self.selection = set(self.model.parts)
+        self.update()
+        self.edited.emit()
+
+    def clear_selection(self):
+        self.selection = set()
+        self.update()
+        self.edited.emit()
+
+    def select_connected(self):
+        """Grow the selection to the whole connected subassemblies it touches."""
+        for group in groups(self.model.connections()):
+            if group & self.selection:
+                self.selection |= group
+        self.update()
+        self.edited.emit()
+
+    def delete_selection(self):
+        if self.selection:
+            self.history.remove_parts(self.selection)
+            self.selection = set()
+            self.update()
+            self.edited.emit()
 
     def mousePressEvent(self, event: QMouseEvent):
         self.last_mouse_pos = event.position()
 
+        if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.SELECT:
+            # Click or box: decided on release (or once the mouse moves far enough)
+            self._press = (event.position(), event.modifiers())
+            return
         if event.buttons() & Qt.MouseButton.LeftButton:
             self._handle_left_click(event)
             self.update()
@@ -159,8 +199,6 @@ class Viewport(QOpenGLWidget):
 
         if self.current_tool == Tool.PLACE:
             self._handle_place_tool(event, ray)
-        elif self.current_tool == Tool.SELECT:
-            self._handle_select_tool(ray)
         elif self.current_tool == Tool.PAINT:
             self._handle_paint_tool(ray)
         elif self.current_tool == Tool.ERASE:
@@ -176,9 +214,42 @@ class Viewport(QOpenGLWidget):
         # Refresh ghost immediately
         self.update_ghost(event.position().x(), event.position().y())
 
-    def _handle_select_tool(self, ray):
-        hit, _, _ = picking.intersect_model(ray, self.model)
-        self.selected_part_id = hit.id if hit else None
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() != Qt.MouseButton.LeftButton or self._press is None:
+            return
+        start, modifiers = self._press
+        add = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        self._press = None
+        if self.select_rect:
+            x0, y0, x1, y1 = self.select_rect
+            found = set(picking.parts_in_rect(self.model, self.camera, x0, y0, x1, y1, self.width(), self.height()))
+            self.selection = (self.selection | found) if add else found
+            self.select_rect = None
+        else:
+            ray = picking.get_mouse_ray(start.x(), start.y(), self.width(), self.height(), self.camera)
+            hit, _, _ = picking.intersect_model(ray, self.model)
+            if add:
+                if hit:
+                    self.selection ^= {hit.id}
+            else:
+                self.selection = {hit.id} if hit else set()
+        self.update()
+        self.edited.emit()
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent):
+        # Double-click in the Select tool: the whole connected subassembly under the cursor
+        if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.SELECT:
+            ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera)
+            hit, _, _ = picking.intersect_model(ray, self.model)
+            if hit:
+                group = next(g for g in groups(self.model.connections()) if hit.id in g)
+                add = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+                self.selection = (self.selection | group) if add else set(group)
+                self._press = None
+                self.update()
+                self.edited.emit()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def _handle_paint_tool(self, ray):
         hit, _, _ = picking.intersect_model(ray, self.model)
@@ -189,12 +260,17 @@ class Viewport(QOpenGLWidget):
         hit, _, _ = picking.intersect_model(ray, self.model)
         if hit:
             self.history.remove_part(hit.id)
-            if hit.id == self.selected_part_id:
-                self.selected_part_id = None
+            self.selection.discard(hit.id)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         current_pos = event.position()
         self.hover_pos = current_pos
+
+        # Dragging in the Select tool draws a selection box once it's more than a few pixels
+        if self._press is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            start = self._press[0]
+            if self.select_rect or (current_pos - start).manhattanLength() > 4:
+                self.select_rect = (start.x(), start.y(), current_pos.x(), current_pos.y())
 
         # Tool-specific hover logic
         if self.current_tool == Tool.PLACE:

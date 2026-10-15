@@ -1,6 +1,6 @@
 import glm
 import math
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.geometry import ray_convex
 from brickbuilder.core.model import Model, PlacedPart
@@ -164,3 +164,22 @@ def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optio
         return hit_part, hit_normal, ray.origin + ray.direction * closest_t
 
     return None, None, None
+
+
+def project(point: glm.vec3, width: float, height: float, camera: Camera) -> Tuple[float, float]:
+    """World point -> widget pixel coordinates (the inverse of get_mouse_ray's mapping)."""
+    clip = camera.get_projection_matrix() * camera.get_view_matrix() * glm.vec4(point, 1.0)
+    return (clip.x / clip.w + 1) / 2 * width, (1 - clip.y / clip.w) / 2 * height
+
+
+def parts_in_rect(model: Model, camera: Camera, x0: float, y0: float, x1: float, y1: float,
+                  width: float, height: float) -> List[int]:
+    """Ids of parts whose bounding-box centre lands inside the screen rectangle (box select)."""
+    left, right = min(x0, x1), max(x0, x1)
+    top, bottom = min(y0, y1), max(y0, y1)
+    out = []
+    for placed in model.parts.values():
+        sx, sy = project((placed.box[0] + placed.box[1]) * 0.5, width, height, camera)
+        if left <= sx <= right and top <= sy <= bottom:
+            out.append(placed.id)
+    return out

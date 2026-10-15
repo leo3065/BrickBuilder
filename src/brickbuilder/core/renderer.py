@@ -28,7 +28,9 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_edges=None, show_grid=True, show_gizmo=True, section_z=None, highlighted=()):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None):
+        # selected_edges: edge lists of the selected parts; select_rect: (x0, y0, x1, y1) in
+        # device pixels while dragging a selection box
         # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
@@ -80,21 +82,52 @@ class Renderer:
         if section_z is not None:
             gl.glDisable(gl.GL_CLIP_PLANE0)
         
+        if select_rect:
+            self.draw_select_rect(select_rect, width, height)
+
         # Draw Gizmo
         if show_gizmo:
             self.draw_orientation_gizmo(camera, width, height)
 
-    def render_selection(self, edges):
-        # Draw the outline of the selected part
+    def render_selection(self, edge_lists):
+        # Draw the outlines of the selected parts
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
-        
+
         gl.glLineWidth(3.0)
         gl.glColor3f(1.0, 1.0, 0.0) # Yellow
-        self.draw_segments(edges)
+        for edges in edge_lists:
+            self.draw_segments(edges)
         gl.glLineWidth(1.0)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_LIGHTING)
+
+    def draw_select_rect(self, rect, width, height):
+        # A translucent box in screen pixels (y down, like mouse coordinates)
+        x0, y0, x1, y1 = rect
+        gl.glPushAttrib(gl.GL_ENABLE_BIT | gl.GL_CURRENT_BIT | gl.GL_LINE_BIT)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glEnable(gl.GL_BLEND)
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glPushMatrix()
+        gl.glLoadIdentity()
+        gl.glOrtho(0, width, height, 0, -1, 1)
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        gl.glPushMatrix()
+        gl.glLoadIdentity()
+        for mode, alpha in ((gl.GL_QUADS, 0.15), (gl.GL_LINE_LOOP, 0.9)):
+            gl.glColor4f(1.0, 1.0, 0.0, alpha)
+            gl.glBegin(mode)
+            for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+                gl.glVertex2f(x, y)
+            gl.glEnd()
+        gl.glPopMatrix()
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glPopMatrix()
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        gl.glPopAttrib()
 
     def draw_orientation_gizmo(self, camera, width, height):
         gizmo_size = 150

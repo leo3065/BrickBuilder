@@ -87,3 +87,17 @@ def test_saved_point_lost_when_history_overflows(model, library):
         pass
     assert len(model.parts) == 1   # the oldest step can't be undone any more...
     assert model.modified          # ...so this is not the saved (empty) state
+
+
+def test_group_edits_undo_in_one_step(model, library):
+    h = History(model)
+    h.reset()
+    ids = [h.add_part(brick(library), (4 * i, 0, 0), 0, "red").id for i in range(3)]
+    h.set_colors(ids, "yellow")
+    assert {p.color for p in model.parts.values()} == {"yellow"}
+    h.remove_parts(ids[:2])
+    assert set(model.parts) == {ids[2]}
+    assert h.undo() and set(model.parts) == set(ids)                     # both back in one step
+    assert h.undo() and {p.color for p in model.parts.values()} == {"red"}
+    h.set_colors(ids, "red")                                              # no change: no step
+    assert h.can_redo()

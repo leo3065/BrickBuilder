@@ -108,6 +108,28 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _=False, dx=dx, dy=dy: self.nudge(dx, dy))
             nudge_menu.addAction(action)
 
+        # Selection (Select tool)
+        edit_menu.addSeparator()
+        select_all_action = QAction("Select All", self)
+        select_all_action.setShortcut(QKeySequence.SelectAll)
+        select_all_action.triggered.connect(self.select_all)
+        edit_menu.addAction(select_all_action)
+
+        select_connected_action = QAction("Select Connected", self)
+        select_connected_action.setToolTip("Grow the selection to whole connected subassemblies (also: double-click)")
+        select_connected_action.triggered.connect(self.viewport.select_connected)
+        edit_menu.addAction(select_connected_action)
+
+        deselect_action = QAction("Deselect", self)
+        deselect_action.setShortcut("Esc")
+        deselect_action.triggered.connect(self.viewport.clear_selection)
+        edit_menu.addAction(deselect_action)
+
+        delete_action = QAction("Delete Selected", self)
+        delete_action.setShortcut(QKeySequence.Delete)
+        delete_action.triggered.connect(self.viewport.delete_selection)
+        edit_menu.addAction(delete_action)
+
         # View Menu
         view_menu = menu_bar.addMenu("View")
         self.highlight_action = QAction("Highlight Unconnected Parts", self)
@@ -230,6 +252,10 @@ class MainWindow(QMainWindow):
         self.viewport.cycle_anchor(step)
         self.update_status()
 
+    def select_all(self):
+        self.set_tool(Tool.SELECT, self.select_action)
+        self.viewport.select_all()
+
     def toggle_highlight(self, on: bool):
         self.viewport.set_highlight_unconnected(on)
         self.update_status()
@@ -241,6 +267,9 @@ class MainWindow(QMainWindow):
         if vp.highlight_unconnected:
             n = len(vp.unconnected_parts())
             unconnected = f"  ·  {n} unconnected part{'s' if n != 1 else ''}"
+        if vp.selection:
+            n = len(vp.selection)
+            unconnected += f"  ·  {n} selected"
         self.statusBar().showMessage(
             f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
             f"{'  ·  half-cell snap' if vp.half_snap else ''}{unconnected}"
@@ -344,7 +373,9 @@ class MainWindow(QMainWindow):
           the preview half a cell. A / Shift+A picks which of its cells (starts at the<br>
           cell nearest the centre) sits under the cursor. Red preview = it would overlap.<br>
           (Ctrl + Left Click removes in Place mode)<br>
-        - Select (W): Click to select brick.<br>
+        - Select (W): click a part; Ctrl+click adds/removes; drag a box; double-click selects the<br>
+          connected subassembly. Delete removes the selection, picking a colour recolours it.<br>
+          Ctrl+A selects all, Esc clears.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>
         <br>

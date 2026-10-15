@@ -99,6 +99,28 @@ class History:
         self.model.set_color(part_id, color)
         self._push([ColorOp(part_id, old, color)])
 
+    def remove_parts(self, part_ids) -> None:
+        """Remove several parts as one undo step."""
+        command = []
+        for part_id in sorted(set(part_ids)):
+            placed = self.model.parts.get(part_id)
+            if placed is not None:
+                self.model.remove_part(part_id)
+                command.append(_snapshot(RemoveOp, placed))
+        if command:
+            self._push(command)
+
+    def set_colors(self, part_ids, color: str) -> None:
+        """Recolour several parts as one undo step."""
+        command = []
+        for part_id in sorted(set(part_ids)):
+            old = self.model.parts[part_id].color
+            if old != color:
+                self.model.set_color(part_id, color)
+                command.append(ColorOp(part_id, old, color))
+        if command:
+            self._push(command)
+
     # --- undo / redo --------------------------------------------------------------------
 
     def can_undo(self) -> bool:

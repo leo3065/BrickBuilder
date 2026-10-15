@@ -135,8 +135,8 @@ tests/               pytest suite
 - Camera controls are middle mouse only (README and Help match); Alt+Left goes to the active tool.
 - **Section view**: `Renderer.render(section_z=...)` supports a clip plane, but the
   viewport never passes it and there's no UI for it.
-- Selection in SELECT mode is display-only; `set_current_color` has a stub for
-  repainting the selection.
+- Selection (`Viewport.selection`, a set of part ids): delete and recolour act on it via
+  `History.remove_parts` / `set_colors` (one undo step each). Moving a selection isn't built yet.
 - Picking iterates every part (fine at small scale); the renderer calls one cached display
   list per part each frame (VBOs/shaders are still the longer-term plan).
 - Profile `clearance`, `body_height` aren't used yet. Outlines come from the merged shape

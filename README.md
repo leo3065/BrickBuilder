@@ -58,7 +58,9 @@ uv run pytest
   - **Space / Shift+Space:** rotate the part 90°.
   - **A / Shift+A:** choose which of its cells sits under the cursor (starts nearest the centre).
   - **H:** toggle half-cell snapping. **Arrow keys:** nudge the preview half a cell.
-- **Select (W):** click to select a part.
+- **Select (W):** click a part; Ctrl+click adds or removes one; drag a box to select several;
+  double-click selects the whole connected subassembly. **Delete** removes the selection and
+  picking a colour recolours it (one undo step each). **Ctrl+A** selects all, **Esc** clears.
 - **Paint (E):** click to recolour a part with the current colour.
 - **Erase (R):** click to remove a part.
 

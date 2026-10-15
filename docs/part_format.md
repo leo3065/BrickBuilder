@@ -220,8 +220,8 @@ ball side's arm direction `d`, relative to the cup's axis `a` (straight out of t
 slot direction `s` (perpendicular to `a`, the side the cup's U-shaped slot opens toward):
 1. **Roll** about the arm itself: always free.
 2. **Cone:** any `d` within about **30°** of `a`, in any direction (limited by the cup's rim).
-3. **Slot:** `d` may also lie in the plane of `a` and `s`, tilted toward `s` by up to about **90°**,
-   with no sideways freedom there. ❓ assumed one-sided (toward the slot only).
+3. **Slot:** `d` may also lie in the plane of `a` and `s`, tilted by up to about **90° either way**
+   (the slot is two-sided ✅), with no sideways freedom there.
 
 The slot is fixed to the cup part, so mounting the cup part on its side turns the 90° range from
 up/down into left/right (the manual's "横向き" 30° vs "縦向き" 90° pictures).
@@ -232,14 +232,18 @@ gives the position, axis and slot direction. A connected ball gives its part its
 (see "Layer 3"); poses are valid inside the cone or in the slot, and the UI's rotation snap applies
 to the joint angles too.
 
-**Dimensions ❓ (to measure):**
-- Straightened, the two parts' faces are exactly 2 cells (8 mm) apart ✅, but the pivot is not in
-  the middle. Pivot distance from the cup part's face = *a*, from the ball part's face = *b*
-  (*a* + *b* = 8 mm). Suggested measurement: bend 90° in the slot with a 2×2 ball part (arm from
-  the middle of a 2-cell face, so its near side face is 4 mm from the arm line), measure the gap
-  *g* from the cup part's face to that side face: *a* = *g* + 4 mm.
-- Height of the arm / cup above the brick's bottom (probably mid-height).
-- Ball diameter (drawing only).
+**Dimensions ✅ (measured with calipers):**
+- Straightened, the two parts' faces are exactly 2 cells (8 mm) apart. The pivot (ball centre) is
+  **4.25 mm from the cup part's face** and **3.75 mm from the ball part's face** (1.0625 and
+  0.9375 cells): not on the half-cell grid, which is fine since a jointed part gets its own frame.
+- Ball and cup sit at **mid-height** of the brick: a joint pair with one side rolled 180° lines up
+  with the other side's top and bottom swapped. Use half a layer (half body height differs by
+  0.04 mm).
+- Ball diameter **4.00–4.05 mm**. The arm from the brick to the ball is a tapered cylinder; model it
+  as a plain cylinder of its narrowest diameter, **1.95 mm** (at the ball end).
+- The LDraw files (NB201B/S, NB202B/S) disagree: ball centre 3.6 mm and cup centre 3.24 mm from
+  the faces (6.84 mm total instead of 8), ball Ø ≈ 3.4 mm, arm Ø 1.6 mm. Treat them as rough shapes
+  only; the measurements win.
 
 ## Library
 - A folder tree of part files; the folders are the categories. Ids are namespaced

@@ -36,8 +36,8 @@ Naming notes:
 | 1x2 : Round | 40 | | NB102R | 1×2 with rounded ends |
 | 1x2 : Slope 1 | 12 | `slope_1x2_wedge_1x1` | NB102A | |
 | 1x2 : Slope 2 | 11 | `slope_1x2_wedge_1x2` | NB10202A | (LDraw drawn 1 mm too short) |
-| 1x2 : SlopeRev 1 | 16 | `slope_1x2_wedge_1x1_reversed` | NB102B | |
-| 1x2 : SlopeRev 2 | 18 | `slope_1x2_wedge_1x2_reversed` | NB10202V | |
+| 1x2 : SlopeRev 1 | 16 | `slope_1x2_wedge_1x1_inverted` | NB102B | |
+| 1x2 : SlopeRev 2 | 18 | `slope_1x2_wedge_1x2_inverted` | NB10202V | |
 | 1x3 : 1/2BO-3 | 24 | `brick_1x3` | NB103 | plain 1×3 |
 | 1x3 : 2凸 | 19 | | NB103S2 | 1×3 with 2 studs |
 | 1x3 : Round | 30 | | NB103R | 1×3 with rounded ends |

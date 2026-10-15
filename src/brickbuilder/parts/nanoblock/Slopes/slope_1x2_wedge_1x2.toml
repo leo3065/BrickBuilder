@@ -1,5 +1,5 @@
 # Like slope_1x2_wedge_1x1 but the triangle is 1 cell x 2 layers (peak 3 layers above the bottom).
-# Pairs with slope_1x2_wedge_1x2_reversed. (The LDraw file draws it 1 mm too short.)
+# Pairs with slope_1x2_wedge_1x2_inverted. (The LDraw file draws it 1 mm too short.)
 name = "Slope 1×2 wedge 1×2"
 ldraw = "NB10202A.dat"
 

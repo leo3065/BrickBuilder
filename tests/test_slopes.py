@@ -67,8 +67,8 @@ def test_wedge_regions_on_the_half_cell_grid(profile):
 def test_slope_parts_cells_and_studs(library):
     assert lib(library, "slope_1x2_wedge_1x1").studs == ((0, 1, 0),)
     assert lib(library, "slope_1x2_wedge_1x2").cells == ((0, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 2))
-    assert lib(library, "slope_1x2_wedge_1x1_reversed").studs == ((0, 0, 0), (0, 1, 0))
-    assert lib(library, "slope_1x2_wedge_1x2_reversed").studs == ((0, 0, 0), (0, 1, 1))
+    assert lib(library, "slope_1x2_wedge_1x1_inverted").studs == ((0, 0, 0), (0, 1, 0))
+    assert lib(library, "slope_1x2_wedge_1x2_inverted").studs == ((0, 0, 0), (0, 1, 1))
     # Every flat top cell has a stud
     assert lib(library, "slope_1x3_wedge_2x1").studs == ((0, 2, 0),)
     assert lib(library, "slope_2x3_wedge_2x1").studs == ((0, 2, 0), (1, 2, 0))
@@ -91,8 +91,8 @@ def test_bad_wedges_rejected(body, message):
 @pytest.mark.parametrize("name, edges", [
     ("brick_1x1", 12), ("brick_2x8", 12),          # half-cell pieces merge back into one box
     ("slope_1x2_wedge_1x1", 18), ("slope_1x2_wedge_1x2", 18),        # hexagonal side profile: 6 + 6 + 6
-    ("slope_1x2_wedge_1x1_reversed", 12),                    # box and wedge tops merge into one flat top
-    ("slope_1x2_wedge_1x2_reversed", 18),
+    ("slope_1x2_wedge_1x1_inverted", 12),                    # box and wedge tops merge into one flat top
+    ("slope_1x2_wedge_1x2_inverted", 18),
     ("slope_1x3_wedge_2x1", 18), ("slope_2x3_wedge_2x1", 18), ("slope_2x2_wedge_1x1", 18), ("slope_2x4_wedge_1x1", 18),  # same profile, wider
 ])
 def test_outline_follows_the_merged_shape(profile, library, name, edges):
@@ -118,8 +118,8 @@ def test_no_seam_between_box_and_wedge(profile, library):
 
 # --- occupancy: the pairs from real sets ----------------------------------------------------
 
-@pytest.mark.parametrize("slope, inverted", [("slope_1x2_wedge_1x1", "slope_1x2_wedge_1x1_reversed"),
-                                             ("slope_1x2_wedge_1x2", "slope_1x2_wedge_1x2_reversed")])
+@pytest.mark.parametrize("slope, inverted", [("slope_1x2_wedge_1x1", "slope_1x2_wedge_1x1_inverted"),
+                                             ("slope_1x2_wedge_1x2", "slope_1x2_wedge_1x2_inverted")])
 def test_complementary_pairs_fit_together(model, profile, library, slope, inverted):
     # Slope's triangle is on cell (0, 0, 1+); the inverted part's triangle (its local cell y=1)
     # lands on the same cells when its origin is at cell (0, -1, 1)
@@ -135,13 +135,13 @@ def test_complementary_pairs_fit_together(model, profile, library, slope, invert
 def test_pair_still_fits_when_turned(model, profile, library):
     model.add_part(lib(library, "slope_1x2_wedge_1x1"), (0, 0, 0), 1, "red")
     # The inverted part's origin (0, -2) turned once about the slope's origin -> (2, 0)
-    assert model.can_place(lib(library, "slope_1x2_wedge_1x1_reversed"), (2, 0, 1), 1)
+    assert model.can_place(lib(library, "slope_1x2_wedge_1x1_inverted"), (2, 0, 1), 1)
 
 
 def test_pair_fits_with_half_offset_along_the_extrusion(model, profile, library):
     model.add_part(lib(library, "slope_1x2_wedge_1x1"), (0, 0, 0), 0, "red")
     # Shifted half a cell in X: the overlapping half-cells are cut by the same plane
-    assert model.can_place(lib(library, "slope_1x2_wedge_1x1_reversed"), (1, -2, 1), 0)
+    assert model.can_place(lib(library, "slope_1x2_wedge_1x1_inverted"), (1, -2, 1), 0)
 
 
 def test_other_overlaps_with_a_slope_are_refused(model, profile, library):
@@ -151,7 +151,7 @@ def test_other_overlaps_with_a_slope_are_refused(model, profile, library):
     # The same slope again, one layer up and back: its base would cut into the triangle
     assert not model.can_place(lib(library, "slope_1x2_wedge_1x1"), sub(profile, (0, -1, 1)), 0)
     # An inverted slope turned the other way: a different plane through the same cell
-    assert not model.can_place(lib(library, "slope_1x2_wedge_1x1_reversed"), sub(profile, (1, 2, 1)), 2)
+    assert not model.can_place(lib(library, "slope_1x2_wedge_1x1_inverted"), sub(profile, (1, 2, 1)), 2)
     # But the empty space above the flat cell is free
     assert model.can_place(lib(library, "brick_1x1"), sub(profile, (0, 1, 1)), 0)
 
@@ -170,7 +170,7 @@ def test_picking_hits_the_slope_not_its_bounding_box(model, profile, library):
     # Pointing at the slope targets the empty part of its own cell (for a complementary wedge)
     target = placement_target(profile, point, normal, half=False)
     assert target == sub(profile, (0, 0, 1))
-    assert model.can_place(lib(library, "slope_1x2_wedge_1x1_reversed"), (target[0], target[1] - 2, target[2]), 0)
+    assert model.can_place(lib(library, "slope_1x2_wedge_1x1_inverted"), (target[0], target[1] - 2, target[2]), 0)
     assert not model.can_place(lib(library, "brick_1x1"), target, 0)
     # The flat top of the other cell is a normal target
     ray = picking.Ray(glm.vec3(0, 4, 100), glm.vec3(0, 0, -1))
@@ -180,7 +180,7 @@ def test_picking_hits_the_slope_not_its_bounding_box(model, profile, library):
 
 def test_slopes_save_and_load(model, profile, library, tmp_path):
     model.add_part(lib(library, "slope_1x2_wedge_1x2"), (0, 0, 0), 0, "red")
-    model.add_part(lib(library, "slope_1x2_wedge_1x2_reversed"), sub(profile, (0, -1, 1)), 0, "white")
+    model.add_part(lib(library, "slope_1x2_wedge_1x2_inverted"), sub(profile, (0, -1, 1)), 0, "white")
     path = tmp_path / "s.json"
     model.save_to_file(str(path))
     loaded = Model(profile, library)
@@ -195,7 +195,7 @@ def test_old_slope_ids_still_load(model, profile, library):
     ]}
     model.from_dict(old)
     assert [p["part"] for p in model.to_dict()["parts"]] == [
-        "nanoblock:slope_1x2_wedge_1x1", "nanoblock:slope_1x2_wedge_1x1_reversed"]
+        "nanoblock:slope_1x2_wedge_1x1", "nanoblock:slope_1x2_wedge_1x1_inverted"]
 
 
 def test_all_ids_are_plain_ascii(library, profile):

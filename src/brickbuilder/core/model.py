@@ -25,8 +25,10 @@ RENAMED_PARTS = {
     "nanoblock:slope_2x2": "nanoblock:slope_2x2_wedge_1x1",
     "nanoblock:slope_2x3": "nanoblock:slope_2x3_wedge_2x1",
     "nanoblock:slope_2x4": "nanoblock:slope_2x4_wedge_1x1",
-    "nanoblock:slope_inverted_1x2": "nanoblock:slope_1x2_wedge_1x1_reversed",
-    "nanoblock:slope_inverted_1x2x2": "nanoblock:slope_1x2_wedge_1x2_reversed",
+    "nanoblock:slope_inverted_1x2": "nanoblock:slope_1x2_wedge_1x1_inverted",
+    "nanoblock:slope_inverted_1x2x2": "nanoblock:slope_1x2_wedge_1x2_inverted",
+    "nanoblock:slope_1x2_wedge_1x1_reversed": "nanoblock:slope_1x2_wedge_1x1_inverted",
+    "nanoblock:slope_1x2_wedge_1x2_reversed": "nanoblock:slope_1x2_wedge_1x2_inverted",
 }
 
 

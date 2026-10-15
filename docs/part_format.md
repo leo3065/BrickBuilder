@@ -200,9 +200,36 @@ once the hand-written library shows real duplication pain.
   snap to that frame (as `feature_plan.md` describes). The angle itself is continuous; the
   **UI snaps** to an editor setting `rotation_snap` (default 7.5°, chosen because it divides
   90° evenly). This is an editor preference, **not** a profile value.
-- ✅ Fine rotation **requires a physical connection that permits it**: every engaged socket
-  must lie on one shared axis (in practice, a part held by a single stud). The pivot is
-  that axis, not the part origin.
+- ✅ **Subassemblies and contacts.** Parts on one frame form a rigid subassembly. Two
+  subassemblies are **held** together if at least one contact links them: a stud in an antistud
+  slot or point, or a ball in a cup. Sturdiness isn't modelled, only held or not. What a
+  contact leaves free:
+
+  | Contact | Fixes | Leaves free |
+  |---|---|---|
+  | Stud in a slot | the two Z axes parallel, the stud on the slot's line | turning about the stud, sliding along the slot |
+  | Stud in a point antistud | as above, plus the position | turning about the stud |
+  | Ball in cup | the ball centre on the cup's pivot | roll, swing within the cone or the slot plane |
+  | Several contacts | everything any of them fixes | only what all of them leave free |
+
+  E.g. two coaxial ball/cup pairs make a **hinge** (only rotation about their line). Two studs
+  of subassembly A on the same local Z level, both in slots of subassembly B (one long slot, or
+  two parallel ones like a 2×N's rows), fix B's angle: B turns about the first stud until the
+  second lands on a slot. That's how a 1×N sits **at an angle across two studs**, and what the
+  "align" tool works out (one slot: the direction between the studs; two slots: a circle meets
+  a line).
+- ✅ **No physics solver.** A pose is either picked by the user within what the contacts leave
+  free, or worked out by the tool (align, land on a grid). Saves store each frame's transform;
+  on load every contact is checked against it within tolerance.
+- ✅ **Snapping** (editor settings, not profile values), by default on, with a key to move freely:
+  - sliding along a slot: half-cell steps (the sub-grid);
+  - turning about an axis (a stud, a hinge, the ball joint's roll): `rotation_snap` steps
+    (default 7.5°);
+  - ball joint swing inside the cone: two angles measured from the cup's axis (sideways and
+    up/down), each snapped. Their singular points are 90° off the axis, far outside the 30° cone,
+    so this behaves like a plain 2D grid; in the slot only the one angle along it is free;
+  - later on top: "land on a grid", i.e. swing until a part on the moving side lines up with a
+    nearby frame's grid (the Intermediate "same grid with minimal rotation" item).
 - ✅ **Frames don't have to form a tree.** A part can bridge two frames. The Koraidon/Miraidon
   style of bracing (bricks reaching past a joint) makes a closed loop. So connections are
   stored as a **graph** (socket ↔ socket edges), and frame parent links are only one spanning

@@ -42,6 +42,7 @@ class Viewport(QOpenGLWidget):
         # ghost_valid is False when it would overlap another part (drawn red, can't place).
         self.ghost_pos: Optional[Sub] = None
         self.ghost_valid = False
+        self.ghost_frame = 0
         self.hover_pos = None # last mouse position over the viewport, for refreshing the ghost
         # Half-offset placement: snap to half-cells in XY, plus a keyboard nudge (in sub-cells)
         # that's kept until the cursor moves to a different target
@@ -72,8 +73,8 @@ class Viewport(QOpenGLWidget):
         pixel_ratio = self.devicePixelRatio()
         ghost = None
         if self.ghost_pos is not None:
-            ghost = (self.model.placement_solids(self.current_part, self.ghost_pos, self.current_turns),
-                     self.model.placement_studs(self.current_part, self.ghost_pos, self.current_turns),
+            ghost = (self.model.placement_solids(self.current_part, self.ghost_pos, self.current_turns, self.ghost_frame),
+                     self.model.placement_studs(self.current_part, self.ghost_pos, self.current_turns, self.ghost_frame),
                      self.ghost_valid)
         selected = self.model.parts.get(self.selected_part_id) if self.selected_part_id is not None else None
         self.renderer.render(self.camera, self.model, self.profile, ghost,
@@ -170,7 +171,8 @@ class Viewport(QOpenGLWidget):
             # Quick erase override in Place mode
             self._handle_erase_tool(ray)
         elif self.ghost_pos is not None and self.ghost_valid:
-            self.history.add_part(self.current_part, self.ghost_pos, self.current_turns, self.current_color)
+            self.history.add_part(self.current_part, self.ghost_pos, self.current_turns, self.current_color,
+                                  self.ghost_frame)
         # Refresh ghost immediately
         self.update_ghost(event.position().x(), event.position().y())
 
@@ -224,8 +226,12 @@ class Viewport(QOpenGLWidget):
         hit, normal, point = picking.intersect_model(ray, self.model)
 
         target = None
+        frame = 0
         if hit:
-            # Snap to the cell against the hit face
+            # Snap to the cell against the hit face. Parts placed against a part go on that
+            # part's grid (its frame), so building on a turned part follows its turn.
+            frame = hit.frame
+            point, normal = self.model.to_frame(frame, point, normal)
             target = placement_target(self.profile, point, normal, self.half_snap)
         elif ray.direction.z < -1e-6:
             # Check ground plane (Z=0) intersection ONLY if looking down
@@ -248,7 +254,8 @@ class Viewport(QOpenGLWidget):
             target = (target[0] + self.nudge[0], target[1] + self.nudge[1], target[2])
             anchor = anchor_cells(self.current_part)[self.current_anchor]
             self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, target)
-            self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns)
+            self.ghost_frame = frame
+            self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns, frame)
 
     def unconnected_parts(self):
         """Ids of parts outside the largest connected group (empty when everything is one group)."""

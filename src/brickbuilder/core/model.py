@@ -15,12 +15,28 @@ Sub = Tuple[int, int, int]  # sub-grid coordinate (profile.subdiv sub-cells per 
 Region = Tuple[Sub, Optional[Cut]]  # a sub-cell and how it's filled: None = full, or a wedge cut
 Solid = List[List[glm.vec3]]  # convex body as outward faces (world space)
 
-SAVE_VERSION = 2
+SAVE_VERSION = 3  # v3: frames with parent, origin and rotation
 
 
 
 class ModelError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class Frame:
+    """A grid of its own: parts in it are placed on its sub-grid like on the root grid, then moved
+    by the frame's transform. Frame 0 is the root (the global grid)."""
+    id: int
+    parent: Optional[int]                  # None only for the root
+    origin: glm.vec3 = glm.vec3(0.0)       # in the parent's space, mm
+    rotation: glm.quat = glm.quat()        # relative to the parent
+
+    def local_matrix(self) -> glm.mat4:
+        return glm.translate(glm.mat4(1.0), self.origin) * glm.mat4_cast(self.rotation)
+
+
+ROOT = Frame(0, None)
 
 
 @dataclass
@@ -30,13 +46,14 @@ class PlacedPart:
     pos: Sub                # sub-grid position of the part origin (min corner, bottom)
     turns: int              # quarter turns about +Z through the origin, 0..3
     color: str              # palette id
-    frame: int              # 0 = root frame (the only one so far)
+    frame: int              # frame id; 0 = the root grid. pos/turns/regions are in its grid
     regions: Tuple[Region, ...]     # sub-cells it occupies (fully, or partly for wedges)
     box: Tuple[glm.vec3, glm.vec3]  # world AABB
     solids: Tuple[Solid, ...]       # world-space bodies, for rendering and picking
     edges: Tuple[Tuple[glm.vec3, glm.vec3], ...]  # outline of the merged shape (no seams)
     studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
     antistuds: Tuple[Tuple[glm.vec3, glm.vec3], ...] = ()  # world slots where a stud from below fits
+    stud_rotation: Optional[glm.mat4] = None  # the frame's rotation, if any (studs follow it)
 
 
 # Rotating a cell's min corner is the same as rotating a sub-cell's (the origin is a corner)
@@ -208,32 +225,95 @@ class Model:
         self.profile = profile
         self.library = library
         self.parts: Dict[int, PlacedPart] = {}
-        # sub-cell -> [(part id, cut)]: more than one only where complementary wedges meet
-        self.occupancy: Dict[Sub, List[Tuple[int, Optional[Cut]]]] = {}
+        self.frames: Dict[int, Frame] = {0: ROOT}
+        # (frame, sub-cell) -> [(part id, cut)]: more than one only where complementary wedges
+        # meet. Each frame has its own grid; parts in different frames aren't checked against
+        # each other (yet).
+        self.occupancy: Dict[Tuple[int, Sub], List[Tuple[int, Optional[Cut]]]] = {}
         self.modified = False
         self._next_id = 1
         self._links = None  # cached connection graph, dropped on any add/remove
 
     # --- queries -------------------------------------------------------------------------
 
-    def _fits(self, regions: List[Region]) -> bool:
+    # --- frames ----------------------------------------------------------------------------
+
+    def frame_matrix(self, frame_id: int) -> glm.mat4:
+        """Frame space (its grid's mm coordinates, as the root grid's) -> world."""
+        m = glm.mat4(1.0)
+        f = self.frames[frame_id]
+        while f.parent is not None:
+            m = f.local_matrix() * m
+            f = self.frames[f.parent]
+        return m
+
+    def to_frame(self, frame_id: int, point: glm.vec3, normal: glm.vec3):
+        """A world point and direction in a frame's own coordinates (for placing onto its grid)."""
+        if frame_id == 0:
+            return point, normal
+        inv = glm.inverse(self.frame_matrix(frame_id))
+        return glm.vec3(inv * glm.vec4(point, 1.0)), glm.normalize(glm.vec3(inv * glm.vec4(normal, 0.0)))
+
+    def add_frame(self, parent: int, origin: glm.vec3, rotation: glm.quat,
+                  frame_id: Optional[int] = None) -> Frame:
+        if parent not in self.frames:
+            raise ModelError(f"unknown parent frame {parent}")
+        if frame_id is None:
+            frame_id = max(self.frames) + 1
+        elif frame_id in self.frames:
+            raise ModelError(f"duplicate frame id {frame_id}")
+        rotation = glm.quat(rotation)
+        # Normalise only if needed: re-normalising a unit quaternion in single precision nudges it,
+        # so every save/load would drift
+        if abs(glm.length(rotation) - 1) > 1e-6:
+            rotation = glm.normalize(rotation)
+        frame = Frame(frame_id, parent, glm.vec3(origin), rotation)
+        self.frames[frame_id] = frame
+        self.modified = True
+        return frame
+
+    def remove_frame(self, frame_id: int) -> None:
+        """Remove an empty frame with no child frames."""
+        if frame_id == 0:
+            raise ModelError("the root frame can't be removed")
+        if any(p.frame == frame_id for p in self.parts.values()) or \
+                any(f.parent == frame_id for f in self.frames.values()):
+            raise ModelError(f"frame {frame_id} still has parts or child frames")
+        del self.frames[frame_id]
+        self.modified = True
+
+    # --- queries ---------------------------------------------------------------------------
+
+    def _fits(self, frame: int, regions: List[Region]) -> bool:
         for sub, cut in regions:
-            for _, other in self.occupancy.get(sub, ()):
+            for _, other in self.occupancy.get((frame, sub), ()):
                 if not compatible(cut, other):
                     return False
         return True
 
-    def can_place(self, part: PartDef, pos: Sub, turns: int) -> bool:
-        return self._fits(footprint_regions(self.profile, part, pos, turns))
+    def can_place(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> bool:
+        return self._fits(frame, footprint_regions(self.profile, part, pos, turns))
 
-    def placement_box(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, glm.vec3]:
-        return subcells_box(self.profile, footprint(self.profile, part, pos, turns))
+    def placement_solids(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> Tuple[Solid, ...]:
+        return self._to_world(frame, solids=part_solids(self.profile, part, pos, turns))["solids"]
 
-    def placement_solids(self, part: PartDef, pos: Sub, turns: int) -> Tuple[Solid, ...]:
-        return part_solids(self.profile, part, pos, turns)
+    def placement_studs(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> Tuple[glm.vec3, ...]:
+        return self._to_world(frame, studs=stud_positions(self.profile, part, pos, turns))["studs"]
 
-    def placement_studs(self, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
-        return stud_positions(self.profile, part, pos, turns)
+    def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=()):
+        """Move frame-space geometry into the world (a no-op for the root frame)."""
+        if frame == 0:
+            return {"solids": solids, "edges": edges, "studs": studs, "antistuds": antistuds}
+        m = self.frame_matrix(frame)
+
+        def pt(p):
+            return glm.vec3(m * glm.vec4(p, 1.0))
+        return {
+            "solids": tuple([[pt(p) for p in face] for face in solid] for solid in solids),
+            "edges": tuple((pt(a), pt(b)) for a, b in edges),
+            "studs": tuple(pt(p) for p in studs),
+            "antistuds": tuple((pt(a), pt(b)) for a, b in antistuds),
+        }
 
     def connections(self) -> Dict[int, set]:
         """Part id -> ids of the parts it's connected to (a stud of one in a slot of the other).
@@ -243,33 +323,45 @@ class Model:
             self._links = find_connections(self.profile, self.parts.values())
         return self._links
 
-    def parts_at(self, sub: Sub) -> List[PlacedPart]:
-        return [self.parts[part_id] for part_id, _ in self.occupancy.get(sub, ())]
+    def parts_at(self, sub: Sub, frame: int = 0) -> List[PlacedPart]:
+        return [self.parts[part_id] for part_id, _ in self.occupancy.get((frame, sub), ())]
 
     # --- edits ---------------------------------------------------------------------------
 
     def add_part(self, part: PartDef, pos: Sub, turns: int, color: str,
-                 part_id: Optional[int] = None) -> Optional[PlacedPart]:
-        """Place a part; returns None (and changes nothing) if it would overlap another part."""
+                 part_id: Optional[int] = None, frame: int = 0) -> Optional[PlacedPart]:
+        """Place a part on a frame's grid; returns None (and changes nothing) if it would overlap
+        another part in that frame."""
         if color not in self.profile.palette:
             raise ModelError(f"unknown color {color!r}")
+        if frame not in self.frames:
+            raise ModelError(f"unknown frame {frame}")
         regions = footprint_regions(self.profile, part, pos, turns)
-        if not self._fits(regions):
+        if not self._fits(frame, regions):
             return None
         if part_id is None:
             part_id = self._next_id
         elif part_id in self.parts:
             raise ModelError(f"duplicate part id {part_id}")
         self._next_id = max(self._next_id, part_id + 1)
-        placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, 0,
-                            tuple(regions), subcells_box(self.profile, (s for s, _ in regions)),
-                            part_solids(self.profile, part, pos, turns),
-                            part_edges(self.profile, part, pos, turns),
-                            stud_positions(self.profile, part, pos, turns),
-                            antistud_slots(self.profile, part, pos, turns))
+        world = self._to_world(frame,
+                               solids=part_solids(self.profile, part, pos, turns),
+                               edges=part_edges(self.profile, part, pos, turns),
+                               studs=stud_positions(self.profile, part, pos, turns),
+                               antistuds=antistud_slots(self.profile, part, pos, turns))
+        if frame == 0:
+            box = subcells_box(self.profile, (s for s, _ in regions))
+        else:
+            pts = [p for solid in world["solids"] for face in solid for p in face]
+            box = (glm.vec3(min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)),
+                   glm.vec3(max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        rotation = None if frame == 0 else glm.mat4(glm.mat3(self.frame_matrix(frame)))
+        placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, frame,
+                            tuple(regions), box, world["solids"], world["edges"],
+                            world["studs"], world["antistuds"], rotation)
         self.parts[part_id] = placed
         for sub, cut in regions:
-            self.occupancy.setdefault(sub, []).append((part_id, cut))
+            self.occupancy.setdefault((frame, sub), []).append((part_id, cut))
         self._links = None
         self.modified = True
         return placed
@@ -279,11 +371,12 @@ class Model:
         if placed is None:
             return
         for sub, _ in placed.regions:
-            remaining = [entry for entry in self.occupancy[sub] if entry[0] != part_id]
+            key = (placed.frame, sub)
+            remaining = [entry for entry in self.occupancy[key] if entry[0] != part_id]
             if remaining:
-                self.occupancy[sub] = remaining
+                self.occupancy[key] = remaining
             else:
-                del self.occupancy[sub]
+                del self.occupancy[key]
         self._links = None
         self.modified = True
 
@@ -298,6 +391,7 @@ class Model:
     def clear(self) -> None:
         self._links = None
         self.parts.clear()
+        self.frames = {0: ROOT}
         self.occupancy.clear()
         self._next_id = 1
         self.modified = True
@@ -326,7 +420,7 @@ class Model:
         return {
             "version": SAVE_VERSION,
             "profile": self.profile.id,
-            "frames": [{"id": 0}],
+            "frames": [self._frame_to_dict(f) for f in sorted(self.frames.values(), key=lambda f: f.id)],
             "parts": [
                 {
                     "id": p.id,
@@ -340,17 +434,26 @@ class Model:
             ],
         }
 
+    @staticmethod
+    def _frame_to_dict(f: Frame) -> Dict[str, Any]:
+        if f.parent is None:
+            return {"id": f.id}
+        q = f.rotation
+        return {"id": f.id, "parent": f.parent, "origin": [f.origin.x, f.origin.y, f.origin.z],
+                "rotation": [q.w, q.x, q.y, q.z]}
+
     def from_dict(self, data: Dict[str, Any]) -> None:
         """Replace the model's contents. On error, raises ModelError and leaves the model untouched."""
         loaded = Model(self.profile, self.library)
         version = data.get("version")
         if version == 1:
             loaded._load_v1(data)
-        elif version == SAVE_VERSION:
+        elif version in (2, SAVE_VERSION):
             loaded._load_v2(data)
         else:
             raise ModelError(f"unsupported save version {version!r}")
         self.parts, self.occupancy, self._next_id = loaded.parts, loaded.occupancy, loaded._next_id
+        self.frames = loaded.frames
         self._links = None
         self.modified = False
 
@@ -371,9 +474,7 @@ class Model:
     def _load_v2(self, data: Dict[str, Any]) -> None:
         if data.get("profile") != self.profile.id:
             raise ModelError(f"file is for profile {data.get('profile')!r}, not {self.profile.id!r}")
-        frames = data.get("frames", [{"id": 0}])
-        if [f.get("id") for f in frames] != [0]:
-            raise ModelError("only the root frame (id 0) is supported so far")
+        self._load_frames(data.get("frames", [{"id": 0}]), data.get("version"))
         parts = data.get("parts", [])
         if not isinstance(parts, list):
             raise ModelError("'parts' must be a list")
@@ -384,8 +485,9 @@ class Model:
             part = self.library.get(p.get("part"))
             if part is None:
                 raise ModelError(f"{where}: unknown part {p.get('part')!r}")
-            if p.get("frame", 0) != 0:
-                raise ModelError(f"{where}: only frame 0 is supported so far")
+            frame = p.get("frame", 0)
+            if frame not in self.frames:
+                raise ModelError(f"{where}: unknown frame {frame!r}")
             turns, part_id, color = p.get("turns", 0), p.get("id"), p.get("color")
             if not isinstance(turns, int) or not 0 <= turns <= 3:
                 raise ModelError(f"{where}: 'turns' must be 0..3")
@@ -394,8 +496,33 @@ class Model:
             if color not in self.profile.palette:
                 raise ModelError(f"{where}: unknown color {color!r}")
             pos = self._cells_to_pos(where, p.get("pos"))
-            if self.add_part(part, pos, turns, color, part_id) is None:
+            if self.add_part(part, pos, turns, color, part_id, frame) is None:
                 raise ModelError(f"{where}: overlaps another part")
+
+    def _load_frames(self, frames: Any, version: Any) -> None:
+        """Frames in order, each after its parent (so they always form a tree from the root)."""
+        if not isinstance(frames, list) or not frames or frames[0] != {"id": 0}:
+            raise ModelError("'frames' must be a list starting with the root frame {\"id\": 0}")
+        if version == 2 and len(frames) > 1:
+            raise ModelError("v2 files have only the root frame")
+
+        def numbers(v, k):
+            return isinstance(v, list) and len(v) == k and all(
+                isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)
+        for n, f in enumerate(frames[1:], start=1):
+            where = f"frames[{n}]"
+            if not isinstance(f, dict) or set(f) != {"id", "parent", "origin", "rotation"}:
+                raise ModelError(f"{where}: needs id, parent, origin and rotation")
+            fid, parent, origin, rotation = f["id"], f["parent"], f["origin"], f["rotation"]
+            if not isinstance(fid, int) or isinstance(fid, bool) or fid < 1 or fid in self.frames:
+                raise ModelError(f"{where}: 'id' must be a new positive integer")
+            if parent not in self.frames:
+                raise ModelError(f"{where}: parent {parent!r} must be listed before it")
+            if not numbers(origin, 3):
+                raise ModelError(f"{where}: 'origin' must be 3 numbers (mm)")
+            if not numbers(rotation, 4) or abs(sum(x * x for x in rotation) - 1) > 1e-6:
+                raise ModelError(f"{where}: 'rotation' must be a unit quaternion [w, x, y, z]")
+            self.add_frame(parent, glm.vec3(*origin), glm.quat(*rotation), fid)
 
     def save_to_file(self, filename: str) -> None:
         # Write to a temporary file and swap it in, so a failed save never truncates the old file

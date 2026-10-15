@@ -96,7 +96,7 @@ def test_fan_shape_studs_and_occupancy(library, profile):
     model = Model(profile, library)
     model.add_part(fan, (0, 0, 0), 0, "red")
     # Half-cells the arc touches count as full; only the corner cell's outer quarter is free
-    assert len(model.occupancy) == 15 and (3, 3, 0) not in model.occupancy
+    assert len(model.occupancy) == 15 and (0, (3, 3, 0)) not in model.occupancy
     # So a 1x1 at the half-offset position over that quarter fits (it clears the arc)...
     assert model.can_place(library["nanoblock:brick_1x1"], (3, 3, 0), 0)
     # ...but one half a cell further in would cut the curve

@@ -21,6 +21,7 @@ class AddOp:
     pos: Sub
     turns: int
     color: str
+    frame: int = 0
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class RemoveOp:
     pos: Sub
     turns: int
     color: str
+    frame: int = 0
 
 
 @dataclass(frozen=True)
@@ -46,20 +48,20 @@ _UNREACHABLE: Command = []  # a clean point that undo can never return to
 
 
 def _snapshot(cls, placed: PlacedPart):
-    return cls(placed.id, placed.part, placed.pos, placed.turns, placed.color)
+    return cls(placed.id, placed.part, placed.pos, placed.turns, placed.color, placed.frame)
 
 
 def _inverse(op: Op) -> Op:
     if isinstance(op, AddOp):
-        return RemoveOp(op.part_id, op.part, op.pos, op.turns, op.color)
+        return RemoveOp(op.part_id, op.part, op.pos, op.turns, op.color, op.frame)
     if isinstance(op, RemoveOp):
-        return AddOp(op.part_id, op.part, op.pos, op.turns, op.color)
+        return AddOp(op.part_id, op.part, op.pos, op.turns, op.color, op.frame)
     return ColorOp(op.part_id, op.new, op.old)
 
 
 def _apply(model: Model, op: Op) -> None:
     if isinstance(op, AddOp):
-        if model.add_part(op.part, op.pos, op.turns, op.color, op.part_id) is None:
+        if model.add_part(op.part, op.pos, op.turns, op.color, op.part_id, op.frame) is None:
             # Can't happen if every edit goes through History
             raise RuntimeError(f"history out of sync: can't re-add part {op.part_id}")
     elif isinstance(op, RemoveOp):
@@ -77,8 +79,8 @@ class History:
 
     # --- edits --------------------------------------------------------------------------
 
-    def add_part(self, part: PartDef, pos: Sub, turns: int, color: str) -> Optional[PlacedPart]:
-        placed = self.model.add_part(part, pos, turns, color)
+    def add_part(self, part: PartDef, pos: Sub, turns: int, color: str, frame: int = 0) -> Optional[PlacedPart]:
+        placed = self.model.add_part(part, pos, turns, color, frame=frame)
         if placed is not None:
             self._push([_snapshot(AddOp, placed)])
         return placed

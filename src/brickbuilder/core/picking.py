@@ -156,7 +156,7 @@ def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optio
                     hit_normal = normal
 
     if hit_part:
-        if abs(hit_normal.z) < 1e-3 and max(abs(hit_normal.x), abs(hit_normal.y)) < 0.999:
+        if hit_part.frame == 0 and abs(hit_normal.z) < 1e-3 and max(abs(hit_normal.x), abs(hit_normal.y)) < 0.999:
             # A curved side (rounded corner): place against the part's flat bounding face instead
             result = intersect_aabb(ray, *hit_part.box)
             if result:

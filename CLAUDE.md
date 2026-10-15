@@ -106,9 +106,16 @@ tests/               pytest suite
   History also owns the modified flag (`mark_clean()` on save, `reset()` on new/open).
 - Renderer loads `Camera.get_projection_matrix()`, the same matrix picking inverts.
 - Ground placement only happens when the ray points downward; layer 0 sits on the grid.
-- Save format v2 (see `docs/part_format.md`): `{version, profile, frames, parts: [{id, part,
-  frame, pos (cells, 0.5 allowed), turns, color}]}`. v1 (`bricks` with float RGB) still loads
-  as 1×1 bricks. Bad files raise `ModelError` and leave the model untouched. Saving writes a `.tmp` file
+- **Frames** (`model.Frame`): a grid of its own = parent + origin (mm, parent space) + rotation
+  (quaternion). Frame 0 is the root grid. A part's `pos`/`turns`/regions are in its frame's grid;
+  its world geometry is that transformed by `Model.frame_matrix`. Occupancy is keyed by
+  (frame, sub-cell); parts in different frames aren't overlap-checked yet. Placing against a part
+  puts the new part in that part's frame (`Model.to_frame`). A turned part's frame should be its
+  original grid turned about the pivot, so it keeps its grid position (and builds stay on whole cells).
+- Save format v3 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,
+  origin, rotation}...], parts: [{id, part, frame, pos (cells, 0.5 allowed), turns, color}]}`;
+  frames listed parent-first. v2 (root frame only) and v1 (`bricks` with float RGB) still load,
+  v1 as 1×1 bricks. Bad files raise `ModelError` and leave the model untouched. Saving writes a `.tmp` file
   and swaps it in, so a failed save never truncates the existing file. Bump `version`
   and keep older loader paths when the schema changes.
 - Type hints are used throughout; `glm` (PyGLM) types for vectors.
@@ -140,10 +147,9 @@ tests/               pytest suite
   are keyed by (id, part, pos, turns, color) — anything else that changes a part's look must join the key.
 
 ## Architectural pressure from upcoming features
-Done in step 2a: placed parts with part id, origin, quarter turns and a sub-cell occupancy
-map (multi-cell parts, half-offset-ready). Still ahead:
-- fine Z rotation (UI-snapped, default 7.5°), ball joints and per-part grids → bricks belong to a
-  "grid frame" (transform); the global grid becomes just the root frame.
+Done: placed parts with part id, origin, quarter turns and a sub-cell occupancy map; grid frames
+in the model and save v3 (step A). Still ahead: the rotate tool (step B), ball joints, overlap
+checks across frames, circular arrays.
 - ~~non-cube cells~~ done: `Profile.cell_box()` (build step 1).
 - Prefer migrating to VBOs/shaders before mesh-heavy features (slopes, imported parts).
 Raise these trade-offs with the user before restructuring; don't silently rewrite.

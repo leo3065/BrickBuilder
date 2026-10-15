@@ -123,7 +123,7 @@ def test_save_roundtrip_including_half_offset(model, library, profile, tmp_path)
     path = tmp_path / "m.json"
     model.save_to_file(str(path))
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["version"] == 2 and data["profile"] == "nanoblock"
+    assert data["version"] == 3 and data["profile"] == "nanoblock"
     assert data["parts"][1]["pos"] == [1.5, 0.5, 1]
 
     loaded = Model(profile, library)
@@ -158,7 +158,8 @@ def test_failed_save_keeps_old_file(model, library, tmp_path, monkeypatch):
     (lambda d: d["parts"][0].update(turns=4), "turns"),
     (lambda d: d["parts"][1].update(pos=[0, 0, 0]), "overlaps"),
     (lambda d: d["parts"][1].update(id=1), "duplicate"),
-    (lambda d: d.update(frames=[{"id": 0}, {"id": 1}]), "root frame"),
+    (lambda d: d.update(frames=[{"id": 0}, {"id": 1}]), "needs id, parent"),
+    (lambda d: d.update(frames=[{"id": 1}]), "root frame"),
 ])
 def test_bad_saves_rejected_and_model_untouched(model, library, mutate, message):
     model.add_part(part(library, "1x1"), (0, 0, 0), 0, "red")

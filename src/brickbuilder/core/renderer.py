@@ -235,7 +235,9 @@ class Renderer:
         # could paint over it where the two touch (e.g. the diagonal between paired slopes).
         live = {}
         for placed in model.parts.values():
-            key = (placed.id, placed.part.id, placed.pos, placed.turns, placed.color)
+            # The frame and world box too: a part rebuilt in a moved frame must recompile
+            key = (placed.id, placed.part.id, placed.pos, placed.turns, placed.color, placed.frame,
+                   tuple(placed.box[0]), tuple(placed.box[1]))
             lists = self._part_lists.pop(key, None)
             if lists is None:
                 lists = self.compile_part(placed, profile)
@@ -265,7 +267,7 @@ class Renderer:
         rgb = profile.palette[placed.color].rgb
         gl.glColor3f(rgb.x, rgb.y, rgb.z)
         self.draw_faces(placed.solids)
-        self.call_at(stud_fill, placed.studs)
+        self.call_at(stud_fill, placed.studs, placed.stud_rotation)
         gl.glEndList()
 
         gl.glNewList(outline, gl.GL_COMPILE)
@@ -273,7 +275,7 @@ class Renderer:
         gl.glColor3f(0.0, 0.0, 0.0)
         self.draw_segments(placed.edges)
         gl.glLineWidth(1.0)
-        self.call_at(stud_rim, placed.studs)
+        self.call_at(stud_rim, placed.studs, placed.stud_rotation)
         gl.glEndList()
         return fill, outline
 
@@ -325,10 +327,14 @@ class Renderer:
             gl.glVertex3f(b.x, b.y, b.z)
         gl.glEnd()
 
-    def call_at(self, display_list, positions):
+    def call_at(self, display_list, positions, rotation=None):
+        # rotation: the part's frame rotation (a mat4), so studs stand up from a tilted part
+        matrix = None if rotation is None else np.array(rotation, dtype=np.float32).flatten()
         for p in positions:
             gl.glPushMatrix()
             gl.glTranslatef(p.x, p.y, p.z)
+            if matrix is not None:
+                gl.glMultTransposeMatrixf(matrix)
             gl.glCallList(display_list)
             gl.glPopMatrix()
 

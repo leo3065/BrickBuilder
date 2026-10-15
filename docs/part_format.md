@@ -189,6 +189,9 @@ once the hand-written library shows real duplication pain.
 
 ## Layer 3 — Placement, frames and rotation
 - A placed part = `(frame, position on sub-grid as ints, quarter_turns, part id, color id)`.
+  ✅ Implemented (save v3): frames with parent, origin (mm, in the parent's space) and rotation
+  (unit quaternion `[w, x, y, z]`), listed parent-first. Each frame has its own grid and
+  occupancy; overlap between frames isn't checked yet.
 - A **frame** is a transform relative to a parent frame. The model's global grid is the root
   frame.
 - A socket type's `dof` decides what a connection does:

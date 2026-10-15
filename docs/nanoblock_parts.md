@@ -51,14 +51,14 @@ Naming notes:
 | 2x2 : Fan-shaped | 46 | | NB202C | quarter round |
 | 2x2 : JO-C | 3 | | NB202S | 2×2 with a socket on the side |
 | 2x2 : JO-D | 4 | | NB202B | 2×2 with a ball on the side |
-| 2x2 : L | 20 | | NB202L | |
+| 2x2 : L | 20 | `brick_2x2_l` | NB202L | L of three cells, a stud on each |
 | 2x2 : Round | 15 | | NB202R | |
 | 2x2 : Slope 1 | 41 | `slope_2x2_wedge_1x1` | | |
 | 2x2 : Tire | 44 | | | ⏭ **skipped**: train/car part |
 | 2x2 : Wheel | 43 | | NB202W | ⏭ **skipped**: train/car part |
 | 2x3 | 8 | `brick_2x3` | NB203 | plain 2×3 |
 | 2x3 : Slope 1 | 13 | `slope_2x3_wedge_2x1` | NB203A | |
-| 2x3 : T | 9 | | NB203T | |
+| 2x3 : T | 9 | `brick_2x3_t` | NB203T | row of three plus one on the middle's side, a stud on each |
 | 2x4 : 1/2A | 31 | `brick_2x4` | NB204 | plain 2×4 |
 | 2x4 : flat | 28 | `flat_2x4` | NB204F | 2×4, no studs; top flush with a brick's body top |
 | 2x4 : Slope 1 | 35 | `slope_2x4_wedge_1x1` | NB204A | |

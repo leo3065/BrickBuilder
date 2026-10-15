@@ -93,6 +93,7 @@ def test_bad_wedges_rejected(body, message):
     ("slope_1x2_wedge_1x1", 18), ("slope_1x2_wedge_1x2", 18),        # hexagonal side profile: 6 + 6 + 6
     ("slope_1x2_wedge_1x1_inverted", 12),                    # box and wedge tops merge into one flat top
     ("slope_1x2_wedge_1x2_inverted", 18),
+    ("brick_2x2_l", 18), ("brick_2x3_t", 24),     # two box bodies, no seam between them
     ("slope_1x3_wedge_2x1", 18), ("slope_2x3_wedge_2x1", 18), ("slope_2x2_wedge_1x1", 18), ("slope_2x4_wedge_1x1", 18),  # same profile, wider
 ])
 def test_outline_follows_the_merged_shape(profile, library, name, edges):

@@ -1,3 +1,5 @@
+import re
+
 import glm
 import pytest
 
@@ -57,7 +59,8 @@ def test_bad_profiles_rejected(overrides, message):
 
 def test_starter_library():
     lib = load_builtin_library("nanoblock")
-    sizes = sorted(k.split("_")[1] for k, p in lib.items() if p.category == "Bricks" and ":brick_" in k)
+    plain = [k for k in lib if re.fullmatch(r"nanoblock:brick_\d+x\d+", k)]
+    sizes = sorted(k.split("_")[1] for k in plain)
     assert sizes == sorted(["1x1", "1x2", "1x3", "1x4", "1x6", "2x2", "2x3", "2x4", "2x8"])
     b = lib["nanoblock:brick_2x4"]
     assert b.name == "Brick 2×4" and b.category == "Bricks" and b.ldraw == "NB204.dat"
@@ -103,3 +106,11 @@ def test_flat_bricks():
         assert flat.category == "Bricks" and len(flat.cells) == cells
         assert {c[2] for c in flat.cells} == {0}   # brick height
         assert flat.studs == ()                    # no studs
+
+
+def test_l_and_t_bricks():
+    lib = load_builtin_library("nanoblock")
+    l_shape = lib["nanoblock:brick_2x2_l"]
+    assert sorted(l_shape.cells) == [(0, 0, 0), (0, 1, 0), (1, 0, 0)] and len(l_shape.studs) == 3
+    t_shape = lib["nanoblock:brick_2x3_t"]
+    assert sorted(t_shape.cells) == [(0, 0, 0), (0, 1, 0), (0, 2, 0), (1, 1, 0)] and len(t_shape.studs) == 4

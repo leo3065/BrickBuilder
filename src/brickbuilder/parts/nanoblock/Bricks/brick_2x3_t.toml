@@ -1,0 +1,12 @@
+# T shape: a row of three cells plus one on the middle cell's side, a stud on each.
+name = "Brick 2×3 T"
+ldraw = "NB203T.dat"
+
+[[body]]
+shape = "box"
+size = [1, 3, 1]
+
+[[body]]
+shape = "box"
+size = [1, 1, 1]
+at = [1, 1, 0]

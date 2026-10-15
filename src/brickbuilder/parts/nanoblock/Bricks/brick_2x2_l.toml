@@ -1,0 +1,12 @@
+# L shape: three cells, a stud on each.
+name = "Brick 2×2 L"
+ldraw = "NB202L.dat"
+
+[[body]]
+shape = "box"
+size = [1, 2, 1]
+
+[[body]]
+shape = "box"
+size = [1, 1, 1]
+at = [1, 0, 0]

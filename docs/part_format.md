@@ -279,6 +279,16 @@ as soon as it bends. Clearance: within half a cell of the axis everything is a r
 ends start half a cell from it, so the parts touch but never overlap at any angle. Test for the
 rotate tool: turning B finds the one axis, turns about it, and keeps every contact.
 
+**Worked example ✅: two ball joints as a hinge, in a chain (Dragon wing).** Group G has two cups,
+group H two balls. Each joint pins a ball centre to a cup centre; together they leave only turning
+about the line through both centres (a hinge), if the two pairs are equally spaced (checked).
+The range is the angles where **both** joints stay within their own limits: a hinge axis across the
+cups' vertical slot planes swings the arms inside their slots (about ±90°); an axis along them
+swings the arms sideways (the ±30° cone). The editor shows one snapped angle (θ/φ/ψ are only for a
+single free joint). The wing is a chain, body → G → H, each link such a hinge: frames nest along
+the chain (H's frame is a child of G's), while the groups (body, G, H) stay separate. With the body
+pinned, turning H moves only H; turning G moves G and H, keeping the fold between them.
+
 Later: **instances** (define a subassembly once, place it several times, edits update all, like the
 manual's "×3" or LDraw multi-part files).
 

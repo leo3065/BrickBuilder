@@ -114,7 +114,6 @@ tests/               pytest suite
 - **Moving bricks** is listed in the done "building" item but isn't implemented.
 - Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
   a global floor meaningless and building from the top is legitimate. "Shift all" is planned.
-- `resizeGL` divides by height (crash at 0).
 - Placement: the cell under the cursor is where the part's **anchor cell** goes (A / Shift+A
   cycles bottom-layer cells, default nearest the centre; `model.origin_for_anchor`). The target
   cell comes from `model.placement_target` (hit point + face normal; H toggles half-cell snap in

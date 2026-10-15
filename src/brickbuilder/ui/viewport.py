@@ -62,7 +62,7 @@ class Viewport(QOpenGLWidget):
         self.renderer.initialize()
 
     def resizeGL(self, w, h):
-        self.camera.set_aspect_ratio(w / h)
+        self.camera.set_aspect_ratio(w / max(h, 1))  # the widget can be squeezed to 0 px high
         gl.glViewport(0, 0, w, h)
 
     def paintGL(self):

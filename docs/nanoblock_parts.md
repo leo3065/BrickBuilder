@@ -48,7 +48,7 @@ Naming notes:
 | 2x2 : 1/2B | 22 | `brick_2x2` | NB202 | plain 2×2 |
 | 2x2 : 1凸 | 10 | `brick_2x2_1_stud` | NB202S1 | 2×2 with one centre stud (fine rotation) |
 | 2x2 : Axle | 42 | | NB202X | ⏭ **skipped**: train/car part |
-| 2x2 : Fan-shaped | 46 | | NB202C | quarter round |
+| 2x2 : Fan-shaped | 46 | `round_2x2_fan` | NB202C | quarter circle, radius 2 cells; studs in an L (the curved corner cell has none) |
 | 2x2 : JO-C | 3 | | NB202S | 2×2 with a socket on the side |
 | 2x2 : JO-D | 4 | | NB202B | 2×2 with a ball on the side |
 | 2x2 : L | 20 | `brick_2x2_l` | NB202L | L of three cells, a stud on each |

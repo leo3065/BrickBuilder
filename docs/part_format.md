@@ -82,9 +82,12 @@ antistuds = "bottom"  # derive antistud sockets on every bottom cell
 | `cylinder` | round parts                               | derived (bounding cells) |
 | `mesh`     | escape hatch: `file = "ball.obj"`         | **must be declared** |
 
-✅ A box can round its four vertical edges with `corner_radius` (cells, at most half the shorter side):
-`0.5` on a 1×N gives semicircular ends. Occupancy stays whole cells (curves can't be exact on the
-sub-grid; on one grid nothing fits in the corner gaps anyway), and a rounded box must be the
+✅ A box can round its vertical edges with `corner_radius` (cells): one number for all four corners
+(at most half the shorter side; `0.5` on a 1×N gives semicircular ends), or a table per corner,
+e.g. `{ "+x+y" = 2 }` for the 2×2 fan's quarter circle (two corners on one side can't round more
+than its length). Occupancy is decided per **sub-cell**: one entirely outside a rounded corner
+(touching the curve at most) is free, any other counts as full; curves can't be exact on the
+sub-grid. A derived stud is dropped when its cell's centre is cut away. A rounded box must be the
 part's only body for now.
 
 `studs` takes `"top"` or `"none"` (flat parts such as NB102F) in step 2. Explicit stud sockets

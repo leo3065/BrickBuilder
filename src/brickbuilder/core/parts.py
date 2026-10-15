@@ -10,7 +10,7 @@ from importlib import resources
 from importlib.resources.abc import Traversable
 from typing import Any, Dict, List, Optional, Tuple
 
-from brickbuilder.core.geometry import Body, part_regions
+from brickbuilder.core.geometry import Body, outside_rounding, part_regions
 
 Cell = Tuple[int, int, int]
 Point = Tuple[float, float, float]
@@ -47,6 +47,30 @@ _BODY_KEYS = {
 }
 _STUD_MODES = {"top", "none"}
 _TALL = {"+x": (0, 1), "-x": (0, -1), "+y": (1, 1), "-y": (1, -1)}
+_CORNERS = ("+x-y", "+x+y", "-x+y", "-x-y")  # the order of Body.radii
+
+
+def _parse_radii(where: str, value: Any, size: Cell) -> Tuple[float, float, float, float]:
+    """corner_radius: one number for all four corners, or a table of corner -> radius (cells)."""
+    def number(v, key):
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
+            raise PartError(f"{where}.{key} must be a number >= 0 (cells)")
+        return float(v)
+    if isinstance(value, dict):
+        unknown = set(value) - set(_CORNERS)
+        if unknown:
+            raise PartError(f"{where}.corner_radius: unknown corners {sorted(unknown)} (use {', '.join(_CORNERS)})")
+        radii = tuple(number(value.get(c, 0), f"corner_radius.{c}") for c in _CORNERS)
+    else:
+        r = number(value, "corner_radius")
+        if r > min(size[0], size[1]) / 2:
+            raise PartError(f"{where}.corner_radius can be at most half the shorter side")
+        radii = (r, r, r, r)
+    # Two corners on one side can't round more than that side's length
+    a, b, c, d = radii  # +x-y, +x+y, -x+y, -x-y
+    if a + b > size[1] or d + c > size[1] or b + c > size[0] or a + d > size[0]:
+        raise PartError(f"{where}.corner_radius: two corners on one side round more than its length")
+    return radii
 
 
 def _int_triple(where: str, value: Any, positive: bool) -> Cell:
@@ -72,12 +96,8 @@ def _parse_body(where: str, body: Any) -> Body:
         studs = body.get("studs", "top")
         if studs not in _STUD_MODES:
             raise PartError(f"{where}.studs must be one of {sorted(_STUD_MODES)}")
-        radius = body.get("corner_radius", 0)
-        if not isinstance(radius, (int, float)) or isinstance(radius, bool) or radius < 0:
-            raise PartError(f"{where}.corner_radius must be a number >= 0 (cells)")
-        if radius > min(size[0], size[1]) / 2:
-            raise PartError(f"{where}.corner_radius can be at most half the shorter side")
-        return Body("box", at, size, studs == "top", radius=float(radius))
+        radii = _parse_radii(where, body.get("corner_radius", 0), size)
+        return Body("box", at, size, studs == "top", radii=radii)
     keep = body.get("keep")
     if keep not in ("lower", "upper"):
         raise PartError(f"{where}.keep must be 'lower' or 'upper'")
@@ -121,7 +141,7 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef
     if not isinstance(raw_bodies, list) or not raw_bodies:
         raise PartError(f"{part_id}: needs at least one [[body]]")
     bodies = tuple(_parse_body(f"{part_id}: body[{n}]", b) for n, b in enumerate(raw_bodies))
-    if len(bodies) > 1 and any(b.radius > 0 for b in bodies):
+    if len(bodies) > 1 and any(b.rounded for b in bodies):
         raise PartError(f"{part_id}: a rounded box must be the part's only body (for now)")
 
     # Cells any body touches: the occupancy computation at whole-cell resolution
@@ -132,8 +152,10 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef
     for b in bodies:
         if b.studs:
             top = b.lo[2] + b.size[2] - 1
+            # A rounded corner that cuts away a cell's centre takes its stud with it
             stud_tops += [(x, y, top) for x in range(b.lo[0], b.lo[0] + b.size[0])
-                          for y in range(b.lo[1], b.lo[1] + b.size[1])]
+                          for y in range(b.lo[1], b.lo[1] + b.size[1])
+                          if not (b.rounded and outside_rounding(b, x + 0.5, y + 0.5))]
     # A stud covered by another body isn't a stud. Derived studs sit at the cell's top centre.
     cell_set = set(cells)
     studs = [(x + 0.5, y + 0.5, z + 1.0) for x, y, z in dict.fromkeys(stud_tops)

@@ -24,7 +24,13 @@ class Body:
     keep: str = ""                # wedge: "lower" (solid bottom, sloped top) | "upper" (solid top)
     tall_axis: int = 0            # wedge: 0 = x, 1 = y; the slope runs along this axis
     tall_sign: int = 1            # wedge: +1 / -1, the side where the wedge is full height
-    radius: float = 0.0           # box: corner radius of its 4 vertical edges, in cells (0 = sharp)
+    # box: radius of each vertical edge in cells, counter-clockwise from the +x-y corner:
+    # (+x-y, +x+y, -x+y, -x-y). 0 = sharp.
+    radii: Tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+
+    @property
+    def rounded(self) -> bool:
+        return any(r > 0 for r in self.radii)
 
 
 @dataclass(frozen=True)
@@ -149,6 +155,8 @@ def part_regions(bodies: Sequence[Body], subdiv: Int3) -> List[Tuple[Int3, Optio
                         if kind == "empty":
                             continue
                         region = cut if kind == "partial" else None
+                    elif body.rounded and _subcell_outside_rounding(body, sub, subdiv):
+                        continue  # outside a rounded corner; sub-cells the curve crosses count as full
                     if sub in regions:
                         region = None  # covered twice within the part: treat as full
                     regions[sub] = region
@@ -184,35 +192,77 @@ def _orient_outward(faces: List[Face]) -> List[Face]:
 ARC_SEGMENTS = 8  # per quarter circle, for rounded corners
 
 
+def _corners(body: Body, scale: Tuple[float, float]):
+    """The rounded box's corners, counter-clockwise from +x-y: (centre x, centre y, radius,
+    start angle, x sign, y sign), in units of `scale` per cell (sub-cells, or 1 for cells)."""
+    x0, y0 = body.lo[0] * scale[0], body.lo[1] * scale[1]
+    x1, y1 = (body.lo[0] + body.size[0]) * scale[0], (body.lo[1] + body.size[1]) * scale[1]
+    out = []
+    for (sx, sy, start), r in zip(((1, -1, -90), (1, 1, 0), (-1, 1, 90), (-1, -1, 180)), body.radii):
+        r = r * scale[0]  # subdiv X == Y (checked by the profile)
+        cx = (x1 if sx > 0 else x0) - sx * r
+        cy = (y1 if sy > 0 else y0) - sy * r
+        out.append((cx, cy, r, start, sx, sy))
+    return out
+
+
 def _rounded_footprint(body: Body, subdiv: Int3):
     """Footprint of a rounded box as a convex polygon of (x, y) points (counter-clockwise), and the
-    indices of tangent points: where a straight side meets a rounded corner."""
-    x0, y0 = body.lo[0] * subdiv[0], body.lo[1] * subdiv[1]
-    x1, y1 = (body.lo[0] + body.size[0]) * subdiv[0], (body.lo[1] + body.size[1]) * subdiv[1]
-    r = body.radius * subdiv[0]  # subdiv X == Y (checked by the profile)
-    corners = [(x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0), (x0 + r, y1 - r, 90), (x0 + r, y0 + r, 180)]
-    points: List[Tuple[float, float]] = []
-    tangents = set()
-    for cx, cy, start in corners:
+    indices of points that get a vertical outline edge: sharp corners, and where a straight side
+    meets a rounded corner (but not where two arcs meet smoothly)."""
+    # Each corner contributes an arc (its end points flagged "end"), or one "sharp" point
+    raw: List[Tuple[Tuple[float, float], str]] = []
+    for cx, cy, r, start, _, _ in _corners(body, (subdiv[0], subdiv[1])):
+        if r == 0:
+            raw.append(((cx, cy), "sharp"))
+            continue
         for k in range(ARC_SEGMENTS + 1):
             a = math.radians(start + 90 * k / ARC_SEGMENTS)
-            p = (cx + r * math.cos(a), cy + r * math.sin(a))
-            if points and math.dist(points[-1], p) < 1e-9:
-                tangents.discard(len(points) - 1)  # no straight side between two arcs here
-                continue
-            if k in (0, ARC_SEGMENTS):
-                tangents.add(len(points))
+            raw.append(((cx + r * math.cos(a), cy + r * math.sin(a)), "end" if k in (0, ARC_SEGMENTS) else "mid"))
+    # Merge points that coincide (zero-length straight sides). Two arc ends meeting = smooth.
+    points: List[Tuple[float, float]] = []
+    kinds: List[List[str]] = []
+    for p, kind in raw:
+        if points and math.dist(points[-1], p) < 1e-9:
+            kinds[-1].append(kind)
+        else:
             points.append(p)
-    if math.dist(points[0], points[-1]) < 1e-9:
+            kinds.append([kind])
+    if len(points) > 1 and math.dist(points[0], points[-1]) < 1e-9:
+        kinds[0] += kinds.pop()
         points.pop()
-        tangents.discard(len(points))
-        tangents.discard(0)
-    return points, sorted(tangents)
+    lines = [i for i, k in enumerate(kinds) if "sharp" in k or k == ["end"]]
+    return points, lines
+
+
+def outside_rounding(body: Body, x: float, y: float, scale: Tuple[float, float] = (1, 1)) -> bool:
+    """Is the point (x, y) cut away by one of the box's rounded corners? (Units: `scale` per cell.)"""
+    for cx, cy, r, _, sx, sy in _corners(body, scale):
+        if r > 0 and (x - cx) * sx > 0 and (y - cy) * sy > 0 and math.hypot(x - cx, y - cy) > r + 1e-9:
+            return True
+    return False
+
+
+def _subcell_outside_rounding(body: Body, sub: Int3, subdiv: Int3) -> bool:
+    """Is the whole sub-cell cut away by a rounded corner (it at most touches the curve)?"""
+    x, y = sub[0], sub[1]
+    for cx, cy, r, _, sx, sy in _corners(body, (subdiv[0], subdiv[1])):
+        if r == 0:
+            continue
+        # Entirely beyond the corner's centre on both axes...
+        if not ((x >= cx if sx > 0 else x + 1 <= cx) and (y >= cy if sy > 0 else y + 1 <= cy)):
+            continue
+        # ...and its nearest point to the centre is on or outside the circle
+        nx = x if sx > 0 else x + 1
+        ny = y if sy > 0 else y + 1
+        if (nx - cx) ** 2 + (ny - cy) ** 2 >= r * r - 1e-9:
+            return True
+    return False
 
 
 def body_faces(body: Body, subdiv: Int3) -> List[Face]:
     """Faces of a body in part sub-grid coordinates (before turning), oriented outward."""
-    if body.kind == "box" and body.radius > 0:
+    if body.kind == "box" and body.rounded:
         points, _ = _rounded_footprint(body, subdiv)
         z0, z1 = body.lo[2] * subdiv[2], (body.lo[2] + body.size[2]) * subdiv[2]
         faces = [[(x, y, z1) for x, y in points], [(x, y, z0) for x, y in reversed(points)]]
@@ -394,16 +444,16 @@ def _primitive(v: Sequence[Fraction]) -> Int3:
 
 def part_outline(bodies: Sequence[Body], subdiv: Int3) -> List[Tuple[Vec3, Vec3]]:
     """Outline segments of a part's merged shape, in part sub-grid coordinates (before turning)."""
-    if len(bodies) == 1 and bodies[0].kind == "box" and bodies[0].radius > 0:
+    if len(bodies) == 1 and bodies[0].kind == "box" and bodies[0].rounded:
         # A rounded box: top and bottom outlines, plus vertical lines only where a straight side
         # meets a rounded corner (a line per arc segment would just be noise)
         b = bodies[0]
-        points, tangents = _rounded_footprint(b, subdiv)
+        points, lines = _rounded_footprint(b, subdiv)
         z0, z1 = float(b.lo[2] * subdiv[2]), float((b.lo[2] + b.size[2]) * subdiv[2])
         segs = []
         for z in (z0, z1):
             segs += [((*points[i], z), (*points[(i + 1) % len(points)], z)) for i in range(len(points))]
-        segs += [((*points[i], z0), (*points[i], z1)) for i in tangents]
+        segs += [((*points[i], z0), (*points[i], z1)) for i in lines]
         return segs
     if len(bodies) == 1 and bodies[0].kind == "box":
         # Shortcut: a lone box is just its 12 edges (big plates would take seconds otherwise)

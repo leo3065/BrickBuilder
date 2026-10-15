@@ -221,9 +221,9 @@ once the hand-written library shows real duplication pain.
   second lands on a slot. That's how a 1×N sits **at an angle across two studs**, and what the
   "align" tool works out (one slot: the direction between the studs; two slots: a circle meets
   a line).
-- ✅ **No physics solver.** A pose is either picked by the user within what the contacts leave
-  free, or worked out by the tool (align, land on a grid). Saves store each frame's transform;
-  on load every contact is checked against it within tolerance.
+- ✅ **A local snapping solver, no physics.** It only moves the frames being dragged, only to
+  satisfy contacts (see "Snapping solver" below). Saves store each frame's transform; on load
+  every contact is checked against it within tolerance.
 - ✅ **Snapping** (editor settings, not profile values), by default on, with a key to move freely:
   - sliding along a slot: half-cell steps (the sub-grid);
   - turning about an axis (a stud, a hinge): `rotation_snap` steps (default 7.5°);
@@ -262,7 +262,7 @@ Alt+click always picks a single part. In the Select tool the outermost group und
 a soft outline on hover; a Groups dock lists the tree with part counts (click to select, and it
 follows viewport selections); the status bar names the selection's group.
 
-**Pins (proposed ❓)**: every connected component has one pin, and components never affect each
+**Pins ✅**: every connected component has one pin, and components never affect each
 other (separate subassemblies on the root grid are separate components). The pin is: an explicitly
 pinned group in it; else whatever touches the ground (root grid, layer 0); else the side with more
 parts. Turning at a joint cuts the component there: the pinned side stays, the other side (the
@@ -288,6 +288,30 @@ swings the arms sideways (the ±30° cone). The editor shows one snapped angle (
 single free joint). The wing is a chain, body → G → H, each link such a hinge: frames nest along
 the chain (H's frame is a child of G's), while the groups (body, G, H) stay separate. With the body
 pinned, turning H moves only H; turning G moves G and H, keeping the fold between them.
+
+**Use cases from real sets ✅** (each becomes a test):
+| Case | Contacts | Freedom left | Solver's job |
+|---|---|---|---|
+| Blue-Eyes White Dragon DX: 3 balls in a line | 3 fixed centres, collinear | hinge (1) | check equal spacing |
+| …3 balls not in a line | 3 fixed centres | none: locked | the one pose where all meet |
+| Koraidon: chain of 3 parts by ball joints, both ends on the body | closed loop of 4 ball joints | ~3, plus each middle link spinning about its two-joint axis | keep the loop closed while posing |
+| Miraidon: a subassembly on its side, 2 studs into 2 slots | 2 stud contacts, different axes | none: locked if spacing fits | place it so both line up |
+| Dragon: 2×2 round as a 45° adapter | studs in its centre hole and diagonal slots | none | find the 45° turn |
+| Seregios wing fold, Dragon wing (above) | stud hinge; 2 ball joints | hinge (1) | one snapped angle within limits |
+
+## Snapping solver (planned) ✅
+Local and geometric, not physics: it moves only the frames being dragged.
+1. Every contact is an error to minimise: a stud's distance from its slot line (point to segment)
+   and how far its axis tilts from the slot's, a ball's distance from its cup centre.
+2. Snapping = least squares on those errors over the moving frames' 6 numbers each, starting from
+   where the user dragged (numpy; a few frames and contacts, so fast). Joint limits and snap angles
+   apply on top.
+3. Free motions come from the same setup: the directions in which the errors don't change (the
+   constraint Jacobian's null space). Collinear balls give one (a hinge), non-collinear none
+   (locked), one stud gives turning about it plus sliding along its slot. No special cases.
+4. After solving: contacts within tolerance, limits respected, no overlap across frames; otherwise
+   the move is refused with the reason. Dragging inside a closed loop (Koraidon) keeps it closed
+   instead of being refused.
 
 Later: **instances** (define a subassembly once, place it several times, edits update all, like the
 manual's "×3" or LDraw multi-part files).

@@ -270,6 +270,15 @@ selection plus everything beyond it) moves; with two joints the pivot is the one
 If pins end up on both sides (e.g. bracing loops), the move is refused with the reason. Turning a
 selection that splits a frame gives the moved parts a new frame.
 
+**Worked example ✅: stud hinge (Seregios wing fold).** Two rigid halves built in layers meet in
+a **fold column**. In each layer, one side's round 1×N end sits in that column, alternating
+between the sides (e.g. bottom to top: A, B, A, A, B, A). The A–B contacts are all there, A studs
+in B slots and B studs in A slots, on one vertical axis through the column's centre. Shared
+freedom: turning about that axis (a hinge). Because slots from both sides take part, sliding locks
+as soon as it bends. Clearance: within half a cell of the axis everything is a round end, and plain
+ends start half a cell from it, so the parts touch but never overlap at any angle. Test for the
+rotate tool: turning B finds the one axis, turns about it, and keeps every contact.
+
 Later: **instances** (define a subassembly once, place it several times, edits update all, like the
 manual's "×3" or LDraw multi-part files).
 

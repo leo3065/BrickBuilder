@@ -24,7 +24,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Slopes in part definitions (wedge bodies, with complementary slopes sharing cells). Starter set: 1×2 and 1×2×2, normal and inverted.
 - [x] More slope parts: 1×3, 2×2, 2×3 and 2×4 slopes (nanoblock.info "Slope 1" shapes), confirmed against real parts.
 - [x] Base plates: 10×10 and 20×20.
-- [ ] More box-based parts from `docs/nanoblock_parts.md`: flat 1×2 and 2×4 (no studs), 2×2 L, 2×3 T, 1×3 with 2 studs, and the single-centre-stud 1×2 and 2×2 (these need studs placed off the cell centres).
+- [ ] More box-based parts from `docs/nanoblock_parts.md`: 2×2 L, 2×3 T, 1×3 with 2 studs, and the single-centre-stud 1×2 and 2×2 (these need studs placed off the cell centres). Flat 1×2 and 2×4 are done.
 - [ ] Round parts and mesh bodies (e.g. joints) in part definitions.
 - [ ] A menu for browsing the part library, with a tree view, thumbnail previews and mark-as-favorite. (The tree view grouped by category is done; thumbnails and favorites are not.)
 - [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.

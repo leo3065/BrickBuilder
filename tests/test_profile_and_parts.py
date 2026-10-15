@@ -57,7 +57,7 @@ def test_bad_profiles_rejected(overrides, message):
 
 def test_starter_library():
     lib = load_builtin_library("nanoblock")
-    sizes = sorted(k.split("_")[1] for k, p in lib.items() if p.category == "Bricks")
+    sizes = sorted(k.split("_")[1] for k, p in lib.items() if p.category == "Bricks" and ":brick_" in k)
     assert sizes == sorted(["1x1", "1x2", "1x3", "1x4", "1x6", "2x2", "2x3", "2x4", "2x8"])
     b = lib["nanoblock:brick_2x4"]
     assert b.name == "Brick 2×4" and b.category == "Bricks" and b.ldraw == "NB204.dat"
@@ -94,3 +94,12 @@ def test_base_plates():
         assert plate.category == "Plates"
         assert len(plate.cells) == size * size and {c[2] for c in plate.cells} == {0}  # brick height
         assert len(plate.studs) == size * size                                        # every top cell
+
+
+def test_flat_bricks():
+    lib = load_builtin_library("nanoblock")
+    for size, cells in (("1x2", 2), ("2x4", 8)):
+        flat = lib[f"nanoblock:flat_{size}"]
+        assert flat.category == "Bricks" and len(flat.cells) == cells
+        assert {c[2] for c in flat.cells} == {0}   # brick height
+        assert flat.studs == ()                    # no studs

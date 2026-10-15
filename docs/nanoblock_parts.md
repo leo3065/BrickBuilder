@@ -29,7 +29,7 @@ Naming notes:
 | 1x1 : Cylinder | 17 | | | tall thin cylinder ❓ |
 | 1x2 : 1/2C | 29 | `brick_1x2` | NB102 | plain 1×2 |
 | 1x2 : 1/2BO-1 | 33 | | NB102S | 1×2 with one centre stud (half-offset stud; fine rotation) |
-| 1x2 : flat | 25 | | NB102F | 1×2, no studs |
+| 1x2 : flat | 25 | `flat_1x2` | NB102F | 1×2, no studs; top flush with a brick's body top |
 | 1x2 : JO-C(?) | 5 | | NB201S ❓ | 1×2 with a socket on the side |
 | 1x2 : JO-D(?) | 6 | | NB201B ❓ | 1×2 with a ball on the side |
 | 1x2 : Ring | 51 | | | 1×2 with a flat loop attached. ⏭ **skipped**: keychain-style kits |
@@ -60,7 +60,7 @@ Naming notes:
 | 2x3 : Slope 1 | 13 | `slope_2x3_wedge_2x1` | NB203A | |
 | 2x3 : T | 9 | | NB203T | |
 | 2x4 : 1/2A | 31 | `brick_2x4` | NB204 | plain 2×4 |
-| 2x4 : flat | 28 | | NB204F | 2×4, no studs |
+| 2x4 : flat | 28 | `flat_2x4` | NB204F | 2×4, no studs; top flush with a brick's body top |
 | 2x4 : Slope 1 | 35 | `slope_2x4_wedge_1x1` | NB204A | |
 | 2x6 : Base of wheel | | | | the only 2×6 on the site (no plain 2×6 brick exists). ⏭ **skipped**: train/car part |
 | 2x8 : 1/2A2 | 23 | `brick_2x8` | NB208 | plain 2×8 |

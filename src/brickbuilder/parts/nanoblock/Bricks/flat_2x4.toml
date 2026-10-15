@@ -1,0 +1,8 @@
+# Brick height but no studs: the top is flush with the body top of a brick next to it.
+name = "Flat 2×4"
+ldraw = "NB204F.dat"
+
+[[body]]
+shape = "box"
+size = [2, 4, 1]
+studs = "none"

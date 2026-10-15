@@ -1,0 +1,8 @@
+# 1x4 with rounded ends: corners rounded with a cell-wide diameter (radius half a cell).
+name = "Round 1×4"
+ldraw = "NB104R.dat"
+
+[[body]]
+shape = "box"
+size = [1, 4, 1]
+corner_radius = 0.5

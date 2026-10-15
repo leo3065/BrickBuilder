@@ -24,6 +24,7 @@ class Body:
     keep: str = ""                # wedge: "lower" (solid bottom, sloped top) | "upper" (solid top)
     tall_axis: int = 0            # wedge: 0 = x, 1 = y; the slope runs along this axis
     tall_sign: int = 1            # wedge: +1 / -1, the side where the wedge is full height
+    radius: float = 0.0           # box: corner radius of its 4 vertical edges, in cells (0 = sharp)
 
 
 @dataclass(frozen=True)
@@ -180,8 +181,45 @@ def _orient_outward(faces: List[Face]) -> List[Face]:
     return out
 
 
+ARC_SEGMENTS = 8  # per quarter circle, for rounded corners
+
+
+def _rounded_footprint(body: Body, subdiv: Int3):
+    """Footprint of a rounded box as a convex polygon of (x, y) points (counter-clockwise), and the
+    indices of tangent points: where a straight side meets a rounded corner."""
+    x0, y0 = body.lo[0] * subdiv[0], body.lo[1] * subdiv[1]
+    x1, y1 = (body.lo[0] + body.size[0]) * subdiv[0], (body.lo[1] + body.size[1]) * subdiv[1]
+    r = body.radius * subdiv[0]  # subdiv X == Y (checked by the profile)
+    corners = [(x1 - r, y0 + r, -90), (x1 - r, y1 - r, 0), (x0 + r, y1 - r, 90), (x0 + r, y0 + r, 180)]
+    points: List[Tuple[float, float]] = []
+    tangents = set()
+    for cx, cy, start in corners:
+        for k in range(ARC_SEGMENTS + 1):
+            a = math.radians(start + 90 * k / ARC_SEGMENTS)
+            p = (cx + r * math.cos(a), cy + r * math.sin(a))
+            if points and math.dist(points[-1], p) < 1e-9:
+                tangents.discard(len(points) - 1)  # no straight side between two arcs here
+                continue
+            if k in (0, ARC_SEGMENTS):
+                tangents.add(len(points))
+            points.append(p)
+    if math.dist(points[0], points[-1]) < 1e-9:
+        points.pop()
+        tangents.discard(len(points))
+        tangents.discard(0)
+    return points, sorted(tangents)
+
+
 def body_faces(body: Body, subdiv: Int3) -> List[Face]:
     """Faces of a body in part sub-grid coordinates (before turning), oriented outward."""
+    if body.kind == "box" and body.radius > 0:
+        points, _ = _rounded_footprint(body, subdiv)
+        z0, z1 = body.lo[2] * subdiv[2], (body.lo[2] + body.size[2]) * subdiv[2]
+        faces = [[(x, y, z1) for x, y in points], [(x, y, z0) for x, y in reversed(points)]]
+        for i, (xa, ya) in enumerate(points):
+            xb, yb = points[(i + 1) % len(points)]
+            faces.append([(xa, ya, z0), (xb, yb, z0), (xb, yb, z1), (xa, ya, z1)])
+        return _orient_outward(faces)
     if body.kind == "box":
         x0, y0, z0 = (body.lo[i] * subdiv[i] for i in range(3))
         x1, y1, z1 = ((body.lo[i] + body.size[i]) * subdiv[i] for i in range(3))
@@ -356,6 +394,17 @@ def _primitive(v: Sequence[Fraction]) -> Int3:
 
 def part_outline(bodies: Sequence[Body], subdiv: Int3) -> List[Tuple[Vec3, Vec3]]:
     """Outline segments of a part's merged shape, in part sub-grid coordinates (before turning)."""
+    if len(bodies) == 1 and bodies[0].kind == "box" and bodies[0].radius > 0:
+        # A rounded box: top and bottom outlines, plus vertical lines only where a straight side
+        # meets a rounded corner (a line per arc segment would just be noise)
+        b = bodies[0]
+        points, tangents = _rounded_footprint(b, subdiv)
+        z0, z1 = float(b.lo[2] * subdiv[2]), float((b.lo[2] + b.size[2]) * subdiv[2])
+        segs = []
+        for z in (z0, z1):
+            segs += [((*points[i], z), (*points[(i + 1) % len(points)], z)) for i in range(len(points))]
+        segs += [((*points[i], z0), (*points[i], z1)) for i in tangents]
+        return segs
     if len(bodies) == 1 and bodies[0].kind == "box":
         # Shortcut: a lone box is just its 12 edges (big plates would take seconds otherwise)
         b = bodies[0]

@@ -56,7 +56,7 @@ src/brickbuilder/
   main.py            QApplication + QSurfaceFormat (Compatibility profile, GL 2.1)
   core/profile.py    Profile (TOML loader, palette) + sub_to_world(): the one grid -> world mapping
   core/parts.py      PartDef + built-in library loader (box and wedge bodies)
-  core/geometry.py   Exact sub-grid geometry: Body, wedge Cut planes, per-sub-cell regions,
+  core/geometry.py   Exact sub-grid geometry: Body (box, rounded box, wedge), wedge Cut planes, per-sub-cell regions,
                      sharing rule (`compatible`), faces, ray vs convex solid, seamless outline
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, footprint/rotation, save v2 (+ v1 load)
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly

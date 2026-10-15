@@ -1,0 +1,8 @@
+# 1x2 with rounded ends: corners rounded with a cell-wide diameter (radius half a cell).
+name = "Round 1×2"
+ldraw = "NB102R.dat"
+
+[[body]]
+shape = "box"
+size = [1, 2, 1]
+corner_radius = 0.5

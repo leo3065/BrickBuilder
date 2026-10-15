@@ -33,17 +33,17 @@ Naming notes:
 | 1x2 : JO-C(?) | 5 | | NB201S ❓ | 1×2 with a socket on the side |
 | 1x2 : JO-D(?) | 6 | | NB201B ❓ | 1×2 with a ball on the side |
 | 1x2 : Ring | 51 | | | 1×2 with a flat loop attached. ⏭ **skipped**: keychain-style kits |
-| 1x2 : Round | 40 | | NB102R | 1×2 with rounded ends |
+| 1x2 : Round | 40 | `round_1x2` | NB102R | 1×2 with rounded ends |
 | 1x2 : Slope 1 | 12 | `slope_1x2_wedge_1x1` | NB102A | |
 | 1x2 : Slope 2 | 11 | `slope_1x2_wedge_1x2` | NB10202A | (LDraw drawn 1 mm too short) |
 | 1x2 : SlopeRev 1 | 16 | `slope_1x2_wedge_1x1_inverted` | NB102B | |
 | 1x2 : SlopeRev 2 | 18 | `slope_1x2_wedge_1x2_inverted` | NB10202V | |
 | 1x3 : 1/2BO-3 | 24 | `brick_1x3` | NB103 | plain 1×3 |
 | 1x3 : 2凸 | 19 | `brick_1x3_2_studs` | NB103S2 | 1×3 with 2 studs, on the cell boundaries |
-| 1x3 : Round | 30 | | NB103R | 1×3 with rounded ends |
+| 1x3 : Round | 30 | `round_1x3` | NB103R | 1×3 with rounded ends |
 | 1x3 : Slope 1 | 14 | `slope_1x3_wedge_2x1` | NB103A | |
 | 1x4 : 1/2D | 21 | `brick_1x4` | NB104 | plain 1×4 |
-| 1x4 : Round | 26 | | NB104R | 1×4 with rounded ends |
+| 1x4 : Round | 26 | `round_1x4` | NB104R | 1×4 with rounded ends |
 | 1x6 | 7 | `brick_1x6` | NB106 | plain 1×6 |
 | 2x2 : 1/2B | 22 | `brick_2x2` | NB202 | plain 2×2 |
 | 2x2 : 1凸 | 10 | `brick_2x2_1_stud` | NB202S1 | 2×2 with one centre stud (fine rotation) |

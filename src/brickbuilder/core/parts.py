@@ -39,7 +39,7 @@ _TOP_KEYS = {"name", "ldraw", "body", "socket"}
 _SOCKET_KEYS = {"type", "at"}
 _SOCKET_TYPES = {"stud"}  # more (antistud, ball, cup) come with connections and joints
 _BODY_KEYS = {
-    "box": {"shape", "size", "at", "studs"},
+    "box": {"shape", "size", "at", "studs", "corner_radius"},
     "wedge": {"shape", "size", "at", "studs", "keep", "tall"},
 }
 _STUD_MODES = {"top", "none"}
@@ -69,7 +69,12 @@ def _parse_body(where: str, body: Any) -> Body:
         studs = body.get("studs", "top")
         if studs not in _STUD_MODES:
             raise PartError(f"{where}.studs must be one of {sorted(_STUD_MODES)}")
-        return Body("box", at, size, studs == "top")
+        radius = body.get("corner_radius", 0)
+        if not isinstance(radius, (int, float)) or isinstance(radius, bool) or radius < 0:
+            raise PartError(f"{where}.corner_radius must be a number >= 0 (cells)")
+        if radius > min(size[0], size[1]) / 2:
+            raise PartError(f"{where}.corner_radius can be at most half the shorter side")
+        return Body("box", at, size, studs == "top", radius=float(radius))
     keep = body.get("keep")
     if keep not in ("lower", "upper"):
         raise PartError(f"{where}.keep must be 'lower' or 'upper'")
@@ -113,6 +118,8 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef
     if not isinstance(raw_bodies, list) or not raw_bodies:
         raise PartError(f"{part_id}: needs at least one [[body]]")
     bodies = tuple(_parse_body(f"{part_id}: body[{n}]", b) for n, b in enumerate(raw_bodies))
+    if len(bodies) > 1 and any(b.radius > 0 for b in bodies):
+        raise PartError(f"{part_id}: a rounded box must be the part's only body (for now)")
 
     # Cells any body touches: the occupancy computation at whole-cell resolution
     cells = tuple(cell for cell, _ in part_regions(bodies, (1, 1, 1)))

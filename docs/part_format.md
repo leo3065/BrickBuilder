@@ -274,8 +274,9 @@ slot direction `s` (perpendicular to `a`, the side the cup's U-shaped slot opens
 3. **Slot:** `d` may also lie in the plane of `a` and `s`, tilted by up to about **90° either way**
    (the slot is two-sided ✅), with no sideways freedom there.
 
-The slot is fixed to the cup part, so mounting the cup part on its side turns the 90° range from
-up/down into left/right (the manual's "横向き" 30° vs "縦向き" 90° pictures).
+✅ The slot runs **vertically**: its plane contains the cup's axis and the cup part's local Z, so
+`s` = ±local Z. The slot is fixed to the cup part, so mounting the cup part on its side turns the
+90° range from up/down into left/right (the manual's "横向き" 30° vs "縦向き" 90° pictures).
 
 Data: the limits belong to the socket type in the profile, e.g.
 `cup = { mates = ["ball"], dof = "spherical", cone = 30, slot = 90 }`; each part's `[[socket]]`

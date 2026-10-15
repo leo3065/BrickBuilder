@@ -246,6 +246,33 @@ once the hand-written library shows real duplication pain.
   sockets still line up within tolerance?); the app does not solve for joint angles. v1 may
   only *create* tree-shaped frames, but nothing in the format should assume a tree.
 
+## Groups, pins and moving subassemblies
+Two separate trees ✅:
+- **Groups** (organising): named, nestable subassemblies made by the user (Group Ctrl+G,
+  Ungroup Ctrl+Shift+G, rename in a Groups dock), e.g. Rayquaza > Body > I-segment > its rings.
+  They decide what a click selects and what a name refers to (later: parts lists per group,
+  instances). Connectivity alone can't: a chain of ball joints makes a whole body one connected
+  component.
+- **Frames** (movement): a frame's parent is what it hangs on, so a chain of joints is a chain of
+  frames. A group may hold several frames (a segment's rings at 0° and 45°), and a chain crosses
+  many groups, so the two trees are kept apart.
+
+Selecting ✅: click selects the outermost group around the part, double-click drills one level in,
+Alt+click always picks a single part. In the Select tool the outermost group under the cursor gets
+a soft outline on hover; a Groups dock lists the tree with part counts (click to select, and it
+follows viewport selections); the status bar names the selection's group.
+
+**Pins (proposed ❓)**: every connected component has one pin, and components never affect each
+other (separate subassemblies on the root grid are separate components). The pin is: an explicitly
+pinned group in it; else whatever touches the ground (root grid, layer 0); else the side with more
+parts. Turning at a joint cuts the component there: the pinned side stays, the other side (the
+selection plus everything beyond it) moves; with two joints the pivot is the one toward the pin.
+If pins end up on both sides (e.g. bracing loops), the move is refused with the reason. Turning a
+selection that splits a frame gives the moved parts a new frame.
+
+Later: **instances** (define a subassembly once, place it several times, edits update all, like the
+manual's "×3" or LDraw multi-part files).
+
 ## Undersides: where studs fit ✅ (from the real parts)
 An antistud is a **slot**: a stud fits anywhere along it (a point is a slot of length 0). Derived
 from each body whose bottom isn't sitting on another body of the part:

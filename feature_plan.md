@@ -11,6 +11,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Half-offset placement: a toggle (H) that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell.
 - [x] Undo/redo.
 - [x] Multi-select: click, Ctrl+click, box drag, double-click for a connected subassembly, select all; delete and recolour the selection as one undo step. (Moving a selection is the next item.)
+- [ ] Groups: named, nestable subassemblies (Ctrl+G / Ctrl+Shift+G), a Groups dock, hover outline; click selects the outermost group, double-click drills in, Alt+click picks one part. Saved in the file. See docs/part_format.md "Groups, pins and moving subassemblies".
 - [ ] Moving and rotating already placed parts (pick a part up, keep its color, put it down elsewhere or turned).
 - [ ] Shifting all bricks (or a selection) by whole cells in any direction at once, e.g. to make room below a model that was built from the top down.
 - [x] Highlight parts that aren't connected to the main build (View > Highlight Unconnected Parts, U): parts outside the largest connected group get an orange outline.
@@ -49,6 +50,8 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Connections on one grid: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Still to extend for frames (rotated parts, joints).
 - [ ] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it.
 - [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
+- [ ] Pins and joint chains: each connected component has one pin (explicit, else grounded, else the larger side); turning at a joint moves the unpinned side.
+- [ ] Instances: define a subassembly once, place it several times, editing it updates every copy (like LDraw multi-part files).
 - [ ] Circular array: copy a selection of parts (a subassembly, possibly spanning several frames) n times, each copy turned 360/n° about a centre, e.g. rings of rounded 1×N and the alternating round 1×4 / 1×3 body segments of the Rayquaza DX set. Copies turned by a multiple of 90° reuse existing frames (that ring needs only the root grid and one 45° frame). Checks the closing contacts and reports any gap. Needs multi-select.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
 - [ ] Add a view option that highlights colliding parts in different frames (rotated parts, joints). Within one frame, overlaps are already refused when placing and loading.

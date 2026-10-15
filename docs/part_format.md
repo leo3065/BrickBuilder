@@ -168,8 +168,7 @@ them. Explicit sockets are for irregular layouts and joints.
 ✅ Implemented so far: `type = "stud"` with `at` (cells: x, y, and the height of the top the stud
 sits on), e.g. the single centre stud of a 1×2 at `[0.5, 1.0, 1]`; and `type = "antistud"`
 (the height of the bottom it's in), e.g. the extra centre antistud of the 2×2 round at
-`[1.0, 1.0, 0]`. Antistuds are only recorded (`PartDef.antistuds`) until connections exist, and
-the ordinary bottom antistuds aren't derived yet. `normal` and the joint socket types come later.
+`[1.0, 1.0, 0]`. With `to`, an antistud is a **slot** (see below). `normal` and the joint socket types come later.
 
 ### Modifiers
 A small, closed set that applies to both bodies and sockets:
@@ -210,6 +209,25 @@ once the hand-written library shows real duplication pain.
   tree of that graph. Loops are allowed in the data and checked for consistency (do the
   sockets still line up within tolerance?); the app does not solve for joint angles. v1 may
   only *create* tree-shaped frames, but nothing in the format should assume a tree.
+
+## Undersides: where studs fit ✅ (from the real parts)
+An antistud is a **slot**: a stud fits anywhere along it (a point is a slot of length 0). Derived
+from each body whose bottom isn't sitting on another body of the part:
+- **1×1**: a point at the cell centre.
+- **1×N**: hollow, one slot along the middle line from the first cell's centre to the last. That's
+  what lets a 1×N sit half-offset, or at an angle across two 1×1s.
+- **2×N**: two slots, one per row, along the long side (the ribs between them block the middle);
+  along Y when the sides are equal, like the other 2×N bricks.
+- Wider footprints (base plates): none for now (real plates do grip studs in places).
+- Lower wedges sit on their base, so a slope's underside is its base's. An upper (inverted) wedge
+  is open below, but there's a wall between it and the box part: separate bodies, separate slots.
+- Same footprint, same underside: flats, single-stud bricks, the 1×3 with 2 studs, round 1×N.
+- L = a 1×2 slot + a 1×1 point, T = a 1×3 slot + a 1×1 point (their bodies are split that way).
+
+A part can replace the derived ones with `antistuds = "none"` plus explicit `antistud` sockets
+(`at`, and `to` for a slot): the 2×2 fan has three points at its cell centres; the 2×2 round has
+a centre point plus four **diagonal** slots, from each cell centre out to the rim (the holes are
+cut open at the rim, so e.g. a 1×3 lying diagonally across it fits).
 
 ## Ball joints (planned)
 Parts: nanoblock.info JO-C (cup / socket) and JO-D (ball), each on a 1×2 or a 2×2, with the cup or

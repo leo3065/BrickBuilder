@@ -1,6 +1,8 @@
-# Round 2x2: a cylinder two cells across, a stud on each cell, and an extra antistud in the
-# centre of the underside, so it can sit on a single stud (and turn on it).
+# Round 2x2: a cylinder two cells across, a stud on each cell. Underside: a centre hole (so it
+# can sit on a single stud and turn on it) and four holes at the cell centres, each opened
+# outward along its diagonal to the rim, so a stud fits anywhere from the cell centre out.
 name = "Round 2×2"
+antistuds = "none"
 ldraw = "NB202R.dat"
 
 [[body]]
@@ -11,3 +13,23 @@ corner_radius = 1.0
 [[socket]]
 type = "antistud"
 at = [1.0, 1.0, 0]
+
+[[socket]]
+type = "antistud"
+at = [0.5, 0.5, 0]
+to = [0.292893, 0.292893, 0]
+
+[[socket]]
+type = "antistud"
+at = [1.5, 0.5, 0]
+to = [1.707107, 0.292893, 0]
+
+[[socket]]
+type = "antistud"
+at = [1.5, 1.5, 0]
+to = [1.707107, 1.707107, 0]
+
+[[socket]]
+type = "antistud"
+at = [0.5, 1.5, 0]
+to = [0.292893, 1.707107, 0]

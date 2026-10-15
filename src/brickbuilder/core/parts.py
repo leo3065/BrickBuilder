@@ -14,6 +14,7 @@ from brickbuilder.core.geometry import Body, outside_rounding, part_regions
 
 Cell = Tuple[int, int, int]
 Point = Tuple[float, float, float]
+Segment = Tuple[Point, Point]  # a slot a stud can sit anywhere along; equal ends = a point
 
 
 class PartError(ValueError):
@@ -33,13 +34,14 @@ class PartDef:
     cells: Tuple[Cell, ...]           # cells any body touches (partly, for wedges), in body order
     studs: Tuple[Point, ...]          # stud positions in cells: (x, y, height of the top it sits on)
     ldraw: Optional[str] = None       # cross-reference into the LDraw Nanoblock library
-    # Explicit antistud positions in cells (x, y, height of the bottom it's in). Recorded for
-    # connections and fine rotation; not used yet, and bottom antistuds aren't derived yet.
-    antistuds: Tuple[Point, ...] = ()
+    # Where a stud from below fits: slots (segments) or points, in cells (x, y, height of the
+    # bottom they're in). Derived from the bodies' undersides plus explicit antistud sockets.
+    antistuds: Tuple[Segment, ...] = ()
 
 
-_TOP_KEYS = {"name", "ldraw", "body", "socket"}
-_SOCKET_KEYS = {"type", "at"}
+_TOP_KEYS = {"name", "ldraw", "body", "socket", "antistuds"}
+_SOCKET_KEYS = {"type", "at", "to"}
+_ANTISTUD_MODES = {"derived", "none"}
 _SOCKET_TYPES = {"stud", "antistud"}  # more (ball, cup) come with joints
 _BODY_KEYS = {
     "box": {"shape", "size", "at", "studs", "corner_radius"},
@@ -113,8 +115,15 @@ def _parse_body(where: str, body: Any) -> Body:
     return Body("wedge", at, size, studs == "top", keep, axis, sign)
 
 
-def _parse_socket(where: str, socket: Any) -> Tuple[str, Point]:
-    """An explicit socket: its type and position in cells."""
+def _point(where: str, value: Any) -> Point:
+    if not (isinstance(value, list) and len(value) == 3
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)):
+        raise PartError(f"{where} must be a list of 3 numbers (cells)")
+    return (float(value[0]), float(value[1]), float(value[2]))
+
+
+def _parse_socket(where: str, socket: Any) -> Tuple[str, Segment]:
+    """An explicit socket: its type and position in cells (a segment for an antistud slot)."""
     if not isinstance(socket, dict):
         raise PartError(f"{where}: must be a table")
     unknown = set(socket) - _SOCKET_KEYS
@@ -122,11 +131,41 @@ def _parse_socket(where: str, socket: Any) -> Tuple[str, Point]:
         raise PartError(f"{where}: unknown keys {sorted(unknown)}")
     if socket.get("type") not in _SOCKET_TYPES:
         raise PartError(f"{where}.type must be one of {sorted(_SOCKET_TYPES)}")
-    at = socket.get("at")
-    if not (isinstance(at, list) and len(at) == 3
-            and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in at)):
-        raise PartError(f"{where}.at must be a list of 3 numbers (cells)")
-    return socket["type"], (float(at[0]), float(at[1]), float(at[2]))
+    at = _point(f"{where}.at", socket.get("at"))
+    to = at
+    if "to" in socket:
+        if socket["type"] != "antistud":
+            raise PartError(f"{where}.to: only antistud sockets can be slots")
+        to = _point(f"{where}.to", socket["to"])
+        if to[2] != at[2]:
+            raise PartError(f"{where}: a slot must be level (at and to at the same height)")
+    return socket["type"], (at, to)
+
+
+def _derived_antistuds(bodies, cell_set) -> List[Segment]:
+    """Slots under each body whose bottom isn't sitting on another body of the part: a 1xN
+    underside is one slot along its middle line, a 2xN one slot per row along the long side
+    (Y when the sides are equal), 1x1 a point. Wider footprints (plates) get none for now.
+    A lower wedge's bottom always sits on its base, so only boxes and upper wedges count."""
+    out: List[Segment] = []
+    for b in bodies:
+        if b.kind == "wedge" and b.keep == "lower":
+            continue
+        (x0, y0, z), (w, d) = b.lo, b.size[:2]
+        if z > 0 and all((x, y, z - 1) in cell_set for x in range(x0, x0 + w) for y in range(y0, y0 + d)):
+            continue
+        if min(w, d) > 2:
+            continue
+        along_y = d >= w
+        rows = w if along_y else d
+        length = d if along_y else w
+        for r in range(rows):
+            if along_y:
+                a, c = (x0 + r + 0.5, y0 + 0.5, float(z)), (x0 + r + 0.5, y0 + length - 0.5, float(z))
+            else:
+                a, c = (x0 + 0.5, y0 + r + 0.5, float(z)), (x0 + length - 0.5, y0 + r + 0.5, float(z))
+            out.append((a, c))
+    return out
 
 
 def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef:
@@ -165,8 +204,12 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef
     if not isinstance(raw_sockets, list):
         raise PartError(f"{part_id}: 'socket' must be an array of tables ([[socket]])")
     sockets = [_parse_socket(f"{part_id}: socket[{n}]", s) for n, s in enumerate(raw_sockets)]
-    studs += [at for kind, at in sockets if kind == "stud"]
-    antistuds = tuple(at for kind, at in sockets if kind == "antistud")
+    studs += [seg[0] for kind, seg in sockets if kind == "stud"]
+    mode = data.get("antistuds", "derived")
+    if mode not in _ANTISTUD_MODES:
+        raise PartError(f"{part_id}: 'antistuds' must be one of {sorted(_ANTISTUD_MODES)}")
+    antistuds = tuple((_derived_antistuds(bodies, cell_set) if mode == "derived" else [])
+                      + [seg for kind, seg in sockets if kind == "antistud"])
     studs_final = tuple(studs)
     ldraw = data.get("ldraw")
     if ldraw is not None and not isinstance(ldraw, str):

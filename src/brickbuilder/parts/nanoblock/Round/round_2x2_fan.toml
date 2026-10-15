@@ -1,9 +1,23 @@
 # Quarter circle of radius 2 cells, centred on the -x-y corner (nanoblock.info "2x2 : Fan-shaped").
 # The stud on the curved corner cell is cut away with it, leaving an L of three studs.
+# Underside: three separate holes at the remaining cell centres.
 name = "Round 2×2 fan"
+antistuds = "none"
 ldraw = "NB202C.dat"
 
 [[body]]
 shape = "box"
 size = [2, 2, 1]
 corner_radius = { "+x+y" = 2 }
+
+[[socket]]
+type = "antistud"
+at = [0.5, 0.5, 0]
+
+[[socket]]
+type = "antistud"
+at = [0.5, 1.5, 0]
+
+[[socket]]
+type = "antistud"
+at = [1.5, 0.5, 0]

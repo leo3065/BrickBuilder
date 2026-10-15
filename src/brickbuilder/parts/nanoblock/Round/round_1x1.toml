@@ -1,0 +1,8 @@
+# Round 1x1: a cylinder one cell across (nanoblock.info "1x1 : 1/2F").
+name = "Round 1×1"
+ldraw = "NB101R.dat"
+
+[[body]]
+shape = "box"
+size = [1, 1, 1]
+corner_radius = 0.5

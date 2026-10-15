@@ -75,3 +75,15 @@ def test_curved_end_places_beside_the_part(library, profile):
     hit, normal, point = picking.intersect_model(ray, model)
     assert hit is not None and tuple(normal) == (0, -1, 0)  # the flat bounding face, not the curve
     assert placement_target(profile, point, normal, half=False) == profile.cell_to_sub((0, -1, 0))
+
+
+def test_round_1x1_and_2x2(library, profile):
+    one = library["nanoblock:round_1x1"]
+    assert len(one.cells) == 1 and one.studs == ((0.5, 0.5, 1.0),) and one.antistuds == ()
+    two = library["nanoblock:round_2x2"]
+    assert len(two.cells) == 4 and len(two.studs) == 4
+    # The extra antistud in the centre of the underside, half a cell off the cell centres
+    assert two.antistuds == ((1.0, 1.0, 0.0),)
+    # Full circles: top and bottom loops only, no straight sides
+    for part in (one, two):
+        assert len(part_outline(part.bodies, profile.subdiv)) == 64

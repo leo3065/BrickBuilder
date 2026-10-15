@@ -15,7 +15,7 @@ data, not code, so other micro-brick systems could be added without changing the
   - **Slopes:** 1×2 (with a 1- or 2-layer wedge), 1×3, 2×2, 2×3 and 2×4, plus inverted versions of
     the two 1×2 slopes. A slope and its inverted partner can share a cell, as in two-colour
     patterns from real sets.
-  - **Round:** 1×2, 1×3 and 1×4 with rounded ends.
+  - **Round:** 1×1 and 2×2 cylinders, and 1×2, 1×3 and 1×4 with rounded ends.
   - **Plates:** 10×10 and 20×20 base plates.
 - **Placement preview** that turns red when a part would overlap something.
 - **Rotation** in 90° steps, a choice of which cell of the part sits under the cursor, and

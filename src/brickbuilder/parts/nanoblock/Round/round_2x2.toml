@@ -1,0 +1,13 @@
+# Round 2x2: a cylinder two cells across, a stud on each cell, and an extra antistud in the
+# centre of the underside, so it can sit on a single stud (and turn on it).
+name = "Round 2×2"
+ldraw = "NB202R.dat"
+
+[[body]]
+shape = "box"
+size = [2, 2, 1]
+corner_radius = 1.0
+
+[[socket]]
+type = "antistud"
+at = [1.0, 1.0, 0]

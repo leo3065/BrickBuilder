@@ -163,8 +163,10 @@ Ordinary bricks need no explicit sockets: `studs = "top"` / `antistuds = "bottom
 them. Explicit sockets are for irregular layouts and joints.
 
 ✅ Implemented so far: `type = "stud"` with `at` (cells: x, y, and the height of the top the stud
-sits on), e.g. the single centre stud of a 1×2 at `[0.5, 1.0, 1]`. `normal` and the other socket
-types come with connections and joints.
+sits on), e.g. the single centre stud of a 1×2 at `[0.5, 1.0, 1]`; and `type = "antistud"`
+(the height of the bottom it's in), e.g. the extra centre antistud of the 2×2 round at
+`[1.0, 1.0, 0]`. Antistuds are only recorded (`PartDef.antistuds`) until connections exist, and
+the ordinary bottom antistuds aren't derived yet. `normal` and the joint socket types come later.
 
 ### Modifiers
 A small, closed set that applies to both bodies and sockets:

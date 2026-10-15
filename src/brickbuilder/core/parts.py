@@ -33,11 +33,14 @@ class PartDef:
     cells: Tuple[Cell, ...]           # cells any body touches (partly, for wedges), in body order
     studs: Tuple[Point, ...]          # stud positions in cells: (x, y, height of the top it sits on)
     ldraw: Optional[str] = None       # cross-reference into the LDraw Nanoblock library
+    # Explicit antistud positions in cells (x, y, height of the bottom it's in). Recorded for
+    # connections and fine rotation; not used yet, and bottom antistuds aren't derived yet.
+    antistuds: Tuple[Point, ...] = ()
 
 
 _TOP_KEYS = {"name", "ldraw", "body", "socket"}
 _SOCKET_KEYS = {"type", "at"}
-_SOCKET_TYPES = {"stud"}  # more (antistud, ball, cup) come with connections and joints
+_SOCKET_TYPES = {"stud", "antistud"}  # more (ball, cup) come with joints
 _BODY_KEYS = {
     "box": {"shape", "size", "at", "studs", "corner_radius"},
     "wedge": {"shape", "size", "at", "studs", "keep", "tall"},
@@ -90,8 +93,8 @@ def _parse_body(where: str, body: Any) -> Body:
     return Body("wedge", at, size, studs == "top", keep, axis, sign)
 
 
-def _parse_socket(where: str, socket: Any) -> Point:
-    """An explicit socket; only studs so far. Returns the stud position in cells."""
+def _parse_socket(where: str, socket: Any) -> Tuple[str, Point]:
+    """An explicit socket: its type and position in cells."""
     if not isinstance(socket, dict):
         raise PartError(f"{where}: must be a table")
     unknown = set(socket) - _SOCKET_KEYS
@@ -103,7 +106,7 @@ def _parse_socket(where: str, socket: Any) -> Point:
     if not (isinstance(at, list) and len(at) == 3
             and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in at)):
         raise PartError(f"{where}.at must be a list of 3 numbers (cells)")
-    return (float(at[0]), float(at[1]), float(at[2]))
+    return socket["type"], (float(at[0]), float(at[1]), float(at[2]))
 
 
 def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef:
@@ -139,12 +142,14 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef
     raw_sockets = data.get("socket", [])
     if not isinstance(raw_sockets, list):
         raise PartError(f"{part_id}: 'socket' must be an array of tables ([[socket]])")
-    studs += [_parse_socket(f"{part_id}: socket[{n}]", s) for n, s in enumerate(raw_sockets)]
+    sockets = [_parse_socket(f"{part_id}: socket[{n}]", s) for n, s in enumerate(raw_sockets)]
+    studs += [at for kind, at in sockets if kind == "stud"]
+    antistuds = tuple(at for kind, at in sockets if kind == "antistud")
     studs_final = tuple(studs)
     ldraw = data.get("ldraw")
     if ldraw is not None and not isinstance(ldraw, str):
         raise PartError(f"{part_id}: 'ldraw' must be a string")
-    return PartDef(part_id, data["name"], category, bodies, cells, studs_final, ldraw)
+    return PartDef(part_id, data["name"], category, bodies, cells, studs_final, ldraw, antistuds)
 
 
 def _walk(folder: Traversable, category: List[str], profile_id: str, out: Dict[str, PartDef]) -> None:

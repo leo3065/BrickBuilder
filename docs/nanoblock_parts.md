@@ -24,7 +24,7 @@ Naming notes:
 | nanoblock.info | # | BrickBuilder | LDraw | Shape |
 |---|---|---|---|---|
 | 1x1 : 1/2E | 34 | `brick_1x1` | NB101 | plain 1×1 |
-| 1x1 : 1/2F | 32 | | NB101R | round 1×1 |
+| 1x1 : 1/2F | 32 | `round_1x1` | NB101R | round 1×1 |
 | 1x1 : 2凸 | 27 | | NB101S | 1×1 with a side stud |
 | 1x1 : Cylinder | 17 | | | tall thin cylinder ❓ |
 | 1x2 : 1/2C | 29 | `brick_1x2` | NB102 | plain 1×2 |
@@ -52,7 +52,7 @@ Naming notes:
 | 2x2 : JO-C | 3 | | NB202S | 2×2 with a socket on the side |
 | 2x2 : JO-D | 4 | | NB202B | 2×2 with a ball on the side |
 | 2x2 : L | 20 | `brick_2x2_l` | NB202L | L of three cells, a stud on each |
-| 2x2 : Round | 15 | | NB202R | |
+| 2x2 : Round | 15 | `round_2x2` | NB202R | cylinder 2 cells across, a stud per cell, extra antistud in the centre of the underside |
 | 2x2 : Slope 1 | 41 | `slope_2x2_wedge_1x1` | | |
 | 2x2 : Tire | 44 | | | ⏭ **skipped**: train/car part |
 | 2x2 : Wheel | 43 | | NB202W | ⏭ **skipped**: train/car part |

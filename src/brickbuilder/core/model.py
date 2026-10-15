@@ -146,14 +146,13 @@ def origin_for_anchor(profile: Profile, anchor: Tuple[int, int, int], turns: int
 
 
 def stud_positions(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[glm.vec3, ...]:
-    """World positions of a placed part's stud bases: centre of the top face of each stud cell."""
+    """World positions of a placed part's stud bases (centre of each stud's bottom)."""
     nx, ny, nz = profile.subdiv
     out = []
-    for cx, cy, cz in part.studs:
-        rx, ry = rotate_cell(cx, cy, turns)
-        out.append(profile.sub_to_world((pos[0] + (rx + 0.5) * nx,
-                                         pos[1] + (ry + 0.5) * ny,
-                                         pos[2] + (cz + 1) * nz)))
+    for x, y, z in part.studs:
+        for _ in range(turns % 4):  # turn the point CCW about the origin corner
+            x, y = -y, x
+        out.append(profile.sub_to_world((pos[0] + x * nx, pos[1] + y * ny, pos[2] + z * nz)))
     return tuple(out)
 
 

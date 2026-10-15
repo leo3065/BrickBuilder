@@ -27,6 +27,11 @@ def lib(library, name):
     return library[f"nanoblock:{name}"]
 
 
+def stud_cells(part):
+    """Cells whose top centre carries a stud (for parts whose studs are all centred)."""
+    return tuple((int(x - 0.5), int(y - 0.5), int(z - 1)) for x, y, z in part.studs)
+
+
 def sub(profile, cell):
     return profile.cell_to_sub(cell)
 
@@ -65,15 +70,15 @@ def test_wedge_regions_on_the_half_cell_grid(profile):
 # --- parts --------------------------------------------------------------------------------
 
 def test_slope_parts_cells_and_studs(library):
-    assert lib(library, "slope_1x2_wedge_1x1").studs == ((0, 1, 0),)
+    assert stud_cells(lib(library, "slope_1x2_wedge_1x1")) == ((0, 1, 0),)
     assert lib(library, "slope_1x2_wedge_1x2").cells == ((0, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 2))
-    assert lib(library, "slope_1x2_wedge_1x1_inverted").studs == ((0, 0, 0), (0, 1, 0))
-    assert lib(library, "slope_1x2_wedge_1x2_inverted").studs == ((0, 0, 0), (0, 1, 1))
+    assert stud_cells(lib(library, "slope_1x2_wedge_1x1_inverted")) == ((0, 0, 0), (0, 1, 0))
+    assert stud_cells(lib(library, "slope_1x2_wedge_1x2_inverted")) == ((0, 0, 0), (0, 1, 1))
     # Every flat top cell has a stud
-    assert lib(library, "slope_1x3_wedge_2x1").studs == ((0, 2, 0),)
-    assert lib(library, "slope_2x3_wedge_2x1").studs == ((0, 2, 0), (1, 2, 0))
-    assert lib(library, "slope_2x2_wedge_1x1").studs == ((0, 1, 0), (1, 1, 0))
-    assert lib(library, "slope_2x4_wedge_1x1").studs == tuple((x, 1, 0) for x in range(4))
+    assert stud_cells(lib(library, "slope_1x3_wedge_2x1")) == ((0, 2, 0),)
+    assert stud_cells(lib(library, "slope_2x3_wedge_2x1")) == ((0, 2, 0), (1, 2, 0))
+    assert stud_cells(lib(library, "slope_2x2_wedge_1x1")) == ((0, 1, 0), (1, 1, 0))
+    assert stud_cells(lib(library, "slope_2x4_wedge_1x1")) == tuple((x, 1, 0) for x in range(4))
 
 
 @pytest.mark.parametrize("body, message", [

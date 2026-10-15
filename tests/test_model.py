@@ -109,6 +109,14 @@ def test_stud_positions_follow_rotation(model, library):
     assert [tuple(s) for s in q.studs] == [(2.0, 2.0, 6.25)]
 
 
+def test_off_centre_stud_follows_rotation(model, library):
+    one_stud = library["nanoblock:brick_1x2_1_stud"]
+    # Unturned at the origin: the stud is between the two cells, at world (0, 2), on top
+    assert [tuple(s) for s in model.add_part(one_stud, (0, 0, 0), 0, "red").studs] == [(0.0, 2.0, 3.125)]
+    # Turned once about the origin corner (world (-2, -2)): the part now runs along -X
+    assert [tuple(s) for s in model.add_part(one_stud, (0, 0, 1), 1, "red").studs] == [(-6.0, 0.0, 6.25)]
+
+
 def test_save_roundtrip_including_half_offset(model, library, profile, tmp_path):
     model.add_part(part(library, "2x4"), (0, 0, 0), 1, "cobalt_blue")
     model.add_part(part(library, "1x2"), (3, 1, 1), 0, "red")  # half-cell offset in X and Y

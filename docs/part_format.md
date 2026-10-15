@@ -157,6 +157,10 @@ normal = "+z"
 Ordinary bricks need no explicit sockets: `studs = "top"` / `antistuds = "bottom"` derive
 them. Explicit sockets are for irregular layouts and joints.
 
+✅ Implemented so far: `type = "stud"` with `at` (cells: x, y, and the height of the top the stud
+sits on), e.g. the single centre stud of a 1×2 at `[0.5, 1.0, 1]`. `normal` and the other socket
+types come with connections and joints.
+
 ### Modifiers
 A small, closed set that applies to both bodies and sockets:
 ```toml

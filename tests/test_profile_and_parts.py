@@ -22,6 +22,11 @@ def minimal_profile(**overrides):
     return data
 
 
+def stud_cells(part):
+    """Cells whose top centre carries a stud (for parts whose studs are all centred)."""
+    return tuple((int(x - 0.5), int(y - 0.5), int(z - 1)) for x, y, z in part.studs)
+
+
 def test_builtin_profile(profile):
     assert profile.id == "nanoblock"
     assert tuple(profile.cell) == (4.0, 4.0, 3.125)
@@ -85,7 +90,7 @@ def test_studs_derived_and_hidden_by_bodies():
         {"shape": "box", "size": [2, 1, 1]},
         {"shape": "box", "size": [1, 1, 1], "at": [0, 0, 1]},
     ]})
-    assert sorted(p.studs) == [(0, 0, 1), (1, 0, 0)]
+    assert sorted(stud_cells(p)) == [(0, 0, 1), (1, 0, 0)]
     flat = part_from_dict("t:f", "", {"name": "F", "body": [{"shape": "box", "size": [1, 2, 1], "studs": "none"}]})
     assert flat.studs == ()
 
@@ -114,3 +119,20 @@ def test_l_and_t_bricks():
     assert sorted(l_shape.cells) == [(0, 0, 0), (0, 1, 0), (1, 0, 0)] and len(l_shape.studs) == 3
     t_shape = lib["nanoblock:brick_2x3_t"]
     assert sorted(t_shape.cells) == [(0, 0, 0), (0, 1, 0), (0, 2, 0), (1, 1, 0)] and len(t_shape.studs) == 4
+
+
+def test_off_centre_studs():
+    lib = load_builtin_library("nanoblock")
+    assert lib["nanoblock:brick_1x2_1_stud"].studs == ((0.5, 1.0, 1.0),)
+    assert lib["nanoblock:brick_2x2_1_stud"].studs == ((1.0, 1.0, 1.0),)
+    assert lib["nanoblock:brick_1x3_2_studs"].studs == ((0.5, 1.0, 1.0), (0.5, 2.0, 1.0))
+
+
+@pytest.mark.parametrize("socket, message", [
+    ({"type": "ball", "at": [0, 0, 1]}, "type"),
+    ({"type": "stud", "at": [0, 0]}, "at"),
+    ({"type": "stud", "at": [0, 0, 1], "normal": "+z"}, "unknown keys"),
+])
+def test_bad_sockets_rejected(socket, message):
+    with pytest.raises(PartError, match=message):
+        part_from_dict("t:s", "", {"name": "S", "body": [{"shape": "box", "size": [1, 2, 1]}], "socket": [socket]})

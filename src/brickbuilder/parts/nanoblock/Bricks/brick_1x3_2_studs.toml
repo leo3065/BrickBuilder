@@ -1,0 +1,17 @@
+# 1x3 with two studs, each on a boundary between cells
+# (nanoblock.info "1x3 : 2凸").
+name = "Brick 1×3 2 studs"
+ldraw = "NB103S2.dat"
+
+[[body]]
+shape = "box"
+size = [1, 3, 1]
+studs = "none"
+
+[[socket]]
+type = "stud"
+at = [0.5, 1.0, 1]
+
+[[socket]]
+type = "stud"
+at = [0.5, 2.0, 1]

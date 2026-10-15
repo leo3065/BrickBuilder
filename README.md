@@ -11,7 +11,7 @@ data, not code, so other micro-brick systems could be added without changing the
 - **3D view** with orbit, pan and zoom, orthographic, Z up, and a grid on the ground plane.
 - **Parts** in groups:
   - **Bricks:** 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8, flat (studless) 1×2 and 2×4,
-    2×2 L and 2×3 T.
+    2×2 L, 2×3 T, and the 1×2 and 2×2 with a single centre stud and the 1×3 with 2 studs.
   - **Slopes:** 1×2 (with a 1- or 2-layer wedge), 1×3, 2×2, 2×3 and 2×4, plus inverted versions of
     the two 1×2 slopes. A slope and its inverted partner can share a cell, as in two-colour
     patterns from real sets.

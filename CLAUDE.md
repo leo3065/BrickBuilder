@@ -89,6 +89,8 @@ tests/               pytest suite
 - Occupancy is `sub-cell -> [(part id, Cut | None)]`: None = full. Two parts share a sub-cell
   only if both are cut by the same plane on opposite sides (complementary slopes). Cuts are
   integer and canonical (`geometry.make_cut`) so they compare exactly; keep it that way.
+- `PartDef.studs` are stud positions in cells `(x, y, top height)`: derived ones sit at cell
+  centres, explicit `[[socket]] type = "stud"` ones anywhere (e.g. on cell boundaries).
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
   in save files, separate from their display `name`. Ids are ASCII `[a-z0-9_]` (checked on load).
   There's no translation for renamed ids: a save using an old id fails with "unknown part".

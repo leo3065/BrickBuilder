@@ -115,6 +115,10 @@ tests/               pytest suite
   only refuses same-frame overlaps. Placing against a part
   puts the new part in that part's frame (`Model.to_frame`). A turned part's frame should be its
   original grid turned about the pivot, so it keeps its grid position (and builds stay on whole cells).
+  `History.move_parts(ids, world transform)` does this: moves frames the set owns outright, gives
+  other moving parts a new child frame, merges anything lined up with its parent grid back into it
+  (`model.to_parent_grid`), and refuses (unchanged, returns the reason) on overlap. Deleting parts
+  removes emptied frames.
 - Save format v4 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,
   origin, rotation}...], groups: [{id, name, parent}...], parts: [{id, part, frame, pos (cells,
   0.5 allowed), turns, color, group?}]}`; frames and groups listed parent-first. v3 (no groups),

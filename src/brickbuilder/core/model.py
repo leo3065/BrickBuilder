@@ -193,6 +193,40 @@ def stud_positions(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tup
     return tuple(part_point_to_world(profile, p, pos, turns) for p in part.studs)
 
 
+def unit_quat(rotation: glm.quat) -> glm.quat:
+    # Normalise only if needed: re-normalising a unit quaternion in single precision nudges it,
+    # so every save/load would drift
+    rotation = glm.quat(rotation)
+    if abs(glm.length(rotation) - 1) > 1e-6:
+        rotation = glm.normalize(rotation)
+    return rotation
+
+
+def decompose(m: glm.mat4) -> Tuple[glm.vec3, glm.quat]:
+    """A rigid transform as (translation, rotation), the way frames store it."""
+    return glm.vec3(m[3]), unit_quat(glm.quat_cast(glm.mat3(m)))
+
+
+def to_parent_grid(profile: Profile, origin: glm.vec3, rotation: glm.quat,
+                   pos: Sub, turns: int) -> Optional[Tuple[Sub, int]]:
+    """A part at `pos`/`turns` in a frame placed at (origin, rotation) in its parent, as a
+    position and turns on the parent's own grid; None if the frame isn't lined up with that grid
+    (turned by something other than a multiple of 90 degrees about Z, or off the sub-grid)."""
+    r = glm.mat3_cast(rotation)
+    if glm.distance(r * glm.vec3(0, 0, 1), glm.vec3(0, 0, 1)) > 1e-5:
+        return None
+    x = r * glm.vec3(1, 0, 0)
+    angle = math.degrees(math.atan2(x.y, x.x))
+    k = round(angle / 90)
+    if abs(angle - k * 90) > 1e-3:
+        return None
+    q = profile.world_to_sub(r * profile.sub_to_world(pos) + origin)
+    snapped = tuple(round(v) for v in q)
+    if any(abs(a - b) > 1e-3 for a, b in zip(q, snapped)):
+        return None
+    return (snapped[0], snapped[1], snapped[2]), (turns + k) % 4
+
+
 def subcells_box(profile: Profile, subcells: Iterable[Sub]) -> Tuple[glm.vec3, glm.vec3]:
     """World AABB around a set of sub-cells."""
     xs, ys, zs = zip(*subcells)
@@ -275,15 +309,40 @@ class Model:
             frame_id = max(self.frames) + 1
         elif frame_id in self.frames:
             raise ModelError(f"duplicate frame id {frame_id}")
-        rotation = glm.quat(rotation)
-        # Normalise only if needed: re-normalising a unit quaternion in single precision nudges it,
-        # so every save/load would drift
-        if abs(glm.length(rotation) - 1) > 1e-6:
-            rotation = glm.normalize(rotation)
-        frame = Frame(frame_id, parent, glm.vec3(origin), rotation)
+        frame = Frame(frame_id, parent, glm.vec3(origin), unit_quat(rotation))
         self.frames[frame_id] = frame
         self.modified = True
         return frame
+
+    def set_frame(self, frame_id: int, parent: int, origin: glm.vec3, rotation: glm.quat) -> None:
+        """Move a frame (new parent and/or transform); its parts and child frames follow."""
+        if frame_id == 0:
+            raise ModelError("the root frame can't be moved")
+        if parent not in self.frames:
+            raise ModelError(f"unknown parent frame {parent}")
+        f = parent
+        while f is not None:
+            if f == frame_id:
+                raise ModelError(f"frame {frame_id} can't go inside itself")
+            f = self.frames[f].parent
+        self.frames[frame_id] = Frame(frame_id, parent, glm.vec3(origin), unit_quat(rotation))
+        self.modified = True
+        inside = self.frame_subtree(frame_id)
+        for pid in [p.id for p in self.parts.values() if p.frame in inside]:
+            p = self.parts[pid]
+            # Same frame, same grid position: only the world geometry changes
+            self.remove_part(pid)
+            self.add_part(p.part, p.pos, p.turns, p.color, pid, p.frame, p.group)
+
+    def frame_subtree(self, frame_id: int) -> Set[int]:
+        """A frame and every frame inside it."""
+        inside = {frame_id}
+        changed = True
+        while changed:
+            more = {f.id for f in self.frames.values() if f.parent in inside}
+            changed = not more <= inside
+            inside |= more
+        return inside
 
     def remove_frame(self, frame_id: int) -> None:
         """Remove an empty frame with no child frames."""

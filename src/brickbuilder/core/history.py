@@ -6,9 +6,11 @@ it. One user action is one command (a list of operations), so future multi-part 
 """
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, List, Optional, Union
+from typing import Deque, Dict, List, Optional, Union
 
-from brickbuilder.core.model import Model, PlacedPart, Sub
+import glm
+
+from brickbuilder.core.model import Model, ModelError, PlacedPart, Sub, decompose, to_parent_grid
 from brickbuilder.core.parts import PartDef
 
 DEFAULT_UNDO_LIMIT = 500  # TODO(preferences): make configurable
@@ -79,7 +81,32 @@ class RenameGroupOp:
     new: str
 
 
-Op = Union[AddOp, RemoveOp, ColorOp, AddGroupOp, RemoveGroupOp, PartGroupOp, GroupParentOp, RenameGroupOp]
+@dataclass(frozen=True)
+class AddFrameOp:
+    frame_id: int
+    parent: int
+    origin: glm.vec3
+    rotation: glm.quat
+
+
+@dataclass(frozen=True)
+class RemoveFrameOp:
+    """Removes an empty frame with no child frames."""
+    frame_id: int
+    parent: int
+    origin: glm.vec3
+    rotation: glm.quat
+
+
+@dataclass(frozen=True)
+class SetFrameOp:
+    frame_id: int
+    old: tuple  # (parent, origin, rotation)
+    new: tuple
+
+
+Op = Union[AddOp, RemoveOp, ColorOp, AddGroupOp, RemoveGroupOp, PartGroupOp, GroupParentOp, RenameGroupOp,
+           AddFrameOp, RemoveFrameOp, SetFrameOp]
 Command = List[Op]
 
 _UNREACHABLE: Command = []  # a clean point that undo can never return to
@@ -89,7 +116,12 @@ def _snapshot(cls, placed: PlacedPart):
     return cls(placed.id, placed.part, placed.pos, placed.turns, placed.color, placed.frame, placed.group)
 
 
-_INVERSE = {AddOp: RemoveOp, RemoveOp: AddOp, AddGroupOp: RemoveGroupOp, RemoveGroupOp: AddGroupOp}
+_INVERSE = {AddOp: RemoveOp, RemoveOp: AddOp, AddGroupOp: RemoveGroupOp, RemoveGroupOp: AddGroupOp,
+            AddFrameOp: RemoveFrameOp, RemoveFrameOp: AddFrameOp}
+
+
+class OutOfSync(RuntimeError):
+    """An op couldn't be applied (e.g. a re-added part overlaps)."""
 
 
 def _inverse(op: Op) -> Op:
@@ -103,8 +135,8 @@ def _inverse(op: Op) -> Op:
 def _apply(model: Model, op: Op) -> None:
     if isinstance(op, AddOp):
         if model.add_part(op.part, op.pos, op.turns, op.color, op.part_id, op.frame, op.group) is None:
-            # Can't happen if every edit goes through History
-            raise RuntimeError(f"history out of sync: can't re-add part {op.part_id}")
+            # Can't happen for undo/redo if every edit goes through History
+            raise OutOfSync(f"part {op.part_id} would overlap a part on the same grid")
     elif isinstance(op, RemoveOp):
         model.remove_part(op.part_id)
     elif isinstance(op, ColorOp):
@@ -117,6 +149,12 @@ def _apply(model: Model, op: Op) -> None:
         model.set_part_group(op.part_id, op.new)
     elif isinstance(op, GroupParentOp):
         model.set_group_parent(op.group_id, op.new)
+    elif isinstance(op, AddFrameOp):
+        model.add_frame(op.parent, op.origin, op.rotation, op.frame_id)
+    elif isinstance(op, RemoveFrameOp):
+        model.remove_frame(op.frame_id)
+    elif isinstance(op, SetFrameOp):
+        model.set_frame(op.frame_id, *op.new)
     else:
         model.rename_group(op.group_id, op.new)
 
@@ -155,6 +193,7 @@ class History:
             prune = self._prune_groups()
             for op in prune:
                 _apply(self.model, op)
+            prune += self._prune_frames()
             self._push(command + prune)
 
     def remove_part(self, part_id: int) -> None:
@@ -204,10 +243,137 @@ class History:
         if old != name:
             self._run([RenameGroupOp(group_id, old, name)])
 
+    # --- moving parts across frames ----------------------------------------------------------
+
+    def move_parts(self, part_ids, transform: glm.mat4) -> Optional[str]:
+        """Move parts rigidly by a world transform, as one undo step. Returns None if done, or
+        why it can't be (nothing changes then).
+
+        Frames: a frame whose parts (with everything in its child frames) all move is moved
+        itself. Other moving parts get a new frame, their old grid moved, as a child of it, so
+        they keep their grid positions; moved frames hanging off that grid go into the new frame.
+        Anything that ends up lined up with its parent's grid (a multiple of 90 degrees, on the
+        sub-grid) goes onto that grid instead, and an emptied frame is removed."""
+        m = self.model
+        moving = set(part_ids) & set(m.parts)
+        if not moving:
+            return "nothing to move"
+
+        def subtree_parts(f):
+            inside = m.frame_subtree(f)
+            return {p.id for p in m.parts.values() if p.frame in inside}
+        owned = {f for f in m.frames if f != 0 and subtree_parts(f) and subtree_parts(f) <= moving}
+        tops = sorted(f for f in owned if m.frames[f].parent not in owned)
+        under_owned = set().union(*(m.frame_subtree(f) for f in owned)) if owned else set()
+        loose: Dict[int, List[int]] = {}
+        for pid in sorted(moving):
+            if m.parts[pid].frame not in under_owned:
+                loose.setdefault(m.parts[pid].frame, []).append(pid)
+
+        # Removes before adds, so moved parts never collide with their own old positions
+        add_frames: Command = []
+        removes: Command = []
+        set_frames: Command = []
+        adds: Command = []
+        remove_frames: Command = []
+        next_frame = max(m.frames) + 1
+        new_frame_for: Dict[int, int] = {}
+
+        def frame_tuple(f):
+            fr = m.frames[f]
+            return (fr.parent, fr.origin, fr.rotation)
+
+        def move_into(pids, frame, converted=None):
+            for pid in pids:
+                p = m.parts[pid]
+                removes.append(_snapshot(RemoveOp, p))
+                pos, turns = converted[pid] if converted else (p.pos, p.turns)
+                adds.append(AddOp(pid, p.part, pos, turns, p.color, frame, p.group))
+
+        def on_parent_grid(origin, rotation, pids):
+            out = {pid: to_parent_grid(m.profile, origin, rotation, m.parts[pid].pos, m.parts[pid].turns)
+                   for pid in pids}
+            return out if all(c is not None for c in out.values()) else None
+
+        for f, pids in sorted(loose.items()):
+            world = m.frame_matrix(f)
+            origin, rotation = decompose(glm.inverse(world) * transform * world)
+            converted = on_parent_grid(origin, rotation, pids)
+            if converted is not None:
+                move_into(pids, f, converted)  # e.g. a quarter turn: stays on its grid
+            else:
+                new_frame_for[f] = next_frame
+                add_frames.append(AddFrameOp(next_frame, f, origin, rotation))
+                move_into(pids, next_frame)
+                next_frame += 1
+
+        for g in tops:
+            frame = m.frames[g]
+            if frame.parent in new_frame_for:
+                parent = new_frame_for[frame.parent]
+                origin, rotation = frame.origin, frame.rotation
+            else:
+                parent = frame.parent
+                world = m.frame_matrix(parent)
+                origin, rotation = decompose(glm.inverse(world) * transform * world * frame.local_matrix())
+            own = [p.id for p in m.parts.values() if p.frame == g]
+            converted = None if parent in new_frame_for.values() else on_parent_grid(origin, rotation, own)
+            if converted is not None:
+                # Lined up with its parent again: merge into it
+                local = glm.translate(glm.mat4(1.0), origin) * glm.mat4_cast(rotation)
+                for child in sorted(f.id for f in m.frames.values() if f.parent == g):
+                    set_frames.append(SetFrameOp(child, frame_tuple(child),
+                                                 (parent, *decompose(local * m.frames[child].local_matrix()))))
+                move_into(own, parent, converted)
+                remove_frames.append(RemoveFrameOp(g, frame.parent, frame.origin, frame.rotation))
+            else:
+                set_frames.append(SetFrameOp(g, frame_tuple(g), (parent, origin, rotation)))
+        return self._try_run(add_frames + removes + set_frames + adds + remove_frames, moving)
+
+    def _try_run(self, command: Command, moved=()) -> Optional[str]:
+        """Apply a command; if an op fails or a moved part ends up overlapping a part on another
+        grid, undo what was applied and return why."""
+        done: Command = []
+        reason = None
+        try:
+            for op in command:
+                _apply(self.model, op)
+                done.append(op)
+        except (OutOfSync, ModelError) as e:
+            reason = str(e)
+        if reason is None:
+            moved = set(moved)
+            for pid in sorted(moved):
+                p = self.model.parts[pid]
+                hit = self.model.cross_frame_overlaps(p.frame, p.solids, ignore=moved)
+                if hit:
+                    reason = f"part {pid} would overlap part {hit[0]}"
+                    break
+        if reason is not None:
+            for op in reversed(done):
+                _apply(self.model, _inverse(op))
+            return reason
+        self._push(command)
+        return None
+
     def _run(self, command: Command) -> None:
         for op in command:
             _apply(self.model, op)
         self._push(command)
+
+    def _prune_frames(self) -> Command:
+        """Remove the frames left with no parts and no child frames (innermost first); applied."""
+        ops: Command = []
+        while True:
+            used = {p.frame for p in self.model.parts.values()} | {f.parent for f in self.model.frames.values()}
+            empty = sorted(f for f in self.model.frames if f != 0 and f not in used)
+            if not empty:
+                return ops
+            for f in empty:
+                fr = self.model.frames[f]
+                op = RemoveFrameOp(f, fr.parent, fr.origin, fr.rotation)
+                _apply(self.model, op)
+                ops.append(op)
 
     def _prune_groups(self, pending: Command = ()) -> Command:
         """Ops removing the groups that are (or, after the not yet applied `pending` ops, will

@@ -5,6 +5,8 @@ line up, so the world-space solids are compared instead. Every body is convex (b
 boxes, wedges), so two bodies are apart iff some axis separates them: a face normal of either,
 or the cross product of an edge direction from each.
 """
+import math
+from dataclasses import dataclass
 from typing import List, Sequence, Tuple
 
 import glm
@@ -75,3 +77,70 @@ def solids_box(solids) -> Tuple[glm.vec3, glm.vec3]:
 
 def hulls_overlap(a: List[Hull], b: List[Hull], penetration: float = PENETRATION) -> bool:
     return any(overlap(x, y, penetration) for x in a for y in b)
+
+
+# --- whole parts: bodies plus studs -------------------------------------------------------
+#
+# Bodies are solid here, though real undersides are hollow: a stud may go into another part's
+# body only where that part has an antistud slot for it. Anywhere else (e.g. a part turned on a
+# brick with several studs, the others poking into it) the stud blocks.
+
+STUD_SIDES = 8
+
+
+@dataclass
+class Shape:
+    hulls: List[Hull]                            # the bodies
+    studs: List[Tuple[glm.vec3, Hull]]           # stud base and its prism
+    slots: Tuple[Tuple[glm.vec3, glm.vec3], ...]  # antistud slots (world)
+    box: Tuple[glm.vec3, glm.vec3]               # around bodies and studs
+
+
+def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> Hull:
+    """A stud as an octagonal prism standing on `base` along `axis`."""
+    axis = glm.normalize(axis)
+    u = glm.normalize(glm.cross(axis, glm.vec3(1, 0, 0) if abs(axis.x) < 0.9 else glm.vec3(0, 1, 0)))
+    v = glm.cross(axis, u)
+    ring = [u * math.cos(2 * math.pi * i / STUD_SIDES) + v * math.sin(2 * math.pi * i / STUD_SIDES)
+            for i in range(STUD_SIDES)]
+    bottom = [base + radius * r for r in ring]
+    top = [p + axis * height for p in bottom]
+    faces = [top, bottom[::-1]] + [[bottom[i], bottom[(i + 1) % STUD_SIDES], top[(i + 1) % STUD_SIDES], top[i]]
+                                   for i in range(STUD_SIDES)]
+    return hull(faces)
+
+
+def make_shape(solids, studs, slots, stud_radius: float, stud_height: float,
+               up: glm.vec3 = glm.vec3(0, 0, 1)) -> Shape:
+    stud_hulls = [(s, stud_hull(s, up, stud_radius, stud_height)) for s in studs]
+    lo, hi = solids_box(solids)
+    for s in studs:
+        top = s + up * stud_height
+        for p in (s, top):
+            lo = glm.vec3(min(lo.x, p.x - stud_radius), min(lo.y, p.y - stud_radius), min(lo.z, p.z))
+            hi = glm.vec3(max(hi.x, p.x + stud_radius), max(hi.y, p.y + stud_radius), max(hi.z, p.z))
+    return Shape([hull(s) for s in solids], stud_hulls, tuple(slots), (lo, hi))
+
+
+def _in_a_slot(p: glm.vec3, slots, tolerance: float) -> bool:
+    for a, b in slots:
+        ab = b - a
+        length2 = glm.dot(ab, ab)
+        t = 0.0 if length2 == 0 else max(0.0, min(1.0, glm.dot(p - a, ab) / length2))
+        if glm.distance(p, a + ab * t) <= tolerance:
+            return True
+    return False
+
+
+def clash(a: Shape, b: Shape, tolerance: float = 1e-3) -> bool:
+    """Do two parts get in each other's way: bodies overlapping, or a stud of one inside the
+    other's body other than in one of its slots."""
+    if not boxes_overlap(a.box, b.box):
+        return False
+    if hulls_overlap(a.hulls, b.hulls):
+        return True
+    for x, y in ((a, b), (b, a)):
+        for base, h in x.studs:
+            if hulls_overlap([h], y.hulls) and not _in_a_slot(base, y.slots, tolerance):
+                return True
+    return False

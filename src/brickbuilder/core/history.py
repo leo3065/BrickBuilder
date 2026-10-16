@@ -243,6 +243,18 @@ class History:
         if old != name:
             self._run([RenameGroupOp(group_id, old, name)])
 
+    def add_part_in_new_frame(self, part: PartDef, pos: Sub, turns: int, color: str, parent: int,
+                              origin: glm.vec3, rotation: glm.quat) -> Optional[PlacedPart]:
+        """Place a part on a new grid of its own (a child of `parent`), as one undo step; None if
+        it would overlap something (nothing changes then)."""
+        frame_id = max(self.model.frames) + 1
+        part_id = self.model._next_id
+        command = [AddFrameOp(frame_id, parent, glm.vec3(origin), glm.quat(rotation)),
+                   AddOp(part_id, part, pos, turns, color, frame_id)]
+        if self._try_run(command, [part_id]) is not None:
+            return None
+        return self.model.parts[part_id]
+
     # --- moving parts across frames ----------------------------------------------------------
 
     def move_parts(self, part_ids, transform: glm.mat4) -> Optional[str]:
@@ -345,7 +357,7 @@ class History:
             moved = set(moved)
             for pid in sorted(moved):
                 p = self.model.parts[pid]
-                hit = self.model.cross_frame_overlaps(p.frame, p.solids, ignore=moved)
+                hit = self.model.cross_frame_overlaps(p.frame, self.model.part_shape(pid), ignore=moved)
                 if hit:
                     reason = f"part {pid} would overlap part {hit[0]}"
                     break

@@ -284,7 +284,7 @@ E.g. body B on the ground with a tail T on one stud: turning T turns T; turning 
 stud and T stays. A move is refused only when the selection is wedged between parts of the rest
 that it would tear apart (a real lock, e.g. a brace on both sides).
 
-## Step B: the Turn tool and turned frames (decided ✅)
+## Step B: the Turn tool and turned frames (decided ✅, built ✅)
 Scope: turning about Z, and placing on turned frames. Ball joints and tilted frames reuse it later;
 sliding along slots and general moving belong to "moving placed parts".
 - **Turn tool (T).** Press on a part (or the selection); the moving set comes from the selection
@@ -310,6 +310,13 @@ sliding along slots and general moving belong to "moving placed parts".
   ground use its grid.
 - Order: B1 overlap across frames, B2 frame bookkeeping (model + history), B3 free-motion finder,
   B4 Turn tool UI, B5 turned ghost and working frame.
+- As built: the overlap test also covers **studs**. Bodies are solid in the test, so a stud may be
+  inside another part's body only on one of that part's antistud slots; anywhere else it blocks
+  (a part turned on a brick with several studs). The turned ghost turns about the centre of its
+  anchor cell, so on a stud at a cell corner (2×2 one-stud) it needs half-cell snap, as unturned.
+  The working grid is toggled with **F** over a part (F over empty space: back to the root grid);
+  the grid drawn is the working one. Keys in the Place tool: **[ / ]** turn the preview, **Shift+R**
+  puts it back.
 
 **Worked example ✅: stud hinge (Seregios wing fold).** Two rigid halves built in layers meet in
 a **fold column**. In each layer, one side's round 1×N end sits in that column, alternating

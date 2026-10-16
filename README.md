@@ -63,6 +63,10 @@ uv run pytest
   - **Space / Shift+Space:** rotate the part 90°.
   - **A / Shift+A:** choose which of its cells sits under the cursor (starts nearest the centre).
   - **H:** toggle half-cell snapping. **Arrow keys:** nudge the preview half a cell.
+  - **[ / ]:** turn the preview off the grid in 7.5° steps (it gets a grid of its own and has to sit
+    on a stud); **Shift+R** puts it back.
+  - **F:** use the grid of the part under the cursor for empty space and the ground too; F over
+    empty space goes back to the main grid.
 - **Select (W):** click a part, or its whole outermost group (outlined in blue on hover);
   double-click drills into a group; Alt+click picks a single part. Ctrl+click adds or removes;
   drag a box to select several. **Delete** removes the selection and picking a colour recolours

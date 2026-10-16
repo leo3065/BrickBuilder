@@ -28,14 +28,15 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=(), collided=(), turning=None, pivot=None):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=(), collided=(), turning=None, pivot=None, grid_matrix=None):
         # selected_edges: edge lists of the selected parts; select_rect: (x0, y0, x1, y1) in
         # device pixels while dragging a selection box
         # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines;
         # collided: the same for parts overlapping another frame's parts, in red
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         # turning: (part ids, world transform, valid) while turning parts: drawn moved, red if
-        # blocked; pivot: a world point whose vertical axis gets a marker
+        # blocked; pivot: a world point whose vertical axis gets a marker; grid_matrix: draw the
+        # grid of that frame (grid space -> world) instead of the root grid (the working frame)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
@@ -67,7 +68,12 @@ class Renderer:
         
         gl.glDisable(gl.GL_LIGHTING)
         if show_grid:
+            if grid_matrix is not None:
+                gl.glPushMatrix()
+                gl.glMultTransposeMatrixf(np.array(grid_matrix, dtype=np.float32).flatten())
             self.draw_grid(profile)
+            if grid_matrix is not None:
+                gl.glPopMatrix()
         gl.glEnable(gl.GL_LIGHTING)
 
         # Render Bricks (one box per placed part; boxes come from the model's sub-grid mapping)

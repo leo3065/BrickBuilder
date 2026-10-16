@@ -138,6 +138,12 @@ class MainWindow(QMainWindow):
             action.setToolTip("Turn the selection by one snap step (7.5°) about the stud it's held by")
             action.triggered.connect(lambda _=False, s=sign: self.viewport.turn_step(s))
             edit_menu.addAction(action)
+        working_action = QAction("Use Grid Under Cursor", self)
+        working_action.setShortcut("F")
+        working_action.setToolTip("Place on the grid of the part under the cursor, also in empty space "
+                                  "(again: back to the main grid)")
+        working_action.triggered.connect(self.viewport.toggle_working_frame)
+        edit_menu.addAction(working_action)
         realign_action = QAction("Realign Selection", self)
         realign_action.setShortcut("Shift+R")
         realign_action.setToolTip("Turn the selection back onto the grid it's held on (nearest quarter turn)")
@@ -325,7 +331,7 @@ class MainWindow(QMainWindow):
         if vp.notice:
             unconnected += f"  ·  {vp.notice}"
         self.statusBar().showMessage(
-            f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
+            f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90 + vp.ghost_angle:g}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
             f"{'  ·  half-cell snap' if vp.half_snap else ''}{unconnected}"
             f"   (Space: rotate, A: anchor cell, Shift reverses; H: half-cell snap, arrows: nudge)")
 
@@ -426,6 +432,9 @@ class MainWindow(QMainWindow):
           Space / Shift+Space rotates it. H toggles half-cell snapping; arrow keys nudge<br>
           the preview half a cell. A / Shift+A picks which of its cells (starts at the<br>
           cell nearest the centre) sits under the cursor. Red preview = it would overlap.<br>
+          [ / ] turn it off the grid in 7.5° steps, about the cell under the cursor (it then<br>
+          gets a grid of its own and must sit on a stud); Shift+R puts it back. F uses the grid<br>
+          of the part under the cursor for empty space too (F again: the main grid).<br>
           (Ctrl + Left Click removes in Place mode)<br>
         - Select (W): click selects a part, or its whole outermost group (outlined in blue on<br>
           hover); double-click drills into the group; Alt+click picks one part. Ctrl+click<br>

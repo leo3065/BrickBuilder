@@ -147,3 +147,25 @@ def test_deleting_the_last_part_of_a_frame_removes_it(model):
     assert set(model.frames) == {0}
     h.undo()
     assert snapshot(model) == turned
+
+
+def test_placing_a_turned_part(model):
+    h = History(model)
+    base = h.add_part(lib(model, "brick_2x2_1_stud"), (0, 0, 0), 0, "gray")
+    stud = base.studs[0]
+    arm = lib(model, "brick_1x4")
+    local = turn(glm.vec3(stud.x, stud.y, 0), 30)
+    assert model.turned_placement_problem(arm, (1, 1, 1), 0, local) is None
+    # Not on anything: has to sit on a stud
+    assert "stud" in model.turned_placement_problem(arm, (11, 11, 1), 0, turn(glm.vec3(24, 24, 0), 30))
+    # On a full 2x4's studs: blocked
+    h.add_part(lib(model, "brick_2x4"), (10, 0, 0), 0, "white")
+    centre = glm.vec3(model.profile.sub_to_world((12, 2, 0)))
+    assert "overlap" in model.turned_placement_problem(lib(model, "brick_2x4"), (10, 0, 1), 0, turn(centre, 30))
+
+    before = snapshot(model)
+    from brickbuilder.core.model import decompose
+    placed = h.add_part_in_new_frame(arm, (1, 1, 1), 0, "red", 0, *decompose(local))
+    assert placed is not None and placed.frame != 0 and model.connections()[placed.id] == {base.id}
+    h.undo()
+    assert snapshot(model) == before

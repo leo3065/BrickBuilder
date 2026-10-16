@@ -157,6 +157,10 @@ tests/               pytest suite
   lists, moved; `Model.moved_overlaps` for red), commit with `History.move_parts`. `[`/`]` and
   Shift+R (`turn_step`, `realign_selection`) act on the selection. Turns are about world Z only
   (all frames are Z-turned for now). `Viewport.notice` is a status-bar message.
+- Clash test (`collision.clash` via `Model.part_shape`, cached): bodies by SAT, plus studs as
+  prisms that may enter another body only on one of its slots. Place tool: `ghost_angle` turns the
+  preview about its anchor cell centre (`ghost_matrix`), placed with `History.add_part_in_new_frame`;
+  `working_frame` (F) sets the grid used for the ground.
 - Picking iterates every part (fine at small scale); the renderer calls one cached display
   list per part each frame (VBOs/shaders are still the longer-term plan).
 - Profile `clearance`, `body_height` aren't used yet. Outlines come from the merged shape

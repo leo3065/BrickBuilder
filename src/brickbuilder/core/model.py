@@ -364,51 +364,82 @@ class Model:
         return True
 
     def can_place(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> bool:
-        """Fits its frame's grid and doesn't overlap parts in other frames."""
+        """Fits its frame's grid and doesn't clash with parts in other frames."""
         if not self._fits(frame, footprint_regions(self.profile, part, pos, turns)):
             return False
-        return not self.cross_frame_overlaps(frame, self.placement_solids(part, pos, turns, frame))
+        geo = self.placement_geometry(part, pos, turns, self.frame_matrix(frame))
+        return not self.cross_frame_overlaps(frame, self.shape(geo["solids"], geo["studs"], geo["antistuds"]))
 
-    def part_hulls(self, part_id: int) -> list:
+    def shape(self, solids, studs, slots, up: glm.vec3 = glm.vec3(0, 0, 1)) -> collision.Shape:
+        """World geometry -> what the clash test needs (bodies, studs, slots)."""
+        st = self.profile.stud
+        return collision.make_shape(solids, studs, slots, st.diameter / 2, st.height, up)
+
+    def part_shape(self, part_id: int) -> collision.Shape:
         if part_id not in self._hulls:
-            self._hulls[part_id] = [collision.hull(s) for s in self.parts[part_id].solids]
+            p = self.parts[part_id]
+            up = glm.vec3(p.stud_rotation * glm.vec4(0, 0, 1, 0)) if p.stud_rotation is not None else glm.vec3(0, 0, 1)
+            self._hulls[part_id] = self.shape(p.solids, p.studs, p.antistuds, up)
         return self._hulls[part_id]
 
-    def cross_frame_overlaps(self, frame: int, solids, ignore: Iterable[int] = ()) -> List[int]:
-        """Parts outside `frame` (and not in `ignore`) that world-space `solids` overlap."""
+    def clashes(self, shape: collision.Shape, skip=lambda p: False) -> List[int]:
+        """Parts (except those `skip` says) that a shape clashes with."""
+        return [p.id for p in self.parts.values()
+                if not skip(p) and collision.boxes_overlap(shape.box, p.box, -self.profile.stud.height)
+                and collision.clash(shape, self.part_shape(p.id))]
+
+    def cross_frame_overlaps(self, frame: int, shape: collision.Shape, ignore: Iterable[int] = ()) -> List[int]:
+        """Parts outside `frame` (and not in `ignore`) that a shape clashes with. Within a frame
+        the occupancy decides instead."""
         ignore = set(ignore)
-        box = collision.solids_box(solids)
-        hulls = None
-        out = []
-        for p in self.parts.values():
-            if p.frame == frame or p.id in ignore or not collision.boxes_overlap(box, p.box):
-                continue
-            if hulls is None:
-                hulls = [collision.hull(s) for s in solids]
-            if collision.hulls_overlap(hulls, self.part_hulls(p.id)):
-                out.append(p.id)
-        return out
+        return self.clashes(shape, lambda p: p.frame == frame or p.id in ignore)
+
+    def placement_geometry(self, part: PartDef, pos: Sub, turns: int, matrix: glm.mat4) -> Dict[str, tuple]:
+        """World solids, studs and antistud slots of a part at pos/turns on a grid placed by
+        `matrix` (grid space -> world), e.g. a frame that doesn't exist yet."""
+        def pt(p):
+            return glm.vec3(matrix * glm.vec4(p, 1.0))
+        return {
+            "solids": tuple([[pt(p) for p in face] for face in solid]
+                            for solid in part_solids(self.profile, part, pos, turns)),
+            "studs": tuple(pt(p) for p in stud_positions(self.profile, part, pos, turns)),
+            "antistuds": tuple((pt(a), pt(b)) for a, b in antistud_slots(self.profile, part, pos, turns)),
+        }
+
+    def turned_placement_problem(self, part: PartDef, pos: Sub, turns: int, matrix: glm.mat4) -> Optional[str]:
+        """Why a part can't go on a grid of its own placed by `matrix` (None if it can): it must
+        not clash with anything and must be held by a real stud contact."""
+        from types import SimpleNamespace
+        from brickbuilder.core.connections import contacts_between
+        geo = self.placement_geometry(part, pos, turns, matrix)
+        up = glm.vec3(matrix * glm.vec4(0, 0, 1, 0))
+        hit = self.clashes(self.shape(geo["solids"], geo["studs"], geo["antistuds"], up))
+        if hit:
+            return f"it would overlap part {hit[0]}"
+        ghost = SimpleNamespace(id=-1, studs=geo["studs"], antistuds=geo["antistuds"])
+        if not contacts_between(self.profile, [ghost], self.parts.values()):
+            return "a turned part has to sit on a stud (or take one)"
+        return None
 
     def moved_overlaps(self, part_ids, transform: glm.mat4) -> Optional[int]:
-        """A part the given parts would overlap if moved by a world transform (the first found),
-        or None. For previews; History.move_parts does the real check."""
+        """A part the given parts would clash with if moved by a world transform (the first
+        found), or None. For previews; History.move_parts does the real check."""
         moving = set(part_ids)
+
+        def pt(v):
+            return glm.vec3(transform * glm.vec4(v, 1.0))
+        up = glm.vec3(transform * glm.vec4(0, 0, 1, 0))
         for pid in sorted(moving):
-            solids = [[[glm.vec3(transform * glm.vec4(v, 1.0)) for v in face] for face in solid]
-                      for solid in self.parts[pid].solids]
-            box = collision.solids_box(solids)
-            hulls = None
-            for q in self.parts.values():
-                if q.id in moving or not collision.boxes_overlap(box, q.box):
-                    continue
-                if hulls is None:
-                    hulls = [collision.hull(s) for s in solids]
-                if collision.hulls_overlap(hulls, self.part_hulls(q.id)):
-                    return q.id
+            p = self.parts[pid]
+            shape = self.shape([[[pt(v) for v in face] for face in solid] for solid in p.solids],
+                               [pt(v) for v in p.studs], [(pt(a), pt(b)) for a, b in p.antistuds], up)
+            hit = self.clashes(shape, lambda q: q.id in moving)
+            if hit:
+                return hit[0]
         return None
 
     def collisions(self) -> Set[int]:
-        """Parts overlapping a part in another frame (within a frame, overlaps can't happen).
+        """Parts clashing with a part in another frame (within a frame, overlaps can't happen).
         Cached until the next change."""
         if self._collisions is None:
             self._collisions = self._find_collisions()
@@ -424,7 +455,7 @@ class Model:
             for fb in frames[i + 1:]:
                 for a in by_frame[fa]:
                     for b in by_frame[fb]:
-                        if collision.boxes_overlap(a.box, b.box) and                                 collision.hulls_overlap(self.part_hulls(a.id), self.part_hulls(b.id)):
+                        if collision.clash(self.part_shape(a.id), self.part_shape(b.id)):
                             out |= {a.id, b.id}
         return out
 

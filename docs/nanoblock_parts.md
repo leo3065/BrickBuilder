@@ -21,11 +21,23 @@ Naming notes:
 - 凸 = stud: "1凸" = one stud, "2凸" = two studs.
 - JO = joint: **JO-C = socket (cup)**, **JO-D = ball**, on the side of the brick.
 
+## Kit usage data
+Per-kit parts lists for 671 kits (NBKS), plus official specs and instruction PDFs (Kawada), are
+collected in `D:\Nanoblocks\KitData` (`data/kit_parts.csv`, `data/parts.csv`,
+`data/part_usage.json`, `tools/nb_query.py`; not part of this repo). Not high priority, but it
+can say, per part, how many kits use it and what share of all blocks it is. Read it both ways:
+a common part matters for coverage, while a part in few kits is hard to get from a donor set even
+when models need only a few.
+
+Snapshot (2026-10-16): the library covers 97.9% of all blocks and 317 of the 671 kits completely.
+The largest gap is the 1×1 with a side stud (`1x1 : 2凸`, in 173 kits), then the four joint parts
+(in 189 kits together, about 1% of blocks).
+
 | nanoblock.info | # | BrickBuilder | LDraw | Shape |
 |---|---|---|---|---|
 | 1x1 : 1/2E | 34 | `brick_1x1` | NB101 | plain 1×1 |
 | 1x1 : 1/2F | 32 | `round_1x1` | NB101R | round 1×1 |
-| 1x1 : 2凸 | 27 | | NB101S | 1×1 with a side stud |
+| 1x1 : 2凸 | 27 | | NB101S | 1×1 with a side stud (planned, after frame placement and rotation) |
 | 1x1 : Cylinder | 17 | | | tall thin cylinder ❓ |
 | 1x2 : 1/2C | 29 | `brick_1x2` | NB102 | plain 1×2 |
 | 1x2 : 1/2BO-1 | 33 | `brick_1x2_1_stud` | NB102S | 1×2 with one centre stud (half-offset stud; fine rotation) |

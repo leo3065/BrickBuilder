@@ -37,6 +37,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Base plates: 10×10 and 20×20.
 - [x] More box-based parts from `docs/nanoblock_parts.md`: flat 1×2 and 2×4, 2×2 L, 2×3 T, and the 1×3 with 2 studs and single-centre-stud 1×2 and 2×2 (explicit stud sockets off the cell centres).
 - [x] Round parts: round 1×1, 1×2, 1×3, 1×4, 2×2 and the 2×2 fan (boxes with `corner_radius`).
+- [ ] 1×1 with a side stud (nanoblock.info "1x1 : 2凸", in 173 of 671 kits: the biggest gap). Parts built on the side stud go in a frame turned 90°, so this comes after groups, frames, and placement and rotation that support them.
 - [ ] Joint parts: ball and socket on 1×2 and 2×2 (nanoblock.info JO-C / JO-D). Needs new body shapes (a sphere and a cup) or mesh bodies; the joint behaviour is under Intermediate.
 - [ ] A menu for browsing the part library, with a tree view, thumbnail previews and mark-as-favorite. (The tree view grouped by category is done; thumbnails and favorites are not.)
 

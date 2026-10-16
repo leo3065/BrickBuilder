@@ -28,12 +28,14 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=(), collided=()):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=(), collided=(), turning=None, pivot=None):
         # selected_edges: edge lists of the selected parts; select_rect: (x0, y0, x1, y1) in
         # device pixels while dragging a selection box
         # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines;
         # collided: the same for parts overlapping another frame's parts, in red
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
+        # turning: (part ids, world transform, valid) while turning parts: drawn moved, red if
+        # blocked; pivot: a world point whose vertical axis gets a marker
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
         view = camera.get_view_matrix()
@@ -69,7 +71,7 @@ class Renderer:
         gl.glEnable(gl.GL_LIGHTING)
 
         # Render Bricks (one box per placed part; boxes come from the model's sub-grid mapping)
-        self.render_bricks(model, profile)
+        self.render_bricks(model, profile, turning)
 
         if highlighted:
             self.render_highlight(highlighted)
@@ -78,6 +80,8 @@ class Renderer:
 
         if ghost:
             self.render_ghost(profile, *ghost)
+        if pivot is not None:
+            self.draw_pivot(pivot, profile)
 
         if hovered_edges:
             # What a click would select (a whole group), in a soft blue
@@ -267,7 +271,7 @@ class Renderer:
         gl.glVertex3f(center.x + hs, center.y + hs, center.z)
         gl.glVertex3f(center.x - hs, center.y - hs, center.z)
 
-    def render_bricks(self, model, profile):
+    def render_bricks(self, model, profile, turning=None):
         # Each part is compiled once into two display lists, its fill and its outline, and only
         # recompiled when something about it changes. All fills are drawn first (offset back),
         # then all outlines: if a part's outline were drawn with its fill, a part drawn later
@@ -286,16 +290,42 @@ class Renderer:
             gl.glDeleteLists(fill, 2)
         self._part_lists = live
 
+        moving = set(turning[0]) if turning else set()
+        still = [lists for key, lists in live.items() if key[0] not in moving]
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glPolygonOffset(1.0, 1.0)
-        for fill, _ in live.values():
+        for fill, _ in still:
             gl.glCallList(fill)
         gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
 
         gl.glDisable(gl.GL_LIGHTING)
-        for _, outline in live.values():
+        for _, outline in still:
             gl.glCallList(outline)
         gl.glEnable(gl.GL_LIGHTING)
+
+        if turning:
+            # The parts being turned: their own display lists, moved by the turn
+            _, transform, valid = turning
+            gl.glPushMatrix()
+            gl.glMultTransposeMatrixf(np.array(transform, dtype=np.float32).flatten())
+            turned = [lists for key, lists in live.items() if key[0] in moving]
+            for fill, _ in turned:
+                gl.glCallList(fill)
+            gl.glDisable(gl.GL_LIGHTING)
+            for _, outline in turned:
+                gl.glCallList(outline)
+            gl.glEnable(gl.GL_LIGHTING)
+            if not valid:  # blocked: a red film over them, visible through everything
+                gl.glEnable(gl.GL_BLEND)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                gl.glDisable(gl.GL_DEPTH_TEST)
+                gl.glColor4f(1.0, 0.15, 0.1, 0.45)
+                for pid in moving:
+                    if pid in model.parts:
+                        self.draw_faces(model.parts[pid].solids)
+                gl.glEnable(gl.GL_DEPTH_TEST)
+                gl.glDisable(gl.GL_BLEND)
+            gl.glPopMatrix()
 
     def compile_part(self, placed, profile):
         stud_fill, stud_rim = self.stud_lists(profile)
@@ -347,6 +377,26 @@ class Renderer:
 
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_BLEND)
+
+    def draw_pivot(self, pivot, profile):
+        # A vertical line through the pivot and a ring around it, seen through everything
+        gl.glPushAttrib(gl.GL_ENABLE_BIT | gl.GL_CURRENT_BIT | gl.GL_LINE_BIT)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glLineWidth(2.0)
+        gl.glColor3f(0.2, 0.9, 1.0)
+        h = profile.cell.z
+        gl.glBegin(gl.GL_LINES)
+        gl.glVertex3f(pivot.x, pivot.y, pivot.z - 2 * h)
+        gl.glVertex3f(pivot.x, pivot.y, pivot.z + 3 * h)
+        gl.glEnd()
+        r = profile.cell.x * 0.5
+        gl.glBegin(gl.GL_LINE_LOOP)
+        for i in range(32):
+            a = 2 * math.pi * i / 32
+            gl.glVertex3f(pivot.x + r * math.cos(a), pivot.y + r * math.sin(a), pivot.z)
+        gl.glEnd()
+        gl.glPopAttrib()
 
     def draw_faces(self, solids):
         # Filled convex faces with their normals (for lighting)

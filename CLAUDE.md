@@ -68,7 +68,7 @@ src/brickbuilder/
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
   core/renderer.py   Legacy GL: grid, parts (one cached display list per part: box, studs,
                      outlines), ghost, selection, axis gizmo, optional Z clip plane (section_z)
-  core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE
+  core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE / TURN
   ui/main_window.py  Menus (Edit > Undo/Redo, Rotate: Space / Shift+Space, anchor: A / Shift+A,
                      Half-Cell Snap: H, nudge: arrows), tool toolbar (Q/W/E/R), parts tree
                      (grouped by category folder) + color docks, status bar, Save/Save As (current file + title marker), close prompt
@@ -152,6 +152,11 @@ tests/               pytest suite
   the top level; double-click sets the context one level deeper); Alt = single part. Group /
   ungroup / rename go through `History.group` / `ungroup` / `rename_group`; `remove_parts` also
   drops groups left empty (same command).
+- **Turn tool (T)**: `Viewport._start_turn/_drag_turn/_finish_turn` plan with `motion.plan_turn`,
+  preview with `Renderer.render(turning=(ids, transform, valid), pivot=...)` (the parts' own display
+  lists, moved; `Model.moved_overlaps` for red), commit with `History.move_parts`. `[`/`]` and
+  Shift+R (`turn_step`, `realign_selection`) act on the selection. Turns are about world Z only
+  (all frames are Z-turned for now). `Viewport.notice` is a status-bar message.
 - Picking iterates every part (fine at small scale); the renderer calls one cached display
   list per part each frame (VBOs/shaders are still the longer-term plan).
 - Profile `clearance`, `body_height` aren't used yet. Outlines come from the merged shape

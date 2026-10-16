@@ -18,6 +18,8 @@ data, not code, so other micro-brick systems could be added without changing the
   - **Round:** 1×1 and 2×2 cylinders, 1×2, 1×3 and 1×4 with rounded ends, and the 2×2 quarter-circle fan.
   - **Plates:** 10×10 and 20×20 base plates.
 - **Placement preview** that turns red when a part would overlap something.
+- **Turning placed parts** to any angle about the stud they're held by (Turn tool), with
+  their own grid for what's built on them.
 - **Rotation** in 90° steps, a choice of which cell of the part sits under the cursor, and
   **half-offset placement**.
 - **The 45 official Nanoblock colours.** Colour names come from nanoblock.info; the RGB values
@@ -68,6 +70,10 @@ uv run pytest
   the selection to whole connected subassemblies.
   - **Ctrl+G / Ctrl+Shift+G:** group / ungroup the selection. Groups nest; the Groups dock lists
     them with part counts (click to select, double-click to rename).
+- **Turn (T):** drag a part (or the selection) to turn it about the stud it's held by, in 7.5°
+  steps; **Shift** turns freely. **[ / ]** turn the selection a step, **Shift+R** turns it back onto
+  its grid. Parts built on a turned part follow its grid. If the contacts lock it (studs on different
+  axes, two studs in one slot), the status bar says why; a red preview means it would overlap.
 - **Paint (E):** click to recolour a part with the current colour.
 - **Erase (R):** click to remove a part.
 

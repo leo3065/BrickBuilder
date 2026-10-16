@@ -389,6 +389,24 @@ class Model:
                 out.append(p.id)
         return out
 
+    def moved_overlaps(self, part_ids, transform: glm.mat4) -> Optional[int]:
+        """A part the given parts would overlap if moved by a world transform (the first found),
+        or None. For previews; History.move_parts does the real check."""
+        moving = set(part_ids)
+        for pid in sorted(moving):
+            solids = [[[glm.vec3(transform * glm.vec4(v, 1.0)) for v in face] for face in solid]
+                      for solid in self.parts[pid].solids]
+            box = collision.solids_box(solids)
+            hulls = None
+            for q in self.parts.values():
+                if q.id in moving or not collision.boxes_overlap(box, q.box):
+                    continue
+                if hulls is None:
+                    hulls = [collision.hull(s) for s in solids]
+                if collision.hulls_overlap(hulls, self.part_hulls(q.id)):
+                    return q.id
+        return None
+
     def collisions(self) -> Set[int]:
         """Parts overlapping a part in another frame (within a frame, overlaps can't happen).
         Cached until the next change."""

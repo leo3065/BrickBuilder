@@ -13,6 +13,7 @@ from brickbuilder.core.model import Model, Sub, anchor_cells, default_anchor_ind
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
+from brickbuilder.core.motion import plan_turn
 from brickbuilder.core.tools import Tool
 
 DEFAULT_PART = "brick_1x1"
@@ -61,6 +62,10 @@ class Viewport(QOpenGLWidget):
         # None = top level (clicks select whole outermost groups)
         self.select_context: Optional[int] = None
         self.hovered: set = set()  # what a click would select, outlined while hovering
+        # Turn tool: the turn being dragged (plan, pivot, start angle, angle, transform, valid)
+        self.turning: Optional[dict] = None
+        self.rotation_snap = 7.5  # degrees; an editor setting (TODO(preferences))
+        self.notice = ""  # a short message for the status bar (why a turn can't happen, ...)
 
         # Enable mouse tracking for hover effects if needed later
         self.setMouseTracking(True)
@@ -96,12 +101,17 @@ class Viewport(QOpenGLWidget):
                              highlighted=[self.model.parts[pid].edges for pid in self.unconnected_parts()]
                              if self.highlight_unconnected else (),
                              collided=[self.model.parts[pid].edges for pid in self.model.collisions()]
-                             if self.highlight_collisions else ())
+                             if self.highlight_collisions else (),
+                             turning=(self.turning["moving"], self.turning["transform"], self.turning["valid"])
+                             if self.turning else None,
+                             pivot=self.turning["pivot"] if self.turning else None)
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
         self.ghost_pos = None
-        if tool != Tool.SELECT:
+        self.turning = None
+        self.notice = ""
+        if tool not in (Tool.SELECT, Tool.TURN):
             self.selection = set()
             self.select_context = None
             self.hovered = set()
@@ -181,6 +191,10 @@ class Viewport(QOpenGLWidget):
         self.edited.emit()
 
     def clear_selection(self):
+        if self.turning:  # Esc while turning cancels the turn
+            self.turning = None
+            self.update()
+            return
         self.selection = set()
         self.select_context = None
         self.update()
@@ -245,6 +259,129 @@ class Viewport(QOpenGLWidget):
             self.history.rename_group(group_id, name)
             self.edited.emit()
 
+    # --- turning (Turn tool) ------------------------------------------------------------------
+
+    def _turn_plan(self, hint=None):
+        """Plan a turn of the selection; returns (plan, pivot) or (None, None) with a notice."""
+        if not self.selection:
+            self.notice = "select something to turn"
+            return None, None
+        plan = plan_turn(self.model, self.selection, hint)
+        if plan.kind == "locked":
+            self.notice = f"can't turn: {plan.reason}"
+            return None, None
+        if plan.kind == "free":  # not held: turn about the middle of what moves
+            lo = glm.vec3(min(self.model.parts[p].box[0].x for p in plan.moving),
+                          min(self.model.parts[p].box[0].y for p in plan.moving),
+                          min(self.model.parts[p].box[0].z for p in plan.moving))
+            hi = glm.vec3(max(self.model.parts[p].box[1].x for p in plan.moving),
+                          max(self.model.parts[p].box[1].y for p in plan.moving),
+                          max(self.model.parts[p].box[1].z for p in plan.moving))
+            return plan, glm.vec3((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z)
+        return plan, plan.pivot
+
+    @staticmethod
+    def turn_matrix(pivot: glm.vec3, degrees: float) -> glm.mat4:
+        """Turning about the vertical axis through `pivot`."""
+        return (glm.translate(glm.mat4(1.0), pivot)
+                * glm.mat4_cast(glm.angleAxis(math.radians(degrees), glm.vec3(0, 0, 1)))
+                * glm.translate(glm.mat4(1.0), -pivot))
+
+    def turn_selection(self, degrees: float) -> bool:
+        """Turn the selection (and what hangs off it) by an angle, as one undo step."""
+        plan, pivot = self._turn_plan()
+        if plan is None:
+            self.edited.emit()
+            return False
+        return self._commit_turn(plan.moving, self.turn_matrix(pivot, degrees))
+
+    def turn_step(self, sign: int):
+        self.turn_selection(sign * self.rotation_snap)
+
+    def realign_selection(self) -> bool:
+        """Shift+R: turn the selection to the nearest quarter turn of the grid it's held on (the
+        root grid if it isn't held), which puts it back on that grid."""
+        plan, pivot = self._turn_plan()
+        if plan is None:
+            self.edited.emit()
+            return False
+        held = plan.contacts[0] if plan.contacts else None
+        if held is not None:
+            mine, other = ((held.stud_part, held.slot_part) if held.stud_part in plan.moving
+                           else (held.slot_part, held.stud_part))
+            base = glm.quat_cast(glm.mat3(self.model.frame_matrix(self.model.parts[other].frame)))
+        else:
+            mine = min(plan.moving)
+            base = glm.quat()
+        rot = glm.inverse(base) * glm.quat_cast(glm.mat3(self.model.frame_matrix(self.model.parts[mine].frame)))
+        x = glm.mat3_cast(rot) * glm.vec3(1, 0, 0)
+        angle = math.degrees(math.atan2(x.y, x.x))
+        delta = round(angle / 90) * 90 - angle
+        if abs(delta) < 1e-4:
+            self.notice = "already lined up with the grid"
+            self.edited.emit()
+            return False
+        return self._commit_turn(plan.moving, self.turn_matrix(pivot, delta))
+
+    def _commit_turn(self, moving, transform) -> bool:
+        reason = self.history.move_parts(moving, transform)
+        self.notice = f"can't turn: {reason}" if reason else ""
+        self.update()
+        self.edited.emit()
+        return reason is None
+
+    def _ground_angle(self, pos, pivot: glm.vec3) -> Optional[float]:
+        """Angle (degrees) of the point under the cursor around the pivot, on its horizontal plane."""
+        ray = picking.get_mouse_ray(pos.x(), pos.y(), self.width(), self.height(), self.camera)
+        t = picking.intersect_plane(ray, glm.vec3(0, 0, 1), pivot)
+        if t is None:
+            return None
+        p = ray.origin + ray.direction * t - pivot
+        return math.degrees(math.atan2(p.y, p.x))
+
+    def _start_turn(self, event: QMouseEvent):
+        hit, _, point = picking.intersect_model(
+            picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera),
+            self.model)
+        if hit is None:
+            return
+        if hit.id not in self.selection:
+            self.selection = self._unit(hit.id, bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
+        plan, pivot = self._turn_plan(point)
+        if plan is not None:
+            start = self._ground_angle(event.position(), pivot)
+            self.turning = {"moving": plan.moving, "pivot": pivot, "start": start or 0.0, "last": start or 0.0,
+                            "raw": 0.0, "angle": 0.0, "transform": glm.mat4(1.0), "valid": True}
+            self.notice = "turning 0°"
+        self.update()
+        self.edited.emit()
+
+    def _drag_turn(self, event: QMouseEvent):
+        t = self.turning
+        a = self._ground_angle(event.position(), t["pivot"])
+        if a is None:
+            return
+        step = (a - t["last"] + 180) % 360 - 180  # unwrapped, so it can go round more than once
+        t["last"] = a
+        t["raw"] += step
+        free = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        angle = t["raw"] if free else round(t["raw"] / self.rotation_snap) * self.rotation_snap
+        if angle != t["angle"]:
+            t["angle"] = angle
+            t["transform"] = self.turn_matrix(t["pivot"], angle)
+            t["valid"] = self.model.moved_overlaps(t["moving"], t["transform"]) is None
+            self.notice = f"turning {angle:.4g}°" + ("" if t["valid"] else " (overlaps)")
+            self.edited.emit()
+
+    def _finish_turn(self):
+        t, self.turning = self.turning, None
+        if abs(t["angle"]) > 1e-9:
+            self._commit_turn(t["moving"], t["transform"])
+        else:
+            self.notice = ""
+            self.update()
+            self.edited.emit()
+
     def delete_selection(self):
         if self.selection:
             self.history.remove_parts(self.selection)
@@ -258,6 +395,9 @@ class Viewport(QOpenGLWidget):
         if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.SELECT:
             # Click or box: decided on release (or once the mouse moves far enough)
             self._press = (event.position(), event.modifiers())
+            return
+        if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.TURN:
+            self._start_turn(event)
             return
         if event.buttons() & Qt.MouseButton.LeftButton:
             self._handle_left_click(event)
@@ -285,6 +425,9 @@ class Viewport(QOpenGLWidget):
         self.update_ghost(event.position().x(), event.position().y())
 
     def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton and self.turning is not None:
+            self._finish_turn()
+            return
         if event.button() != Qt.MouseButton.LeftButton or self._press is None:
             return
         start, modifiers = self._press
@@ -362,8 +505,10 @@ class Viewport(QOpenGLWidget):
              self.update_ghost(current_pos.x(), current_pos.y())
         else:
             self.ghost_pos = None
-        if self.current_tool == Tool.SELECT and not event.buttons():
+        if self.current_tool in (Tool.SELECT, Tool.TURN) and not event.buttons():
             self._update_hover(current_pos, event.modifiers())
+        if self.turning is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._drag_turn(event)
 
         if self.last_mouse_pos is not None:
              # Navigation stays same

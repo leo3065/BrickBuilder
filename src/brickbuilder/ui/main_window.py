@@ -132,6 +132,19 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(delete_action)
 
         edit_menu.addSeparator()
+        for text, key, sign in (("Turn Selection Left", "[", 1), ("Turn Selection Right", "]", -1)):
+            action = QAction(text, self)
+            action.setShortcut(key)
+            action.setToolTip("Turn the selection by one snap step (7.5°) about the stud it's held by")
+            action.triggered.connect(lambda _=False, s=sign: self.viewport.turn_step(s))
+            edit_menu.addAction(action)
+        realign_action = QAction("Realign Selection", self)
+        realign_action.setShortcut("Shift+R")
+        realign_action.setToolTip("Turn the selection back onto the grid it's held on (nearest quarter turn)")
+        realign_action.triggered.connect(self.viewport.realign_selection)
+        edit_menu.addAction(realign_action)
+
+        edit_menu.addSeparator()
         group_action = QAction("Group", self)
         group_action.setShortcut("Ctrl+G")
         group_action.triggered.connect(self.viewport.group_selection)
@@ -202,12 +215,22 @@ class MainWindow(QMainWindow):
         toolbar.addAction(erase_action)
         self.erase_action = erase_action
 
+        # Turn Tool
+        turn_action = QAction("Turn", self)
+        turn_action.setCheckable(True)
+        turn_action.setShortcut("T")
+        turn_action.setToolTip("Turn (T): drag a part or the selection about the stud it's held by; "
+                               "Shift turns freely, [ / ] turn by a step, Shift+R realigns")
+        turn_action.triggered.connect(lambda: self.set_tool(Tool.TURN, turn_action))
+        toolbar.addAction(turn_action)
+        self.turn_action = turn_action
+
         toolbar.addSeparator()
         toolbar.addAction(self.half_snap_action)
 
     def set_tool(self, tool: Tool, action: QAction):
         # Uncheck others
-        for a in [self.place_action, self.select_action, self.paint_action, self.erase_action]:
+        for a in [self.place_action, self.select_action, self.paint_action, self.erase_action, self.turn_action]:
             if a != action:
                 a.setChecked(False)
         action.setChecked(True) # Ensure clicked is checked
@@ -299,6 +322,8 @@ class MainWindow(QMainWindow):
             group = vp.selected_group()
             if group is not None:
                 unconnected += f" (group \"{vp.model.groups[group].name}\")"
+        if vp.notice:
+            unconnected += f"  ·  {vp.notice}"
         self.statusBar().showMessage(
             f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
             f"{'  ·  half-cell snap' if vp.half_snap else ''}{unconnected}"
@@ -408,6 +433,9 @@ class MainWindow(QMainWindow):
           Ctrl+A selects all, Esc clears. Ctrl+G groups the selection, Ctrl+Shift+G ungroups;<br>
           rename groups in the Groups dock (double-click). Edit > Select Connected grows the<br>
           selection to whole connected subassemblies.<br>
+        - Turn (T): drag a part (or the selection) to turn it about the stud it's held by, in<br>
+          7.5° steps; Shift turns freely. [ / ] turn the selection a step, Shift+R turns it back<br>
+          onto its grid. Locked parts say why in the status bar; red = it would overlap.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>
         <br>

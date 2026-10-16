@@ -5,3 +5,4 @@ class Tool(Enum):
     SELECT = auto()
     PAINT = auto()
     ERASE = auto()
+    TURN = auto()

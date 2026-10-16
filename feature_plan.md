@@ -20,6 +20,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] A save/load function to save the current model and load a saved model.
 - [x] Save (to the current file) as well as Save As, and the unsaved-changes prompt when closing the window.
 - [ ] Preferences dialog, saved per user: undo history size (fixed at 500 for now), rotation snap angle (default 7.5°) and similar editor settings.
+- [ ] Revisit the key mapping as a whole, and let users customise it in Preferences.
 - [ ] Parts list (bill of materials): count of each part per color, e.g. for finding kits that contain them on nanoblock.info.
 
 #### View
@@ -49,7 +50,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 
 ### Intermediate
 - [x] Connections on one grid: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Still to extend for frames (rotated parts, joints).
-- [ ] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it.
+- [ ] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it. Planned as step B (see docs/part_format.md "Step B"): Turn tool (T; Shift = free, [ / ] = one step, Shift+R = realign), turned ghost placement, and a working frame.
 - [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
 - [ ] Snapping solver: contacts as errors minimised by least squares over the dragged frames; free motions from the same setup (hinges, locks, slides); keeps loops closed. Used by turning, align, ball joints and circular arrays. See docs/part_format.md.
 - [ ] Pins and joint chains: each connected component has one pin (explicit, else grounded, else the larger side); turning at a joint moves the unpinned side.

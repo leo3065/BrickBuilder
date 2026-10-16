@@ -277,6 +277,40 @@ selection plus everything beyond it) moves; with two joints the pivot is the one
 If pins end up on both sides (e.g. bracing loops), the move is refused with the reason. Turning a
 selection that splits a frame gives the moved parts a new frame.
 
+**The selection always moves ✅.** If the selection itself holds the pin (it's grounded or
+pinned), that pin is ignored for this move: the selection plus whatever hangs only off it moves,
+and the pin rule, applied to the rest without the selection, decides which side of the rest stays.
+E.g. body B on the ground with a tail T on one stud: turning T turns T; turning B turns B about the
+stud and T stays. A move is refused only when the selection is wedged between parts of the rest
+that it would tear apart (a real lock, e.g. a brace on both sides).
+
+## Step B: the Turn tool and turned frames (decided ✅)
+Scope: turning about Z, and placing on turned frames. Ball joints and tilted frames reuse it later;
+sliding along slots and general moving belong to "moving placed parts".
+- **Turn tool (T).** Press on a part (or the selection); the moving set comes from the selection
+  rule above. Its contacts with the rest give the free motion (a small version of the snapping
+  solver: one moving body, angle + x + y, stud-in-slot errors, free motions from the null space;
+  numpy). One stud or several on one axis: turn about it; otherwise locked, with the reason.
+  Dragging around the pivot turns in `rotation_snap` steps; **Shift** turns freely (later also
+  moves freely); **[ / ]** turn by one step; **Shift+R** realigns (a Z-turned set to the nearest
+  90° of its parent grid, which merges it back; later a ball joint back to straight, keeping its
+  roll). R is still Erase outside the Turn tool. The preview turns red on overlap; committing is
+  one undo step.
+- **Frames.** A turned set gets a frame that is its old grid turned about the pivot, so parts keep
+  `pos` and `turns` and only the frame transform is new. A set that already owns its frame just
+  changes that frame. Turning back to a multiple of 90° (when the parts land on the parent's
+  sub-grid) merges them into the parent and deletes the empty frame. Frames hanging off the moving
+  set are reparented with it.
+- **Overlap across frames.** Exact test on the convex part solids after a bounding-box check;
+  touching is allowed (the Seregios round ends touch at every angle). Also drives the "highlight
+  colliding parts" view option.
+- **Placing.** Against a turned part: that part's frame (already the case). The ghost can be turned
+  by the snap step about the stud under its anchor; placing it creates the frame, valid only with a
+  real stud contact. **Working frame:** make a hovered part's frame active, so empty space and the
+  ground use its grid.
+- Order: B1 overlap across frames, B2 frame bookkeeping (model + history), B3 free-motion finder,
+  B4 Turn tool UI, B5 turned ghost and working frame.
+
 **Worked example ✅: stud hinge (Seregios wing fold).** Two rigid halves built in layers meet in
 a **fold column**. In each layer, one side's round 1×N end sits in that column, alternating
 between the sides (e.g. bottom to top: A, B, A, A, B, A). The A–B contacts are all there, A studs

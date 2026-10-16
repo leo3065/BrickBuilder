@@ -61,6 +61,8 @@ src/brickbuilder/
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, frames, groups, save v4 (+ v1-v3 load)
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/connections.py  Stud-in-antistud-slot graph (Model.connections(), cached) + groups()
+  core/motion.py     Turn planning: moving set (selection always moves; pin rule on the rest) and
+                     free motion from stud-in-slot contacts (null space, numpy): turn / locked / free
   core/collision.py  Overlap across frames: separating axis test on convex solids (numpy), touching allowed
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test

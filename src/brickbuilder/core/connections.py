@@ -6,13 +6,22 @@ each slot only looks at the studs right around it.
 """
 import math
 from collections import defaultdict
-from typing import Dict, Iterable, List, Set, Tuple
+from dataclasses import dataclass
+from typing import Dict, Iterable, Iterator, List, Set, Tuple
 
 import glm
 
 from brickbuilder.core.profile import Profile
 
-TOLERANCE = 1e-4  # mm: a stud "is in" a slot if its centre is this close to the slot's line
+TOLERANCE = 1e-3  # mm: a stud "is in" a slot if its centre is this close to the slot's line
+
+
+@dataclass(frozen=True)
+class Contact:
+    stud: glm.vec3                   # world position of the stud's base
+    slot: Tuple[glm.vec3, glm.vec3]  # the antistud slot it's in (a == b for a point)
+    stud_part: int
+    slot_part: int
 
 
 def _on_segment(p: glm.vec3, a: glm.vec3, b: glm.vec3) -> bool:
@@ -22,27 +31,44 @@ def _on_segment(p: glm.vec3, a: glm.vec3, b: glm.vec3) -> bool:
     return glm.distance(p, a + ab * t) <= TOLERANCE
 
 
-def find_connections(profile: Profile, parts: Iterable) -> Dict[int, Set[int]]:
-    parts = list(parts)
+def _bucket_z(z: float) -> int:
+    return round(z / TOLERANCE)
+
+
+def iter_contacts(profile: Profile, stud_parts: Iterable, slot_parts: Iterable) -> Iterator[Contact]:
+    """Every stud of `stud_parts` sitting in a slot of a different part in `slot_parts`."""
     cx, cy = profile.cell.x, profile.cell.y
     buckets: Dict[Tuple[int, int, int], List[Tuple[glm.vec3, int]]] = defaultdict(list)
-    for placed in parts:
+    for placed in stud_parts:
         for s in placed.studs:
-            buckets[(round(s.z / TOLERANCE), math.floor(s.x / cx), math.floor(s.y / cy))].append((s, placed.id))
-    links: Dict[int, Set[int]] = {placed.id: set() for placed in parts}
-    for placed in parts:
+            buckets[(_bucket_z(s.z), math.floor(s.x / cx), math.floor(s.y / cy))].append((s, placed.id))
+    for placed in slot_parts:
         for a, b in placed.antistuds:
-            z = round(a.z / TOLERANCE)
+            z = _bucket_z(a.z)
             # Cell columns the slot passes over (a stud on a column boundary sits in either)
             x0, x1 = math.floor((min(a.x, b.x) - TOLERANCE) / cx), math.floor((max(a.x, b.x) + TOLERANCE) / cx)
             y0, y1 = math.floor((min(a.y, b.y) - TOLERANCE) / cy), math.floor((max(a.y, b.y) + TOLERANCE) / cy)
-            for i in range(x0, x1 + 1):
-                for j in range(y0, y1 + 1):
-                    for stud, other in buckets.get((z, i, j), ()):
-                        if other != placed.id and _on_segment(stud, a, b):
-                            links[placed.id].add(other)
-                            links[other].add(placed.id)
+            for zz in (z - 1, z, z + 1):  # float noise can put a height just across a bucket edge
+                for i in range(x0, x1 + 1):
+                    for j in range(y0, y1 + 1):
+                        for stud, other in buckets.get((zz, i, j), ()):
+                            if other != placed.id and abs(stud.z - a.z) <= TOLERANCE and _on_segment(stud, a, b):
+                                yield Contact(stud, (a, b), other, placed.id)
+
+
+def find_connections(profile: Profile, parts: Iterable) -> Dict[int, Set[int]]:
+    parts = list(parts)
+    links: Dict[int, Set[int]] = {placed.id: set() for placed in parts}
+    for c in iter_contacts(profile, parts, parts):
+        links[c.slot_part].add(c.stud_part)
+        links[c.stud_part].add(c.slot_part)
     return links
+
+
+def contacts_between(profile: Profile, a: Iterable, b: Iterable) -> List[Contact]:
+    """Contacts between two sets of parts, either way round."""
+    a, b = list(a), list(b)
+    return list(iter_contacts(profile, a, b)) + list(iter_contacts(profile, b, a))
 
 
 def groups(links: Dict[int, Set[int]]) -> List[Set[int]]:

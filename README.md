@@ -25,6 +25,7 @@ data, not code, so other micro-brick systems could be added without changing the
 - **Connection check:** View > Highlight Unconnected Parts (U) marks parts that aren't held
   by the main build. Undersides follow the real parts: a 1×N's hollow slot takes studs anywhere
   along it, a 2×N has one slot per row, and so on.
+- **Groups:** named, nestable subassemblies that clicks select as a whole.
 - **Undo/redo**, Save / Save As, and a prompt before closing with unsaved changes.
 
 See [`feature_plan.md`](feature_plan.md) for what's planned next.
@@ -58,9 +59,13 @@ uv run pytest
   - **Space / Shift+Space:** rotate the part 90°.
   - **A / Shift+A:** choose which of its cells sits under the cursor (starts nearest the centre).
   - **H:** toggle half-cell snapping. **Arrow keys:** nudge the preview half a cell.
-- **Select (W):** click a part; Ctrl+click adds or removes one; drag a box to select several;
-  double-click selects the whole connected subassembly. **Delete** removes the selection and
-  picking a colour recolours it (one undo step each). **Ctrl+A** selects all, **Esc** clears.
+- **Select (W):** click a part, or its whole outermost group (outlined in blue on hover);
+  double-click drills into a group; Alt+click picks a single part. Ctrl+click adds or removes;
+  drag a box to select several. **Delete** removes the selection and picking a colour recolours
+  it (one undo step each). **Ctrl+A** selects all, **Esc** clears. Edit > Select Connected grows
+  the selection to whole connected subassemblies.
+  - **Ctrl+G / Ctrl+Shift+G:** group / ungroup the selection. Groups nest; the Groups dock lists
+    them with part counts (click to select, double-click to rename).
 - **Paint (E):** click to recolour a part with the current colour.
 - **Erase (R):** click to remove a part.
 

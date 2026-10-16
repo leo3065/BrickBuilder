@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QTreeWidget, QTreeWidgetItem, QAbstractItemView
 from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
 from PySide6.QtCore import Qt, QSize
 from pathlib import Path
@@ -20,6 +20,7 @@ class MainWindow(QMainWindow):
         self.create_toolbar()
         self.create_parts_dock()
         self.create_color_dock()
+        self.create_groups_dock()
         self.update_status()
 
         self.viewport.edited.connect(self.on_model_edited)
@@ -116,7 +117,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(select_all_action)
 
         select_connected_action = QAction("Select Connected", self)
-        select_connected_action.setToolTip("Grow the selection to whole connected subassemblies (also: double-click)")
+        select_connected_action.setToolTip("Grow the selection to whole connected subassemblies")
         select_connected_action.triggered.connect(self.viewport.select_connected)
         edit_menu.addAction(select_connected_action)
 
@@ -129,6 +130,17 @@ class MainWindow(QMainWindow):
         delete_action.setShortcut(QKeySequence.Delete)
         delete_action.triggered.connect(self.viewport.delete_selection)
         edit_menu.addAction(delete_action)
+
+        edit_menu.addSeparator()
+        group_action = QAction("Group", self)
+        group_action.setShortcut("Ctrl+G")
+        group_action.triggered.connect(self.viewport.group_selection)
+        edit_menu.addAction(group_action)
+
+        ungroup_action = QAction("Ungroup", self)
+        ungroup_action.setShortcut("Ctrl+Shift+G")
+        ungroup_action.triggered.connect(self.viewport.ungroup_selection)
+        edit_menu.addAction(ungroup_action)
 
         # View Menu
         view_menu = menu_bar.addMenu("View")
@@ -270,6 +282,9 @@ class MainWindow(QMainWindow):
         if vp.selection:
             n = len(vp.selection)
             unconnected += f"  ·  {n} selected"
+            group = vp.selected_group()
+            if group is not None:
+                unconnected += f" (group \"{vp.model.groups[group].name}\")"
         self.statusBar().showMessage(
             f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
             f"{'  ·  half-cell snap' if vp.half_snap else ''}{unconnected}"
@@ -373,9 +388,12 @@ class MainWindow(QMainWindow):
           the preview half a cell. A / Shift+A picks which of its cells (starts at the<br>
           cell nearest the centre) sits under the cursor. Red preview = it would overlap.<br>
           (Ctrl + Left Click removes in Place mode)<br>
-        - Select (W): click a part; Ctrl+click adds/removes; drag a box; double-click selects the<br>
-          connected subassembly. Delete removes the selection, picking a colour recolours it.<br>
-          Ctrl+A selects all, Esc clears.<br>
+        - Select (W): click selects a part, or its whole outermost group (outlined in blue on<br>
+          hover); double-click drills into the group; Alt+click picks one part. Ctrl+click<br>
+          adds/removes; drag a box. Delete removes the selection, picking a colour recolours it.<br>
+          Ctrl+A selects all, Esc clears. Ctrl+G groups the selection, Ctrl+Shift+G ungroups;<br>
+          rename groups in the Groups dock (double-click). Edit > Select Connected grows the<br>
+          selection to whole connected subassemblies.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>
         <br>
@@ -396,7 +414,58 @@ class MainWindow(QMainWindow):
         
         d.exec()
 
+    def create_groups_dock(self):
+        # The group tree: name and part count; click selects a group, double-click renames it
+        dock = QDockWidget("Groups", self)
+        dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.groups_tree = QTreeWidget()
+        self.groups_tree.setColumnCount(2)
+        self.groups_tree.setHeaderLabels(["Group", "Parts"])
+        self.groups_tree.setRootIsDecorated(True)
+        self.groups_tree.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked |
+                                         QAbstractItemView.EditTrigger.EditKeyPressed)
+        self.groups_tree.itemClicked.connect(self.on_group_clicked)
+        self.groups_tree.itemChanged.connect(self.on_group_renamed)
+        dock.setWidget(self.groups_tree)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.refresh_groups()
+
+    def refresh_groups(self):
+        model = self.viewport.model
+        tree = self.groups_tree
+        selected = self.viewport.selected_group()
+        tree.blockSignals(True)
+        tree.clear()
+        items = {}
+        def add(parent_item, parent_id):
+            for g in sorted((g for g in model.groups.values() if g.parent == parent_id), key=lambda g: g.id):
+                item = QTreeWidgetItem(parent_item, [g.name, str(len(model.group_parts(g.id)))])
+                item.setData(0, Qt.ItemDataRole.UserRole, g.id)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+                item.setExpanded(True)
+                items[g.id] = item
+                add(item, g.id)
+        add(tree.invisibleRootItem(), None)
+        tree.setCurrentItem(items.get(selected))  # follows the viewport's selection
+        if selected is None:
+            tree.clearSelection()
+        tree.blockSignals(False)
+
+    def on_group_clicked(self, item, _column=0):
+        self.set_tool(Tool.SELECT, self.select_action)
+        self.viewport.select_group(item.data(0, Qt.ItemDataRole.UserRole))
+
+    def on_group_renamed(self, item, column):
+        if column == 0:
+            name = item.text(0).strip()
+            group_id = item.data(0, Qt.ItemDataRole.UserRole)
+            if name:
+                self.viewport.rename_group(group_id, name)
+            else:
+                self.refresh_groups()  # an empty name puts the old one back
+
     def on_model_edited(self):
+        self.refresh_groups()
         history = self.viewport.history
         self.undo_action.setEnabled(history.can_undo())
         self.redo_action.setEnabled(history.can_redo())

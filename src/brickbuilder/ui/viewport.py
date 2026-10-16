@@ -56,6 +56,10 @@ class Viewport(QOpenGLWidget):
         self.selection: set = set()
         self.select_rect = None
         self._press = None  # (position, modifiers) of a left press in the Select tool
+        # The group double-click drilled into: clicks inside it select one level below it.
+        # None = top level (clicks select whole outermost groups)
+        self.select_context: Optional[int] = None
+        self.hovered: set = set()  # what a click would select, outlined while hovering
 
         # Enable mouse tracking for hover effects if needed later
         self.setMouseTracking(True)
@@ -86,6 +90,8 @@ class Viewport(QOpenGLWidget):
                              int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
                              [self.model.parts[pid].edges for pid in self.selection if pid in self.model.parts],
                              select_rect=rect,
+                             hovered_edges=[self.model.parts[pid].edges for pid in self.hovered - self.selection
+                                            if pid in self.model.parts],
                              highlighted=[self.model.parts[pid].edges for pid in self.unconnected_parts()]
                              if self.highlight_unconnected else ())
 
@@ -94,6 +100,8 @@ class Viewport(QOpenGLWidget):
         self.ghost_pos = None
         if tool != Tool.SELECT:
             self.selection = set()
+            self.select_context = None
+            self.hovered = set()
         self.update()
         self.edited.emit()
 
@@ -103,6 +111,8 @@ class Viewport(QOpenGLWidget):
         self.camera.reset()
         self.ghost_pos = None
         self.selection = set()
+        self.select_context = None
+        self.hovered = set()
         self.update()
         self.edited.emit()
 
@@ -111,6 +121,8 @@ class Viewport(QOpenGLWidget):
         self.history.reset()
         self.ghost_pos = None
         self.selection = set()
+        self.select_context = None
+        self.hovered = set()
         self.update()
         self.edited.emit()
 
@@ -124,6 +136,9 @@ class Viewport(QOpenGLWidget):
 
     def _after_history_step(self):
         self.selection &= set(self.model.parts)
+        self.hovered &= set(self.model.parts)
+        if self.select_context not in self.model.groups:
+            self.select_context = None
         self.refresh_ghost()
         self.edited.emit()
 
@@ -164,6 +179,7 @@ class Viewport(QOpenGLWidget):
 
     def clear_selection(self):
         self.selection = set()
+        self.select_context = None
         self.update()
         self.edited.emit()
 
@@ -174,6 +190,57 @@ class Viewport(QOpenGLWidget):
                 self.selection |= group
         self.update()
         self.edited.emit()
+
+    def _unit(self, part_id: int, single: bool = False) -> set:
+        """What clicking a part selects at the current drill level (just the part if single)."""
+        if single:
+            return {part_id}
+        if self.select_context not in self.model.group_chain(part_id):
+            self.select_context = None  # clicked outside the group we were in
+        return self.model.selection_unit(part_id, self.select_context)[0]
+
+    def selected_group(self) -> Optional[int]:
+        """The group the selection is exactly, if it is one."""
+        groups, loose = self.model.top_units(self.selection)
+        if len(groups) == 1 and not loose:
+            return next(iter(groups))
+        return None
+
+    def select_group(self, group_id: int):
+        self.selection = self.model.group_parts(group_id)
+        self.select_context = self.model.groups[group_id].parent
+        self.update()
+        self.edited.emit()
+
+    def group_selection(self) -> Optional[int]:
+        """Ctrl+G: put the selection into a new group (one undo step)."""
+        if not self.selection:
+            return None
+        n = len(self.model.groups) + 1
+        names = {g.name for g in self.model.groups.values()}
+        while f"Group {n}" in names:
+            n += 1
+        gid = self.history.group(self.selection, f"Group {n}")
+        self.select_context = self.model.groups[gid].parent
+        self.update()
+        self.edited.emit()
+        return gid
+
+    def ungroup_selection(self):
+        """Ctrl+Shift+G: dissolve the whole groups in the selection, one level."""
+        groups, _ = self.model.top_units(self.selection)
+        if not groups:
+            return
+        if self.select_context in groups:
+            self.select_context = self.model.groups[self.select_context].parent
+        self.history.ungroup(groups)
+        self.update()
+        self.edited.emit()
+
+    def rename_group(self, group_id: int, name: str):
+        if group_id in self.model.groups and name:
+            self.history.rename_group(group_id, name)
+            self.edited.emit()
 
     def delete_selection(self):
         if self.selection:
@@ -219,37 +286,52 @@ class Viewport(QOpenGLWidget):
             return
         start, modifiers = self._press
         add = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+        single = bool(modifiers & Qt.KeyboardModifier.AltModifier)  # Alt: one part, ignoring groups
         self._press = None
         if self.select_rect:
             x0, y0, x1, y1 = self.select_rect
-            found = set(picking.parts_in_rect(self.model, self.camera, x0, y0, x1, y1, self.width(), self.height()))
+            found = set()
+            for pid in picking.parts_in_rect(self.model, self.camera, x0, y0, x1, y1, self.width(), self.height()):
+                found |= self._unit(pid, single)
             self.selection = (self.selection | found) if add else found
             self.select_rect = None
         else:
-            ray = picking.get_mouse_ray(start.x(), start.y(), self.width(), self.height(), self.camera)
-            hit, _, _ = picking.intersect_model(ray, self.model)
+            hit = self._hit(start)
+            unit = self._unit(hit.id, single) if hit else set()
             if add:
-                if hit:
-                    self.selection ^= {hit.id}
+                self.selection = (self.selection - unit) if unit and unit <= self.selection else (self.selection | unit)
             else:
-                self.selection = {hit.id} if hit else set()
+                self.selection = unit
+                if not hit:
+                    self.select_context = None
         self.update()
         self.edited.emit()
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
-        # Double-click in the Select tool: the whole connected subassembly under the cursor
+        # Double-click in the Select tool drills into the group under the cursor: selects the
+        # next level down (a child group, or the part itself)
         if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.SELECT:
-            ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera)
-            hit, _, _ = picking.intersect_model(ray, self.model)
-            if hit:
-                group = next(g for g in groups(self.model.connections()) if hit.id in g)
-                add = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
-                self.selection = (self.selection | group) if add else set(group)
-                self._press = None
-                self.update()
-                self.edited.emit()
+            self._press = None
+            hit = self._hit(event.position())
+            if hit and not event.modifiers() & Qt.KeyboardModifier.AltModifier:
+                self._unit(hit.id)  # drops a context the part isn't in
+                _, group = self.model.selection_unit(hit.id, self.select_context)
+                if group is not None:
+                    self.select_context = group
+                    self.selection = self._unit(hit.id)
+                    self.hovered = set(self.selection)
+                    self.update()
+                    self.edited.emit()
             return
         super().mouseDoubleClickEvent(event)
+
+    def _hit(self, pos):
+        ray = picking.get_mouse_ray(pos.x(), pos.y(), self.width(), self.height(), self.camera)
+        return picking.intersect_model(ray, self.model)[0]
+
+    def _update_hover(self, pos, modifiers):
+        hit = self._hit(pos) if pos is not None else None
+        self.hovered = self._unit(hit.id, bool(modifiers & Qt.KeyboardModifier.AltModifier)) if hit else set()
 
     def _handle_paint_tool(self, ray):
         hit, _, _ = picking.intersect_model(ray, self.model)
@@ -277,6 +359,8 @@ class Viewport(QOpenGLWidget):
              self.update_ghost(current_pos.x(), current_pos.y())
         else:
             self.ghost_pos = None
+        if self.current_tool == Tool.SELECT and not event.buttons():
+            self._update_hover(current_pos, event.modifiers())
 
         if self.last_mouse_pos is not None:
              # Navigation stays same
@@ -365,6 +449,7 @@ class Viewport(QOpenGLWidget):
     def leaveEvent(self, event):
         self.hover_pos = None
         self.ghost_pos = None
+        self.hovered = set()
         self.update()
         super().leaveEvent(event)
 

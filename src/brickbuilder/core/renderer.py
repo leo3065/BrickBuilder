@@ -28,7 +28,7 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=()):
         # selected_edges: edge lists of the selected parts; select_rect: (x0, y0, x1, y1) in
         # device pixels while dragging a selection box
         # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines
@@ -76,6 +76,9 @@ class Renderer:
         if ghost:
             self.render_ghost(profile, *ghost)
 
+        if hovered_edges:
+            # What a click would select (a whole group), in a soft blue
+            self.render_selection(hovered_edges, (0.45, 0.75, 1.0), 2.0)
         if selected_edges:
             self.render_selection(selected_edges)
 
@@ -89,13 +92,13 @@ class Renderer:
         if show_gizmo:
             self.draw_orientation_gizmo(camera, width, height)
 
-    def render_selection(self, edge_lists):
-        # Draw the outlines of the selected parts
+    def render_selection(self, edge_lists, color=(1.0, 1.0, 0.0), width=3.0):
+        # Draw the outlines of the selected parts (yellow by default)
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST) # See selection through walls
 
-        gl.glLineWidth(3.0)
-        gl.glColor3f(1.0, 1.0, 0.0) # Yellow
+        gl.glLineWidth(width)
+        gl.glColor3f(*color)
         for edges in edge_lists:
             self.draw_segments(edges)
         gl.glLineWidth(1.0)

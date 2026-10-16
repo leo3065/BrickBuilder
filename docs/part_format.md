@@ -247,7 +247,7 @@ once the hand-written library shows real duplication pain.
   only *create* tree-shaped frames, but nothing in the format should assume a tree.
 
 ## Groups, pins and moving subassemblies
-Two separate trees ✅:
+Two separate trees ✅ (groups implemented, save v4):
 - **Groups** (organising): named, nestable subassemblies made by the user (Group Ctrl+G,
   Ungroup Ctrl+Shift+G, rename in a Groups dock), e.g. Rayquaza > Body > I-segment > its rings.
   They decide what a click selects and what a name refers to (later: parts lists per group,
@@ -261,6 +261,13 @@ Selecting ✅: click selects the outermost group around the part, double-click d
 Alt+click always picks a single part. In the Select tool the outermost group under the cursor gets
 a soft outline on hover; a Groups dock lists the tree with part counts (click to select, and it
 follows viewport selections); the status bar names the selection's group.
+
+Grouping ✅ (as built): Ctrl+G takes the selection's largest whole groups as child groups and its
+loose parts directly; the new group goes inside the deepest group they all share. Ungroup dissolves
+the selection's whole groups one level (contents move to the parent). Deleting parts removes groups
+left empty, in the same undo step. Placing a part doesn't group it. Click and box select both pick
+whole units at the current drill level; clicking outside the drilled-into group (or Esc) goes back
+to the top level.
 
 **Pins ✅**: every connected component has one pin, and components never affect each
 other (separate subassemblies on the root grid are separate components). The pin is: an explicitly
@@ -416,7 +423,12 @@ Model        # parts: dict[id, PlacedPart]; occupancy: dict[sub-cell, part id]
   colors become the initial palette, so renaming them to official Nanoblock colors later needs
   an id-mapping for older saves.
 - The v1 loader maps each v1 cube to `brick_1x1` in frame 0, with RGB matched to the palette
-  (exact for files saved from the current palette, otherwise nearest). Saving always writes v2.
+  (exact for files saved from the current palette, otherwise nearest). Saving always writes the
+  latest version.
+- ✅ v3 adds non-root frames; v4 adds groups:
+  `"groups": [{ "id": 1, "name": "Wing", "parent": null }, ...]` (parent-first, ids ≥ 1) and an
+  optional `"group": 1` on each part (its innermost group; omitted when ungrouped). v2 and v3
+  files still load.
 
 ## Build order
 1. Profile file + a single cell-to-world function used by the renderer, picking and camera →

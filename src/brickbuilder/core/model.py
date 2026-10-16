@@ -1,6 +1,6 @@
 """Placed parts, sub-cell occupancy and the save format (see docs/part_format.md)."""
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 import json
 import math
 import os
@@ -15,7 +15,7 @@ Sub = Tuple[int, int, int]  # sub-grid coordinate (profile.subdiv sub-cells per 
 Region = Tuple[Sub, Optional[Cut]]  # a sub-cell and how it's filled: None = full, or a wedge cut
 Solid = List[List[glm.vec3]]  # convex body as outward faces (world space)
 
-SAVE_VERSION = 3  # v3: frames with parent, origin and rotation
+SAVE_VERSION = 4  # v3: frames with parent, origin and rotation; v4: groups
 
 
 
@@ -40,6 +40,14 @@ ROOT = Frame(0, None)
 
 
 @dataclass
+class Group:
+    """A named subassembly the user made: holds parts (PlacedPart.group) and child groups."""
+    id: int
+    name: str
+    parent: Optional[int] = None
+
+
+@dataclass
 class PlacedPart:
     id: int
     part: PartDef
@@ -54,6 +62,7 @@ class PlacedPart:
     studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
     antistuds: Tuple[Tuple[glm.vec3, glm.vec3], ...] = ()  # world slots where a stud from below fits
     stud_rotation: Optional[glm.mat4] = None  # the frame's rotation, if any (studs follow it)
+    group: Optional[int] = None    # the innermost group it belongs to, if any
 
 
 # Rotating a cell's min corner is the same as rotating a sub-cell's (the origin is a corner)
@@ -226,6 +235,7 @@ class Model:
         self.library = library
         self.parts: Dict[int, PlacedPart] = {}
         self.frames: Dict[int, Frame] = {0: ROOT}
+        self.groups: Dict[int, Group] = {}
         # (frame, sub-cell) -> [(part id, cut)]: more than one only where complementary wedges
         # meet. Each frame has its own grid; parts in different frames aren't checked against
         # each other (yet).
@@ -329,13 +339,16 @@ class Model:
     # --- edits ---------------------------------------------------------------------------
 
     def add_part(self, part: PartDef, pos: Sub, turns: int, color: str,
-                 part_id: Optional[int] = None, frame: int = 0) -> Optional[PlacedPart]:
+                 part_id: Optional[int] = None, frame: int = 0,
+                 group: Optional[int] = None) -> Optional[PlacedPart]:
         """Place a part on a frame's grid; returns None (and changes nothing) if it would overlap
         another part in that frame."""
         if color not in self.profile.palette:
             raise ModelError(f"unknown color {color!r}")
         if frame not in self.frames:
             raise ModelError(f"unknown frame {frame}")
+        if group is not None and group not in self.groups:
+            raise ModelError(f"unknown group {group}")
         regions = footprint_regions(self.profile, part, pos, turns)
         if not self._fits(frame, regions):
             return None
@@ -358,7 +371,7 @@ class Model:
         rotation = None if frame == 0 else glm.mat4(glm.mat3(self.frame_matrix(frame)))
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, frame,
                             tuple(regions), box, world["solids"], world["edges"],
-                            world["studs"], world["antistuds"], rotation)
+                            world["studs"], world["antistuds"], rotation, group)
         self.parts[part_id] = placed
         for sub, cut in regions:
             self.occupancy.setdefault((frame, sub), []).append((part_id, cut))
@@ -388,10 +401,106 @@ class Model:
             placed.color = color
             self.modified = True
 
+    # --- groups ----------------------------------------------------------------------------
+
+    def add_group(self, name: str, parent: Optional[int] = None, group_id: Optional[int] = None) -> Group:
+        if parent is not None and parent not in self.groups:
+            raise ModelError(f"unknown parent group {parent}")
+        if group_id is None:
+            group_id = max(self.groups, default=0) + 1
+        elif group_id in self.groups:
+            raise ModelError(f"duplicate group id {group_id}")
+        group = Group(group_id, name, parent)
+        self.groups[group_id] = group
+        self.modified = True
+        return group
+
+    def remove_group(self, group_id: int) -> None:
+        """Remove an empty group (no parts, no child groups)."""
+        if any(p.group == group_id for p in self.parts.values()) or \
+                any(g.parent == group_id for g in self.groups.values()):
+            raise ModelError(f"group {group_id} isn't empty")
+        del self.groups[group_id]
+        self.modified = True
+
+    def set_part_group(self, part_id: int, group_id: Optional[int]) -> None:
+        if group_id is not None and group_id not in self.groups:
+            raise ModelError(f"unknown group {group_id}")
+        self.parts[part_id].group = group_id
+        self.modified = True
+
+    def set_group_parent(self, group_id: int, parent: Optional[int]) -> None:
+        g = parent
+        while g is not None:  # no cycles: the new parent can't be inside this group
+            if g == group_id:
+                raise ModelError(f"group {group_id} can't go inside itself")
+            g = self.groups[g].parent
+        self.groups[group_id].parent = parent
+        self.modified = True
+
+    def rename_group(self, group_id: int, name: str) -> None:
+        self.groups[group_id].name = name
+        self.modified = True
+
+    def group_ancestors(self, group_id: Optional[int]) -> List[int]:
+        """The group and the groups it's inside, outermost first."""
+        chain: List[int] = []
+        while group_id is not None:
+            chain.append(group_id)
+            group_id = self.groups[group_id].parent
+        return chain[::-1]
+
+    def group_chain(self, part_id: int) -> List[int]:
+        """The groups a part is inside, outermost first."""
+        return self.group_ancestors(self.parts[part_id].group)
+
+    def group_parts(self, group_id: int) -> Set[int]:
+        """Every part inside a group, including its child groups."""
+        inside = {group_id}
+        changed = True
+        while changed:
+            more = {g.id for g in self.groups.values() if g.parent in inside}
+            changed = not more <= inside
+            inside |= more
+        return {p.id for p in self.parts.values() if p.group in inside}
+
+    def selection_unit(self, part_id: int, context: Optional[int] = None) -> Tuple[Set[int], Optional[int]]:
+        """What clicking a part selects: the group one level below `context` that holds it
+        (the outermost group for None), or the part itself below its innermost group.
+        Returns (part ids, group id or None). A context the part isn't inside counts as None."""
+        chain = self.group_chain(part_id)
+        level = chain.index(context) + 1 if context in chain else 0
+        if level < len(chain):
+            return self.group_parts(chain[level]), chain[level]
+        return {part_id}, None
+
+    def top_units(self, part_ids) -> Tuple[Set[int], Set[int]]:
+        """Split a set of parts into its largest whole groups and the loose parts left over:
+        each part goes up to the outermost group whose parts are all in the set.
+        Returns (group ids, part ids)."""
+        part_ids = set(part_ids)
+        whole: Dict[int, bool] = {}
+        groups: Set[int] = set()
+        loose: Set[int] = set()
+        for pid in part_ids:
+            top = None
+            for g in self.group_chain(pid):
+                if g not in whole:
+                    whole[g] = self.group_parts(g) <= part_ids
+                if whole[g]:
+                    top = g
+                    break
+            if top is None:
+                loose.add(pid)
+            else:
+                groups.add(top)
+        return groups, loose
+
     def clear(self) -> None:
         self._links = None
         self.parts.clear()
         self.frames = {0: ROOT}
+        self.groups = {}
         self.occupancy.clear()
         self._next_id = 1
         self.modified = True
@@ -421,6 +530,7 @@ class Model:
             "version": SAVE_VERSION,
             "profile": self.profile.id,
             "frames": [self._frame_to_dict(f) for f in sorted(self.frames.values(), key=lambda f: f.id)],
+            "groups": [{"id": g.id, "name": g.name, "parent": g.parent} for g in self._groups_parent_first()],
             "parts": [
                 {
                     "id": p.id,
@@ -429,10 +539,20 @@ class Model:
                     "pos": self._pos_to_cells(p.pos),
                     "turns": p.turns,
                     "color": p.color,
+                    **({"group": p.group} if p.group is not None else {}),
                 }
                 for p in sorted(self.parts.values(), key=lambda p: p.id)
             ],
         }
+
+    def _groups_parent_first(self) -> List[Group]:
+        out: List[Group] = []
+        def visit(parent):
+            for g in sorted((g for g in self.groups.values() if g.parent == parent), key=lambda g: g.id):
+                out.append(g)
+                visit(g.id)
+        visit(None)
+        return out
 
     @staticmethod
     def _frame_to_dict(f: Frame) -> Dict[str, Any]:
@@ -448,12 +568,13 @@ class Model:
         version = data.get("version")
         if version == 1:
             loaded._load_v1(data)
-        elif version in (2, SAVE_VERSION):
+        elif version in (2, 3, SAVE_VERSION):
             loaded._load_v2(data)
         else:
             raise ModelError(f"unsupported save version {version!r}")
         self.parts, self.occupancy, self._next_id = loaded.parts, loaded.occupancy, loaded._next_id
         self.frames = loaded.frames
+        self.groups = loaded.groups
         self._links = None
         self.modified = False
 
@@ -475,6 +596,7 @@ class Model:
         if data.get("profile") != self.profile.id:
             raise ModelError(f"file is for profile {data.get('profile')!r}, not {self.profile.id!r}")
         self._load_frames(data.get("frames", [{"id": 0}]), data.get("version"))
+        self._load_groups(data.get("groups", []), data.get("version"))
         parts = data.get("parts", [])
         if not isinstance(parts, list):
             raise ModelError("'parts' must be a list")
@@ -496,8 +618,30 @@ class Model:
             if color not in self.profile.palette:
                 raise ModelError(f"{where}: unknown color {color!r}")
             pos = self._cells_to_pos(where, p.get("pos"))
-            if self.add_part(part, pos, turns, color, part_id, frame) is None:
+            group = p.get("group")
+            if group is not None and group not in self.groups:
+                raise ModelError(f"{where}: unknown group {group!r}")
+            if self.add_part(part, pos, turns, color, part_id, frame, group) is None:
                 raise ModelError(f"{where}: overlaps another part")
+
+    def _load_groups(self, groups: Any, version: Any) -> None:
+        """Groups in order, each after its parent."""
+        if not isinstance(groups, list):
+            raise ModelError("'groups' must be a list")
+        if version in (2, 3) and groups:
+            raise ModelError(f"v{version} files have no groups")
+        for n, g in enumerate(groups):
+            where = f"groups[{n}]"
+            if not isinstance(g, dict) or set(g) != {"id", "name", "parent"}:
+                raise ModelError(f"{where}: needs id, name and parent")
+            gid, name, parent = g["id"], g["name"], g["parent"]
+            if not isinstance(gid, int) or isinstance(gid, bool) or gid < 1 or gid in self.groups:
+                raise ModelError(f"{where}: 'id' must be a new positive integer")
+            if not isinstance(name, str):
+                raise ModelError(f"{where}: 'name' must be a string")
+            if parent is not None and parent not in self.groups:
+                raise ModelError(f"{where}: parent {parent!r} must be listed before it")
+            self.add_group(name, parent, gid)
 
     def _load_frames(self, frames: Any, version: Any) -> None:
         """Frames in order, each after its parent (so they always form a tree from the root)."""

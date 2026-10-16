@@ -123,7 +123,7 @@ def test_save_roundtrip_including_half_offset(model, library, profile, tmp_path)
     path = tmp_path / "m.json"
     model.save_to_file(str(path))
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["version"] == 3 and data["profile"] == "nanoblock"
+    assert data["version"] == 4 and data["profile"] == "nanoblock"
     assert data["parts"][1]["pos"] == [1.5, 0.5, 1]
 
     loaded = Model(profile, library)

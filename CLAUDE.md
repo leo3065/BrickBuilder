@@ -58,7 +58,7 @@ src/brickbuilder/
   core/parts.py      PartDef + built-in library loader (box and wedge bodies)
   core/geometry.py   Exact sub-grid geometry: Body (box, rounded box, wedge), wedge Cut planes, per-sub-cell regions,
                      sharing rule (`compatible`), faces, ray vs convex solid, seamless outline
-  core/model.py      Model: PlacedPart dict + sub-cell occupancy, footprint/rotation, save v2 (+ v1 load)
+  core/model.py      Model: PlacedPart dict + sub-cell occupancy, frames, groups, save v4 (+ v1-v3 load)
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/connections.py  Stud-in-antistud-slot graph (Model.connections(), cached) + groups()
   core/camera.py     Orbit camera, orthographic projection, Z-up
@@ -112,9 +112,10 @@ tests/               pytest suite
   (frame, sub-cell); parts in different frames aren't overlap-checked yet. Placing against a part
   puts the new part in that part's frame (`Model.to_frame`). A turned part's frame should be its
   original grid turned about the pivot, so it keeps its grid position (and builds stay on whole cells).
-- Save format v3 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,
-  origin, rotation}...], parts: [{id, part, frame, pos (cells, 0.5 allowed), turns, color}]}`;
-  frames listed parent-first. v2 (root frame only) and v1 (`bricks` with float RGB) still load,
+- Save format v4 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,
+  origin, rotation}...], groups: [{id, name, parent}...], parts: [{id, part, frame, pos (cells,
+  0.5 allowed), turns, color, group?}]}`; frames and groups listed parent-first. v3 (no groups),
+  v2 (root frame only) and v1 (`bricks` with float RGB) still load,
   v1 as 1×1 bricks. Bad files raise `ModelError` and leave the model untouched. Saving writes a `.tmp` file
   and swaps it in, so a failed save never truncates the existing file. Bump `version`
   and keep older loader paths when the schema changes.
@@ -137,6 +138,11 @@ tests/               pytest suite
   viewport never passes it and there's no UI for it.
 - Selection (`Viewport.selection`, a set of part ids): delete and recolour act on it via
   `History.remove_parts` / `set_colors` (one undo step each). Moving a selection isn't built yet.
+- **Groups** (`model.Group`, `Model.groups`; `PlacedPart.group` = innermost group): separate from
+  frames. Click selects `Model.selection_unit(part, Viewport.select_context)` (outermost group at
+  the top level; double-click sets the context one level deeper); Alt = single part. Group /
+  ungroup / rename go through `History.group` / `ungroup` / `rename_group`; `remove_parts` also
+  drops groups left empty (same command).
 - Picking iterates every part (fine at small scale); the renderer calls one cached display
   list per part each frame (VBOs/shaders are still the longer-term plan).
 - Profile `clearance`, `body_height` aren't used yet. Outlines come from the merged shape

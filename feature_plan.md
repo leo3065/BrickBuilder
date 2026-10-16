@@ -10,8 +10,8 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.
 - [x] Half-offset placement: a toggle (H) that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell.
 - [x] Undo/redo.
-- [x] Multi-select: click, Ctrl+click, box drag, double-click for a connected subassembly, select all; delete and recolour the selection as one undo step. (Moving a selection is the next item.)
-- [ ] Groups: named, nestable subassemblies (Ctrl+G / Ctrl+Shift+G), a Groups dock, hover outline; click selects the outermost group, double-click drills in, Alt+click picks one part. Saved in the file. See docs/part_format.md "Groups, pins and moving subassemblies".
+- [x] Multi-select: click, Ctrl+click, box drag, select all, Edit > Select Connected; delete and recolour the selection as one undo step. (Moving a selection is the next item.)
+- [x] Groups: named, nestable subassemblies (Ctrl+G / Ctrl+Shift+G), a Groups dock, hover outline; click selects the outermost group, double-click drills in, Alt+click picks one part. Saved in the file. See docs/part_format.md "Groups, pins and moving subassemblies".
 - [ ] Moving and rotating already placed parts (pick a part up, keep its color, put it down elsewhere or turned).
 - [ ] Shifting all bricks (or a selection) by whole cells in any direction at once, e.g. to make room below a model that was built from the top down.
 - [x] Highlight parts that aren't connected to the main build (View > Highlight Unconnected Parts, U): parts outside the largest connected group get an orange outline.

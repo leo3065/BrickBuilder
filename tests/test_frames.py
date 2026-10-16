@@ -99,7 +99,7 @@ def test_frames_save_and_load(model, profile, library, tmp_path):
     path = tmp_path / "f.json"
     model.save_to_file(str(path))
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["version"] == 3 and [f["id"] for f in data["frames"]] == [0, frame.id, child.id]
+    assert data["version"] == 4 and [f["id"] for f in data["frames"]] == [0, frame.id, child.id]
     loaded = Model(profile, library)
     loaded.load_from_file(str(path))
     assert loaded.to_dict() == model.to_dict()

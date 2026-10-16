@@ -28,10 +28,11 @@ class Renderer:
         # Light position is transformed by current ModelView when specified.
         # We can set it in render loop to be fixed relative to world/camera.
 
-    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=()):
+    def render(self, camera, model, profile, ghost, width, height, selected_edges=(), show_grid=True, show_gizmo=True, section_z=None, highlighted=(), select_rect=None, hovered_edges=(), collided=()):
         # selected_edges: edge lists of the selected parts; select_rect: (x0, y0, x1, y1) in
         # device pixels while dragging a selection box
-        # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines
+        # highlighted: edge lists of parts to mark (e.g. unconnected), drawn as thick orange outlines;
+        # collided: the same for parts overlapping another frame's parts, in red
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
@@ -72,6 +73,8 @@ class Renderer:
 
         if highlighted:
             self.render_highlight(highlighted)
+        if collided:
+            self.render_highlight(collided, (0.95, 0.1, 0.1))
 
         if ghost:
             self.render_ghost(profile, *ghost)
@@ -315,12 +318,12 @@ class Renderer:
         gl.glEndList()
         return fill, outline
 
-    def render_highlight(self, edge_lists):
+    def render_highlight(self, edge_lists, color=(1.0, 0.55, 0.0)):
         # On top of the black outlines (same lines, so the depth test must let equal depths pass)
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDepthFunc(gl.GL_LEQUAL)
         gl.glLineWidth(4.0)
-        gl.glColor3f(1.0, 0.55, 0.0)
+        gl.glColor3f(*color)
         for edges in edge_lists:
             self.draw_segments(edges)
         gl.glLineWidth(1.0)

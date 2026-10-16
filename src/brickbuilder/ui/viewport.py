@@ -49,6 +49,7 @@ class Viewport(QOpenGLWidget):
         self.half_snap = False
         # Mark parts outside the largest connected group (View > Highlight Unconnected Parts)
         self.highlight_unconnected = False
+        self.highlight_collisions = False
         self.nudge = (0, 0)
         self._nudge_base = None
 
@@ -93,7 +94,9 @@ class Viewport(QOpenGLWidget):
                              hovered_edges=[self.model.parts[pid].edges for pid in self.hovered - self.selection
                                             if pid in self.model.parts],
                              highlighted=[self.model.parts[pid].edges for pid in self.unconnected_parts()]
-                             if self.highlight_unconnected else ())
+                             if self.highlight_unconnected else (),
+                             collided=[self.model.parts[pid].edges for pid in self.model.collisions()]
+                             if self.highlight_collisions else ())
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
@@ -424,6 +427,10 @@ class Viewport(QOpenGLWidget):
 
     def set_highlight_unconnected(self, on: bool):
         self.highlight_unconnected = on
+        self.update()
+
+    def set_highlight_collisions(self, on: bool):
+        self.highlight_collisions = on
         self.update()
 
     def set_half_snap(self, on: bool):

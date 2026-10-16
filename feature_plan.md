@@ -57,7 +57,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Instances: define a subassembly once, place it several times, editing it updates every copy (like LDraw multi-part files).
 - [ ] Circular array: copy a selection of parts (a subassembly, possibly spanning several frames) n times, each copy turned 360/n° about a centre, e.g. rings of rounded 1×N and the alternating round 1×4 / 1×3 body segments of the Rayquaza DX set. Copies turned by a multiple of 90° reuse existing frames (that ring needs only the root grid and one 45° frame). Checks the closing contacts and reports any gap. Needs multi-select.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
-- [ ] Add a view option that highlights colliding parts in different frames (rotated parts, joints). Within one frame, overlaps are already refused when placing and loading.
+- [x] Add a view option that highlights colliding parts in different frames (rotated parts, joints): View > Highlight Colliding Parts (O), in red. Within one frame, overlaps are already refused when placing and loading; across frames the placement preview turns red too.
 - [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation.
 
 ### Advanced

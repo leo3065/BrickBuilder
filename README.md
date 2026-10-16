@@ -26,6 +26,8 @@ data, not code, so other micro-brick systems could be added without changing the
   by the main build. Undersides follow the real parts: a 1×N's hollow slot takes studs anywhere
   along it, a 2×N has one slot per row, and so on.
 - **Groups:** named, nestable subassemblies that clicks select as a whole.
+- **Collision check:** View > Highlight Colliding Parts (O) marks parts on different grids (turned
+  parts) that overlap.
 - **Undo/redo**, Save / Save As, and a prompt before closing with unsaved changes.
 
 See [`feature_plan.md`](feature_plan.md) for what's planned next.

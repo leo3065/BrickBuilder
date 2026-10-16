@@ -61,6 +61,7 @@ src/brickbuilder/
   core/model.py      Model: PlacedPart dict + sub-cell occupancy, frames, groups, save v4 (+ v1-v3 load)
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/connections.py  Stud-in-antistud-slot graph (Model.connections(), cached) + groups()
+  core/collision.py  Overlap across frames: separating axis test on convex solids (numpy), touching allowed
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
   core/renderer.py   Legacy GL: grid, parts (one cached display list per part: box, studs,
@@ -109,7 +110,9 @@ tests/               pytest suite
 - **Frames** (`model.Frame`): a grid of its own = parent + origin (mm, parent space) + rotation
   (quaternion). Frame 0 is the root grid. A part's `pos`/`turns`/regions are in its frame's grid;
   its world geometry is that transformed by `Model.frame_matrix`. Occupancy is keyed by
-  (frame, sub-cell); parts in different frames aren't overlap-checked yet. Placing against a part
+  (frame, sub-cell); parts in different frames are compared by their solids (`collision.py`):
+  `can_place` checks both, `Model.collisions()` (cached) lists cross-frame overlaps; `add_part` itself
+  only refuses same-frame overlaps. Placing against a part
   puts the new part in that part's frame (`Model.to_frame`). A turned part's frame should be its
   original grid turned about the pivot, so it keeps its grid position (and builds stay on whole cells).
 - Save format v4 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,

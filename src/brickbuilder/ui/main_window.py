@@ -151,6 +151,13 @@ class MainWindow(QMainWindow):
         self.highlight_action.toggled.connect(self.toggle_highlight)
         view_menu.addAction(self.highlight_action)
 
+        self.collisions_action = QAction("Highlight Colliding Parts", self)
+        self.collisions_action.setCheckable(True)
+        self.collisions_action.setShortcut("O")
+        self.collisions_action.setToolTip("Mark parts that overlap parts on another grid (turned parts, joints)")
+        self.collisions_action.toggled.connect(self.toggle_collisions)
+        view_menu.addAction(self.collisions_action)
+
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
         help_action = QAction("Controls", self)
@@ -272,6 +279,10 @@ class MainWindow(QMainWindow):
         self.viewport.set_highlight_unconnected(on)
         self.update_status()
 
+    def toggle_collisions(self, on: bool):
+        self.viewport.set_highlight_collisions(on)
+        self.update_status()
+
     def update_status(self):
         vp = self.viewport
         anchors = len(anchor_cells(vp.current_part))
@@ -279,6 +290,9 @@ class MainWindow(QMainWindow):
         if vp.highlight_unconnected:
             n = len(vp.unconnected_parts())
             unconnected = f"  ·  {n} unconnected part{'s' if n != 1 else ''}"
+        if vp.highlight_collisions:
+            n = len(vp.model.collisions())
+            unconnected += f"  ·  {n} colliding part{'s' if n != 1 else ''}"
         if vp.selection:
             n = len(vp.selection)
             unconnected += f"  ·  {n} selected"
@@ -399,6 +413,7 @@ class MainWindow(QMainWindow):
         <br>
         <b>View:</b><br>
         - U: highlight parts not connected to the main build (in orange)<br>
+        - O: highlight parts overlapping parts on another grid (in red)<br>
         <br>
         <b>Edit / File:</b><br>
         - Undo: Ctrl+Z; Redo: Ctrl+Y or Ctrl+Shift+Z<br>

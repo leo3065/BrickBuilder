@@ -5,6 +5,7 @@ import json
 import math
 import os
 import glm
+from brickbuilder.core import collision
 from brickbuilder.core.geometry import (Cut, body_faces, compatible, part_outline, part_regions,
                                         rotate_cut, rotate_sub, transform_faces, transform_segments,
                                         translate_cut)
@@ -237,12 +238,14 @@ class Model:
         self.frames: Dict[int, Frame] = {0: ROOT}
         self.groups: Dict[int, Group] = {}
         # (frame, sub-cell) -> [(part id, cut)]: more than one only where complementary wedges
-        # meet. Each frame has its own grid; parts in different frames aren't checked against
-        # each other (yet).
+        # meet. Each frame has its own grid; parts in different frames are compared by their
+        # solids instead (collision.py), on demand.
         self.occupancy: Dict[Tuple[int, Sub], List[Tuple[int, Optional[Cut]]]] = {}
         self.modified = False
         self._next_id = 1
         self._links = None  # cached connection graph, dropped on any add/remove
+        self._collisions: Optional[Set[int]] = None  # cached collisions(), dropped likewise
+        self._hulls: Dict[int, list] = {}  # part id -> collision hulls of its solids, built on demand
 
     # --- queries -------------------------------------------------------------------------
 
@@ -302,7 +305,51 @@ class Model:
         return True
 
     def can_place(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> bool:
-        return self._fits(frame, footprint_regions(self.profile, part, pos, turns))
+        """Fits its frame's grid and doesn't overlap parts in other frames."""
+        if not self._fits(frame, footprint_regions(self.profile, part, pos, turns)):
+            return False
+        return not self.cross_frame_overlaps(frame, self.placement_solids(part, pos, turns, frame))
+
+    def part_hulls(self, part_id: int) -> list:
+        if part_id not in self._hulls:
+            self._hulls[part_id] = [collision.hull(s) for s in self.parts[part_id].solids]
+        return self._hulls[part_id]
+
+    def cross_frame_overlaps(self, frame: int, solids, ignore: Iterable[int] = ()) -> List[int]:
+        """Parts outside `frame` (and not in `ignore`) that world-space `solids` overlap."""
+        ignore = set(ignore)
+        box = collision.solids_box(solids)
+        hulls = None
+        out = []
+        for p in self.parts.values():
+            if p.frame == frame or p.id in ignore or not collision.boxes_overlap(box, p.box):
+                continue
+            if hulls is None:
+                hulls = [collision.hull(s) for s in solids]
+            if collision.hulls_overlap(hulls, self.part_hulls(p.id)):
+                out.append(p.id)
+        return out
+
+    def collisions(self) -> Set[int]:
+        """Parts overlapping a part in another frame (within a frame, overlaps can't happen).
+        Cached until the next change."""
+        if self._collisions is None:
+            self._collisions = self._find_collisions()
+        return self._collisions
+
+    def _find_collisions(self) -> Set[int]:
+        by_frame: Dict[int, List[PlacedPart]] = {}
+        for p in self.parts.values():
+            by_frame.setdefault(p.frame, []).append(p)
+        frames = sorted(by_frame)
+        out: Set[int] = set()
+        for i, fa in enumerate(frames):
+            for fb in frames[i + 1:]:
+                for a in by_frame[fa]:
+                    for b in by_frame[fb]:
+                        if collision.boxes_overlap(a.box, b.box) and                                 collision.hulls_overlap(self.part_hulls(a.id), self.part_hulls(b.id)):
+                            out |= {a.id, b.id}
+        return out
 
     def placement_solids(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> Tuple[Solid, ...]:
         return self._to_world(frame, solids=part_solids(self.profile, part, pos, turns))["solids"]
@@ -365,9 +412,7 @@ class Model:
         if frame == 0:
             box = subcells_box(self.profile, (s for s, _ in regions))
         else:
-            pts = [p for solid in world["solids"] for face in solid for p in face]
-            box = (glm.vec3(min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)),
-                   glm.vec3(max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+            box = collision.solids_box(world["solids"])
         rotation = None if frame == 0 else glm.mat4(glm.mat3(self.frame_matrix(frame)))
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, frame,
                             tuple(regions), box, world["solids"], world["edges"],
@@ -375,7 +420,7 @@ class Model:
         self.parts[part_id] = placed
         for sub, cut in regions:
             self.occupancy.setdefault((frame, sub), []).append((part_id, cut))
-        self._links = None
+        self._links = self._collisions = None
         self.modified = True
         return placed
 
@@ -383,6 +428,7 @@ class Model:
         placed = self.parts.pop(part_id, None)
         if placed is None:
             return
+        self._hulls.pop(part_id, None)
         for sub, _ in placed.regions:
             key = (placed.frame, sub)
             remaining = [entry for entry in self.occupancy[key] if entry[0] != part_id]
@@ -390,7 +436,7 @@ class Model:
                 self.occupancy[key] = remaining
             else:
                 del self.occupancy[key]
-        self._links = None
+        self._links = self._collisions = None
         self.modified = True
 
     def set_color(self, part_id: int, color: str) -> None:
@@ -497,8 +543,9 @@ class Model:
         return groups, loose
 
     def clear(self) -> None:
-        self._links = None
+        self._links = self._collisions = None
         self.parts.clear()
+        self._hulls = {}
         self.frames = {0: ROOT}
         self.groups = {}
         self.occupancy.clear()
@@ -575,7 +622,8 @@ class Model:
         self.parts, self.occupancy, self._next_id = loaded.parts, loaded.occupancy, loaded._next_id
         self.frames = loaded.frames
         self.groups = loaded.groups
-        self._links = None
+        self._links = self._collisions = None
+        self._hulls = {}
         self.modified = False
 
     def _load_v1(self, data: Dict[str, Any]) -> None:

@@ -34,8 +34,8 @@ clearance = 0.05              # cosmetic seam between bodies; real gap is below 
 body_height = 3.05            # rendering only; stacking pitch minus seating gap
 
 [stud]                        # used to generate stud/antistud geometry
-diameter = 2.65
-height = 2.00
+diameter = 2.45
+height = 1.60
 hollow_diameter = 0.0         # solid
 
 [[underside]]                 # where studs fit under a body (first match by its short side)
@@ -530,8 +530,9 @@ Taken with calipers. ✅ = consistent, ❓ = needs a recheck.
 | stud pitch | 4.00 ✅ | |
 | 1×1 body width | 4.000 | measured across a row of 20, which really measures pitch; real gap not resolvable |
 | stacking pitch | 3.125 ✅ | 10-brick stack, top stud excluded |
-| single body height | 3.05 ✅ | 5.05 total incl. stud − 2.00 stud; ~0.075 seating gap per layer |
-| stud | Ø2.65 × 2.00, solid ✅ | |
+| single body height | 3.05 ✅ | ~0.075 seating gap per layer (first derived as 5.05 total incl. stud − a 2.00 stud; the stud re-measured smaller, see below) |
+| stud | Ø2.45 × 1.60, solid ✅ | re-measured (first measured Ø2.65 × 2.00); side studs are the same |
+| side stud (1×1 "2凸") | centred on the face, centre 0.875 above the bottom; base flush with the face ✅ | |
 | wall, 1×N / 2×N | 0.85 / 0.95 | |
 | 1×1 inner opening | 2.2 ❓ | consistent with walls (0.85+2.2+0.85 = 3.9 ≈ pitch − gap). Magnifier photos: a **round counterbore at the mouth**, then a deeper **square cavity whose corners are clipped by the circle**. Best guess: the stud grips in the round bore and 2.2 is the deeper square. To confirm: round bore diameter + depth (caliper depth rod). Parked: rendering only |
 | 1×N underside | hollow | |

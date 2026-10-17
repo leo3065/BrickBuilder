@@ -93,7 +93,7 @@ class Viewport(QOpenGLWidget):
         if self.ghost_pos is not None:
             geo = self.model.placement_geometry(self.current_part, self.ghost_pos, self.current_turns,
                                                 self.ghost_matrix())
-            ghost = (geo["solids"], geo["studs"], self.ghost_valid)
+            ghost = (geo["solids"], geo["studs"], self.ghost_valid, geo["stud_axes"])
         rect = None
         if self.select_rect:
             rect = tuple(v * pixel_ratio for v in self.select_rect)

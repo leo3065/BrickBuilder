@@ -1,8 +1,9 @@
 """Which parts are connected: a stud of one sitting in an antistud slot of another.
 
-On a single grid this is fully determined by where the parts are, so it's worked out on demand
-rather than stored (see docs/part_format.md). Studs are bucketed by height and cell column, so
-each slot only looks at the studs right around it.
+It's fully determined by where the parts are, so it's worked out on demand rather than stored
+(see docs/part_format.md). Positions are world space, so it works across frames; a stud must be
+on the slot and point the way the slot expects (side studs, tilted frames). Studs are bucketed by
+cell-sized world boxes, so each slot only looks at the studs right around it.
 """
 import math
 from collections import defaultdict
@@ -22,6 +23,9 @@ class Contact:
     slot: Tuple[glm.vec3, glm.vec3]  # the antistud slot it's in (a == b for a point)
     stud_part: int
     slot_part: int
+    axis: glm.vec3 = glm.vec3(0, 0, 1)  # which way the stud points (world)
+
+AXIS_TOLERANCE = 1e-4  # 1 - cos(angle) between a stud's axis and its slot's: about 0.8 degrees
 
 
 def on_slot(p: glm.vec3, a: glm.vec3, b: glm.vec3, tolerance: float = TOLERANCE) -> bool:
@@ -32,29 +36,27 @@ def on_slot(p: glm.vec3, a: glm.vec3, b: glm.vec3, tolerance: float = TOLERANCE)
     return glm.distance(p, a + ab * t) <= tolerance
 
 
-def _bucket_z(z: float) -> int:
-    return round(z / TOLERANCE)
-
-
 def iter_contacts(profile: Profile, stud_parts: Iterable, slot_parts: Iterable) -> Iterator[Contact]:
-    """Every stud of `stud_parts` sitting in a slot of a different part in `slot_parts`."""
-    cx, cy = profile.cell.x, profile.cell.y
-    buckets: Dict[Tuple[int, int, int], List[Tuple[glm.vec3, int]]] = defaultdict(list)
+    """Every stud of `stud_parts` sitting in a slot of a different part in `slot_parts`, pointing
+    the way the slot expects."""
+    size = profile.cell.x
+    buckets: Dict[Tuple[int, int, int], List[Tuple[glm.vec3, glm.vec3, int]]] = defaultdict(list)
     for placed in stud_parts:
-        for s in placed.studs:
-            buckets[(_bucket_z(s.z), math.floor(s.x / cx), math.floor(s.y / cy))].append((s, placed.id))
+        for s, axis in zip(placed.studs, placed.stud_axes):
+            buckets[(math.floor(s.x / size), math.floor(s.y / size), math.floor(s.z / size))].append(
+                (s, axis, placed.id))
     for placed in slot_parts:
-        for a, b in placed.antistuds:
-            z = _bucket_z(a.z)
-            # Cell columns the slot passes over (a stud on a column boundary sits in either)
-            x0, x1 = math.floor((min(a.x, b.x) - TOLERANCE) / cx), math.floor((max(a.x, b.x) + TOLERANCE) / cx)
-            y0, y1 = math.floor((min(a.y, b.y) - TOLERANCE) / cy), math.floor((max(a.y, b.y) + TOLERANCE) / cy)
-            for zz in (z - 1, z, z + 1):  # float noise can put a height just across a bucket edge
-                for i in range(x0, x1 + 1):
-                    for j in range(y0, y1 + 1):
-                        for stud, other in buckets.get((zz, i, j), ()):
-                            if other != placed.id and abs(stud.z - a.z) <= TOLERANCE and on_slot(stud, a, b):
-                                yield Contact(stud, (a, b), other, placed.id)
+        for (a, b), slot_axis in zip(placed.antistuds, placed.antistud_axes):
+            # Buckets the slot passes through (a stud on a bucket edge sits in either)
+            lo = [math.floor((min(a[k], b[k]) - TOLERANCE) / size) for k in range(3)]
+            hi = [math.floor((max(a[k], b[k]) + TOLERANCE) / size) for k in range(3)]
+            for i in range(lo[0], hi[0] + 1):
+                for j in range(lo[1], hi[1] + 1):
+                    for k in range(lo[2], hi[2] + 1):
+                        for stud, axis, other in buckets.get((i, j, k), ()):
+                            if other != placed.id and glm.dot(axis, slot_axis) > 1 - AXIS_TOLERANCE \
+                                    and on_slot(stud, a, b):
+                                yield Contact(stud, (a, b), other, placed.id, axis)
 
 
 def find_connections(profile: Profile, parts: Iterable) -> Dict[int, Set[int]]:

@@ -13,7 +13,7 @@ from typing import List, Optional, Sequence, Tuple
 import glm
 import numpy as np
 
-from brickbuilder.core.connections import on_slot
+from brickbuilder.core.connections import AXIS_TOLERANCE, on_slot
 
 # mm: two solids overlapping by less than this along some axis only touch (faces in contact, the
 # round ends of a stud hinge, float noise from turned frames)
@@ -94,9 +94,9 @@ STUD_SIDES = 8
 @dataclass
 class Shape:
     hulls: List[Hull]                            # the bodies
-    studs: List[Tuple[glm.vec3, Hull]]           # stud base and its prism
-    slots: Tuple[Tuple[glm.vec3, glm.vec3], ...]  # antistud slots (world)
-    box: Tuple[glm.vec3, glm.vec3]               # around bodies and studs
+    studs: List[Tuple[glm.vec3, glm.vec3, Hull]]  # stud base, its axis and its prism
+    slots: List[Tuple[glm.vec3, glm.vec3, glm.vec3]]  # antistud slots (world): ends and stud axis
+    box: Tuple[glm.vec3, glm.vec3]                # around bodies and studs
 
 
 def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> Hull:
@@ -113,16 +113,15 @@ def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> H
     return hull(faces)
 
 
-def make_shape(solids, studs, slots, stud_radius: float, stud_height: float,
-               up: glm.vec3 = glm.vec3(0, 0, 1)) -> Shape:
-    stud_hulls = [(s, stud_hull(s, up, stud_radius, stud_height)) for s in studs]
+def make_shape(solids, studs, stud_axes, slots, slot_axes, stud_radius: float, stud_height: float) -> Shape:
+    stud_hulls = [(s, axis, stud_hull(s, axis, stud_radius, stud_height)) for s, axis in zip(studs, stud_axes)]
     lo, hi = solids_box(solids)
-    for s in studs:
-        top = s + up * stud_height
-        for p in (s, top):
-            lo = glm.vec3(min(lo.x, p.x - stud_radius), min(lo.y, p.y - stud_radius), min(lo.z, p.z))
-            hi = glm.vec3(max(hi.x, p.x + stud_radius), max(hi.y, p.y + stud_radius), max(hi.z, p.z))
-    return Shape([hull(s) for s in solids], stud_hulls, tuple(slots), (lo, hi))
+    for s, axis in zip(studs, stud_axes):
+        for p in (s, s + axis * stud_height):  # widened by the radius in every direction: a bound
+            lo = glm.vec3(min(lo.x, p.x - stud_radius), min(lo.y, p.y - stud_radius), min(lo.z, p.z - stud_radius))
+            hi = glm.vec3(max(hi.x, p.x + stud_radius), max(hi.y, p.y + stud_radius), max(hi.z, p.z + stud_radius))
+    return Shape([hull(s) for s in solids], stud_hulls,
+                 [(a, b, axis) for (a, b), axis in zip(slots, slot_axes)], (lo, hi))
 
 
 def clash(a: Shape, b: Shape) -> Optional[str]:
@@ -133,7 +132,9 @@ def clash(a: Shape, b: Shape) -> Optional[str]:
     if hulls_overlap(a.hulls, b.hulls):
         return "bodies"
     for x, y in ((a, b), (b, a)):
-        for base, h in x.studs:
-            if hulls_overlap([h], y.hulls) and not any(on_slot(base, s0, s1) for s0, s1 in y.slots):
+        for base, axis, h in x.studs:
+            if hulls_overlap([h], y.hulls) and not any(
+                    glm.dot(axis, slot_axis) > 1 - AXIS_TOLERANCE and on_slot(base, s0, s1)
+                    for s0, s1, slot_axis in y.slots):
                 return "stud"
     return None

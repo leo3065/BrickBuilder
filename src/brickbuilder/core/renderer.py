@@ -332,7 +332,7 @@ class Renderer:
         rgb = profile.palette[placed.color].rgb
         gl.glColor3f(rgb.x, rgb.y, rgb.z)
         self.draw_faces(placed.solids)
-        self.call_at(stud_fill, placed.studs, placed.stud_rotation)
+        self.call_at(stud_fill, placed.studs, placed.stud_axes)
         gl.glEndList()
 
         gl.glNewList(outline, gl.GL_COMPILE)
@@ -340,7 +340,7 @@ class Renderer:
         gl.glColor3f(0.0, 0.0, 0.0)
         self.draw_segments(placed.edges)
         gl.glLineWidth(1.0)
-        self.call_at(stud_rim, placed.studs, placed.stud_rotation)
+        self.call_at(stud_rim, placed.studs, placed.stud_axes)
         gl.glEndList()
         return fill, outline
 
@@ -356,7 +356,7 @@ class Renderer:
         gl.glDepthFunc(gl.GL_LESS)
         gl.glEnable(gl.GL_LIGHTING)
 
-    def render_ghost(self, profile, solids, studs, valid):
+    def render_ghost(self, profile, solids, studs, valid, stud_axes=None):
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
@@ -369,7 +369,7 @@ class Renderer:
         else:
             gl.glColor4f(1.0, 0.15, 0.1, 0.5) # Semi-transparent red: would overlap
         self.draw_faces(solids)
-        self.call_at(self.stud_lists(profile)[0], studs)
+        self.call_at(self.stud_lists(profile)[0], studs, stud_axes)
 
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_BLEND)
@@ -412,14 +412,19 @@ class Renderer:
             gl.glVertex3f(b.x, b.y, b.z)
         gl.glEnd()
 
-    def call_at(self, display_list, positions, rotation=None):
-        # rotation: the part's frame rotation (a mat4), so studs stand up from a tilted part
-        matrix = None if rotation is None else np.array(rotation, dtype=np.float32).flatten()
-        for p in positions:
+    def call_at(self, display_list, positions, axes=None):
+        # axes: which way each stud points (the display list's stud points up +Z)
+        for i, p in enumerate(positions):
             gl.glPushMatrix()
             gl.glTranslatef(p.x, p.y, p.z)
-            if matrix is not None:
-                gl.glMultTransposeMatrixf(matrix)
+            if axes is not None:
+                a = axes[i]
+                if a.z < 1 - 1e-6:  # turn +Z onto the axis
+                    turn = glm.cross(glm.vec3(0, 0, 1), a)
+                    angle = math.degrees(math.atan2(glm.length(turn), a.z))
+                    if glm.length(turn) < 1e-9:
+                        turn = glm.vec3(1, 0, 0)
+                    gl.glRotatef(angle, turn.x, turn.y, turn.z)
             gl.glCallList(display_list)
             gl.glPopMatrix()
 

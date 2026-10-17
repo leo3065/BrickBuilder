@@ -15,6 +15,9 @@ from brickbuilder.core.profile import ID_PATTERN, Profile, UndersideRule, load_b
 Cell = Tuple[int, int, int]
 Point = Tuple[float, float, float]
 Segment = Tuple[Point, Point]  # a slot a stud can sit anywhere along; equal ends = a point
+Axis = Tuple[int, int, int]    # a unit direction along a part axis, e.g. (0, 0, 1)
+UP: Axis = (0, 0, 1)
+AXES = {"+x": (1, 0, 0), "-x": (-1, 0, 0), "+y": (0, 1, 0), "-y": (0, -1, 0), "+z": (0, 0, 1), "-z": (0, 0, -1)}
 
 
 class PartError(ValueError):
@@ -30,14 +33,25 @@ class PartDef:
     category: str
     bodies: Tuple[Body, ...]          # in part cells; origin = min corner, bottom
     cells: Tuple[Cell, ...]           # cells any body touches (partly, for wedges), in body order
-    studs: Tuple[Point, ...]          # stud positions in cells: (x, y, height of the top it sits on)
-    # Where a stud from below fits: slots (segments) or points, in cells (x, y, height of the
-    # bottom they're in). Derived from the bodies' undersides plus explicit antistud sockets.
+    studs: Tuple[Point, ...]          # stud base positions in cells (x, y, height of the face it's on)
+    # Where a stud fits: slots (segments) or points, in cells. Derived from the bodies'
+    # undersides plus explicit antistud sockets.
     antistuds: Tuple[Segment, ...] = ()
+    # Which way each stud points (parallel to `studs`), and which way a stud in each antistud
+    # points (parallel to `antistuds`): +z for top studs and undersides, e.g. +x for a side stud
+    stud_axes: Tuple[Axis, ...] = ()
+    antistud_axes: Tuple[Axis, ...] = ()
+
+    def __post_init__(self):
+        # Parts built without axes (tests, older code) point everything up
+        if len(self.stud_axes) != len(self.studs):
+            object.__setattr__(self, "stud_axes", (UP,) * len(self.studs))
+        if len(self.antistud_axes) != len(self.antistuds):
+            object.__setattr__(self, "antistud_axes", (UP,) * len(self.antistuds))
 
 
 _TOP_KEYS = {"name", "body", "socket", "antistuds"}
-_SOCKET_KEYS = {"type", "at", "to"}
+_SOCKET_KEYS = {"type", "at", "to", "axis"}
 _ANTISTUD_MODES = {"derived", "none"}
 _SOCKET_TYPES = {"stud", "antistud"}  # more (ball, cup) come with joints
 _BODY_KEYS = {
@@ -119,8 +133,9 @@ def _point(where: str, value: Any) -> Point:
     return (float(value[0]), float(value[1]), float(value[2]))
 
 
-def _parse_socket(where: str, socket: Any) -> Tuple[str, Segment]:
-    """An explicit socket: its type and position in cells (a segment for an antistud slot)."""
+def _parse_socket(where: str, socket: Any) -> Tuple[str, Segment, Axis]:
+    """An explicit socket: its type, position in cells (a segment for an antistud slot) and axis
+    (which way the stud points: out of a stud socket, or of a stud sitting in an antistud)."""
     if not isinstance(socket, dict):
         raise PartError(f"{where}: must be a table")
     unknown = set(socket) - _SOCKET_KEYS
@@ -129,14 +144,18 @@ def _parse_socket(where: str, socket: Any) -> Tuple[str, Segment]:
     if socket.get("type") not in _SOCKET_TYPES:
         raise PartError(f"{where}.type must be one of {sorted(_SOCKET_TYPES)}")
     at = _point(f"{where}.at", socket.get("at"))
+    axis = socket.get("axis", "+z")
+    if axis not in AXES:
+        raise PartError(f"{where}.axis must be one of {sorted(AXES)}")
+    axis = AXES[axis]
     to = at
     if "to" in socket:
         if socket["type"] != "antistud":
             raise PartError(f"{where}.to: only antistud sockets can be slots")
         to = _point(f"{where}.to", socket["to"])
-        if to[2] != at[2]:
-            raise PartError(f"{where}: a slot must be level (at and to at the same height)")
-    return socket["type"], (at, to)
+        if sum((t - a) * n for t, a, n in zip(to, at, axis)) != 0:
+            raise PartError(f"{where}: a slot must lie across its axis (at and to at the same height)")
+    return socket["type"], (at, to), axis
 
 
 def _underside_pattern(rules: Sequence[UndersideRule], w: int, d: int) -> str:
@@ -211,13 +230,16 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any],
     if not isinstance(raw_sockets, list):
         raise PartError(f"{part_id}: 'socket' must be an array of tables ([[socket]])")
     sockets = [_parse_socket(f"{part_id}: socket[{n}]", s) for n, s in enumerate(raw_sockets)]
-    studs += [seg[0] for kind, seg in sockets if kind == "stud"]
+    stud_axes = [UP] * len(studs) + [axis for kind, _, axis in sockets if kind == "stud"]
+    studs += [seg[0] for kind, seg, _ in sockets if kind == "stud"]
     mode = data.get("antistuds", "derived")
     if mode not in _ANTISTUD_MODES:
         raise PartError(f"{part_id}: 'antistuds' must be one of {sorted(_ANTISTUD_MODES)}")
-    antistuds = tuple((_derived_antistuds(bodies, cell_set, underside) if mode == "derived" else [])
-                      + [seg for kind, seg in sockets if kind == "antistud"])
-    return PartDef(part_id, data["name"], category, bodies, cells, tuple(studs), antistuds)
+    derived = _derived_antistuds(bodies, cell_set, underside) if mode == "derived" else []
+    antistuds = tuple(derived + [seg for kind, seg, _ in sockets if kind == "antistud"])
+    antistud_axes = tuple([UP] * len(derived) + [axis for kind, _, axis in sockets if kind == "antistud"])
+    return PartDef(part_id, data["name"], category, bodies, cells, tuple(studs), antistuds,
+                   tuple(stud_axes), antistud_axes)
 
 
 def _walk(folder: Traversable, category: List[str], profile: Profile, out: Dict[str, PartDef]) -> None:

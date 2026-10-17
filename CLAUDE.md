@@ -34,7 +34,7 @@ Koraidon/Miraidon sets (regular + sloped bricks bracing beyond the joints).
 - 1×1 unit is nominally **4 mm × 4 mm × 3 mm** (W × D × H, studs excluded); the widely
   quoted "4×4×5" figure includes the 2 mm stud. Lego is 5×5×4 for comparison.
   Measured (see `docs/part_format.md`): stud pitch 4.00, **stacking pitch 3.125**
-  (single body 3.05 + seating gap), stud Ø2.65 × 2.00 solid. Use the stacking pitch for
+  (single body 3.05 + seating gap), stud Ø2.45 × 1.60 solid (re-measured). Use the stacking pitch for
   proportions.
 - So a unit cell is **not a cube**: height/width ≈ 0.78. Anything doing proportions,
   rendering or import/voxelization must respect this.

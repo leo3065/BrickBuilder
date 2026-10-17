@@ -55,7 +55,7 @@ def test_slot_sockets_validated():
     with pytest.raises(PartError, match="only antistud"):
         part_from_dict("t:s", "", {"name": "S", "body": [{"shape": "box", "size": [1, 2, 1]}],
                                    "socket": [{"type": "stud", "at": [0, 0, 1], "to": [0, 1, 1]}]})
-    with pytest.raises(PartError, match="level"):
+    with pytest.raises(PartError, match="across its axis"):
         part_from_dict("t:s", "", {"name": "S", "body": [{"shape": "box", "size": [1, 2, 1]}],
                                    "socket": [{"type": "antistud", "at": [0, 0, 0], "to": [0, 1, 1]}]})
     with pytest.raises(PartError, match="antistuds"):

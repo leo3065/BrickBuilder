@@ -61,8 +61,9 @@ class PlacedPart:
     solids: Tuple[Solid, ...]       # world-space bodies, for rendering and picking
     edges: Tuple[Tuple[glm.vec3, glm.vec3], ...]  # outline of the merged shape (no seams)
     studs: Tuple[glm.vec3, ...]     # world positions of stud bases (centre of the stud's bottom)
-    antistuds: Tuple[Tuple[glm.vec3, glm.vec3], ...] = ()  # world slots where a stud from below fits
-    stud_rotation: Optional[glm.mat4] = None  # the frame's rotation, if any (studs follow it)
+    antistuds: Tuple[Tuple[glm.vec3, glm.vec3], ...] = ()  # world slots where a stud fits
+    stud_axes: Tuple[glm.vec3, ...] = ()      # world direction each stud points
+    antistud_axes: Tuple[glm.vec3, ...] = ()  # world direction a stud in each slot points
     group: Optional[int] = None    # the innermost group it belongs to, if any
 
 
@@ -180,6 +181,22 @@ def part_point_to_world(profile: Profile, point, pos: Sub, turns: int) -> glm.ve
     for _ in range(turns % 4):  # turn CCW about the origin corner
         x, y = -y, x
     return profile.sub_to_world((pos[0] + x * nx, pos[1] + y * ny, pos[2] + z * nz))
+
+
+def turn_axis(axis, turns: int) -> glm.vec3:
+    """A part-space direction turned `turns` quarter turns CCW about Z."""
+    x, y, z = axis
+    for _ in range(turns % 4):
+        x, y = -y, x
+    return glm.vec3(x, y, z)
+
+
+def stud_axes(part: PartDef, turns: int) -> Tuple[glm.vec3, ...]:
+    return tuple(turn_axis(a, turns) for a in part.stud_axes)
+
+
+def antistud_axes(part: PartDef, turns: int) -> Tuple[glm.vec3, ...]:
+    return tuple(turn_axis(a, turns) for a in part.antistud_axes)
 
 
 def antistud_slots(profile: Profile, part: PartDef, pos: Sub, turns: int):
@@ -378,18 +395,18 @@ class Model:
         if not self._fits(frame, footprint_regions(self.profile, part, pos, turns)):
             return False
         geo = self.placement_geometry(part, pos, turns, self.frame_matrix(frame))
-        return not self.cross_frame_overlaps(frame, self.shape(geo["solids"], geo["studs"], geo["antistuds"]))
+        return not self.cross_frame_overlaps(frame, self.shape(geo))
 
-    def shape(self, solids, studs, slots, up: glm.vec3 = glm.vec3(0, 0, 1)) -> collision.Shape:
-        """World geometry -> what the clash test needs (bodies, studs, slots)."""
+    def shape(self, geo) -> collision.Shape:
+        """World geometry (a placement_geometry dict, or a PlacedPart) -> what the clash test needs."""
+        g = geo if isinstance(geo, dict) else vars(geo)
         st = self.profile.stud
-        return collision.make_shape(solids, studs, slots, st.diameter / 2, st.height, up)
+        return collision.make_shape(g["solids"], g["studs"], g["stud_axes"], g["antistuds"], g["antistud_axes"],
+                                    st.diameter / 2, st.height)
 
     def part_shape(self, part_id: int) -> collision.Shape:
         if part_id not in self._shapes:
-            p = self.parts[part_id]
-            up = glm.vec3(p.stud_rotation * glm.vec4(0, 0, 1, 0)) if p.stud_rotation is not None else glm.vec3(0, 0, 1)
-            self._shapes[part_id] = self.shape(p.solids, p.studs, p.antistuds, up)
+            self._shapes[part_id] = self.shape(self.parts[part_id])
         return self._shapes[part_id]
 
     def clashes(self, shape: collision.Shape, skip=lambda p: False) -> List[int]:
@@ -416,11 +433,16 @@ class Model:
         `matrix` (grid space -> world), e.g. a frame that doesn't exist yet."""
         def pt(p):
             return glm.vec3(matrix * glm.vec4(p, 1.0))
+
+        def axis(v):
+            return glm.normalize(glm.vec3(matrix * glm.vec4(v, 0.0)))
         return {
             "solids": tuple([[pt(p) for p in face] for face in solid]
                             for solid in part_solids(self.profile, part, pos, turns)),
             "studs": tuple(pt(p) for p in stud_positions(self.profile, part, pos, turns)),
             "antistuds": tuple((pt(a), pt(b)) for a, b in antistud_slots(self.profile, part, pos, turns)),
+            "stud_axes": tuple(axis(a) for a in stud_axes(part, turns)),
+            "antistud_axes": tuple(axis(a) for a in antistud_axes(part, turns)),
         }
 
     def turned_placement_problem(self, part: PartDef, pos: Sub, turns: int, matrix: glm.mat4) -> Optional[str]:
@@ -429,12 +451,11 @@ class Model:
         from types import SimpleNamespace
         from brickbuilder.core.connections import contacts_between
         geo = self.placement_geometry(part, pos, turns, matrix)
-        up = glm.vec3(matrix * glm.vec4(0, 0, 1, 0))
-        shape = self.shape(geo["solids"], geo["studs"], geo["antistuds"], up)
+        shape = self.shape(geo)
         hit = self.clashes(shape)
         if hit:
             return self.clash_reason(shape, hit[0])
-        ghost = SimpleNamespace(id=-1, studs=geo["studs"], antistuds=geo["antistuds"])
+        ghost = SimpleNamespace(id=-1, **geo)
         if not contacts_between(self.profile, [ghost], self.parts.values()):
             return "a turned part has to sit on a stud (or take one)"
         return None
@@ -446,11 +467,15 @@ class Model:
 
         def pt(v):
             return glm.vec3(transform * glm.vec4(v, 1.0))
-        up = glm.vec3(transform * glm.vec4(0, 0, 1, 0))
+
+        def axis(v):
+            return glm.vec3(transform * glm.vec4(v, 0.0))
         for pid in sorted(moving):
             p = self.parts[pid]
-            shape = self.shape([[[pt(v) for v in face] for face in solid] for solid in p.solids],
-                               [pt(v) for v in p.studs], [(pt(a), pt(b)) for a, b in p.antistuds], up)
+            shape = self.shape({"solids": [[[pt(v) for v in face] for face in solid] for solid in p.solids],
+                                "studs": [pt(v) for v in p.studs], "stud_axes": [axis(a) for a in p.stud_axes],
+                                "antistuds": [(pt(a), pt(b)) for a, b in p.antistuds],
+                                "antistud_axes": [axis(a) for a in p.antistud_axes]})
             hit = self.clashes(shape, lambda q: q.id in moving)
             if hit:
                 return hit[0]
@@ -477,19 +502,25 @@ class Model:
                             out |= {a.id, b.id}
         return out
 
-    def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=()):
+    def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=(), stud_axes=(), antistud_axes=()):
         """Move frame-space geometry into the world (a no-op for the root frame)."""
         if frame == 0:
-            return {"solids": solids, "edges": edges, "studs": studs, "antistuds": antistuds}
+            return {"solids": solids, "edges": edges, "studs": studs, "antistuds": antistuds,
+                    "stud_axes": stud_axes, "antistud_axes": antistud_axes}
         m = self.frame_matrix(frame)
 
         def pt(p):
             return glm.vec3(m * glm.vec4(p, 1.0))
+
+        def axis(v):
+            return glm.normalize(glm.vec3(m * glm.vec4(v, 0.0)))
         return {
             "solids": tuple([[pt(p) for p in face] for face in solid] for solid in solids),
             "edges": tuple((pt(a), pt(b)) for a, b in edges),
             "studs": tuple(pt(p) for p in studs),
             "antistuds": tuple((pt(a), pt(b)) for a, b in antistuds),
+            "stud_axes": tuple(axis(a) for a in stud_axes),
+            "antistud_axes": tuple(axis(a) for a in antistud_axes),
         }
 
     def connections(self) -> Dict[int, set]:
@@ -528,15 +559,17 @@ class Model:
                                solids=part_solids(self.profile, part, pos, turns),
                                edges=part_edges(self.profile, part, pos, turns),
                                studs=stud_positions(self.profile, part, pos, turns),
-                               antistuds=antistud_slots(self.profile, part, pos, turns))
+                               antistuds=antistud_slots(self.profile, part, pos, turns),
+                               stud_axes=stud_axes(part, turns),
+                               antistud_axes=antistud_axes(part, turns))
         if frame == 0:
             box = subcells_box(self.profile, (s for s, _ in regions))
         else:
             box = collision.solids_box(world["solids"])
-        rotation = None if frame == 0 else glm.mat4(glm.mat3(self.frame_matrix(frame)))
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, frame,
                             tuple(regions), box, world["solids"], world["edges"],
-                            world["studs"], world["antistuds"], rotation, group)
+                            world["studs"], world["antistuds"], world["stud_axes"], world["antistud_axes"],
+                            group)
         self.parts[part_id] = placed
         for sub, cut in regions:
             self.occupancy.setdefault((frame, sub), []).append((part_id, cut))

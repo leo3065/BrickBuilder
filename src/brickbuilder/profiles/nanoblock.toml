@@ -8,8 +8,8 @@ clearance = 0.05              # cosmetic seam between bodies
 body_height = 3.05            # rendering only; stacking pitch minus seating gap
 
 [stud]
-diameter = 2.65
-height = 2.00
+diameter = 2.45               # re-measured; side studs are the same
+height = 1.60
 hollow_diameter = 0.0         # solid
 
 # Where studs fit under a body when its part file doesn't list antistud sockets (measured from the

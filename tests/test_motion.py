@@ -94,3 +94,34 @@ def test_stud_hinge_turns_about_the_column(model):
     assert h.move_parts({b1}, t) is None
     links = model.connections()
     assert b1 in links[a1] and b1 in links[a2]
+
+
+def test_round_1x3_hinge_keeps_turning_at_any_angle(model):
+    """From a user's file: two round 1x3s (layers 0 and 2, tied by a 1x2) and a round 1x3 in
+    layer 1 hinged on their end studs. Float noise in the turned frame used to lock it at some
+    angles (and then Shift+R couldn't put it back)."""
+    a1 = add(model, "round_1x3", (-2, -6, 0))      # sub-cells (the file has cells)
+    a2 = add(model, "round_1x3", (-2, -6, 2))
+    add(model, "brick_1x2", (-2, -6, 1))
+    b = add(model, "round_1x3", (-2, -2, 1))
+    links = model.connections()
+    assert b in links[a1] and b in links[a2]
+    h = History(model)
+
+    def turn_by(degrees):
+        plan = plan_turn(model, {b})
+        assert plan.kind == "turn", (degrees, plan.reason)
+        t = (glm.translate(glm.mat4(1.0), plan.pivot)
+             * glm.mat4_cast(glm.angleAxis(glm.radians(degrees), glm.vec3(0, 0, 1)))
+             * glm.translate(glm.mat4(1.0), -plan.pivot))
+        return h.move_parts({b}, t)
+
+    total = 0.0
+    for step in [7.5] * 12 + [13.7, -3.1, 22.5, 0.4] + [-7.5] * 6:
+        if turn_by(step) is None:
+            total += step
+        links = model.connections()
+        assert b in links[a1] and b in links[a2], total
+    # Back to straight: on the root grid again
+    assert turn_by(-total) is None
+    assert model.parts[b].frame == 0 and set(model.frames) == {0}

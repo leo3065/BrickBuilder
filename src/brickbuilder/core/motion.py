@@ -19,7 +19,9 @@ import numpy as np
 
 from brickbuilder.core.connections import Contact, contacts_between
 
-RANK_TOL = 1e-6
+# Errors are in mm, from float32 positions: a turned frame puts studs ~1e-6 mm off, so anything
+# below this counts as zero (well under connections.TOLERANCE)
+EPS = 1e-4
 
 
 @dataclass
@@ -97,14 +99,14 @@ def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
     centre = contacts[0].stud
     a = np.array([row for c in contacts for row in _jacobian_rows(c, centre)])
     s = np.linalg.svd(a, compute_uv=False)
-    rank = int(np.sum(s > RANK_TOL * max(1.0, s[0])))
+    rank = int(np.sum(s > EPS))
     if rank >= 3:
         return TurnPlan("locked", moving, fixed, reason="held by studs on different axes", contacts=contacts)
 
     def turns_freely_about(p: glm.vec3) -> bool:
         r = p - centre
         q = np.array([1.0, r.y, -r.x])  # turning about p: velocity at the centre = -ez x (p - centre)
-        return float(np.linalg.norm(a @ q)) < 1e-6 * max(1.0, float(np.linalg.norm(q)))
+        return float(np.linalg.norm(a @ q)) < EPS * float(np.linalg.norm(q))
 
     studs = sorted({(round(c.stud.x, 4), round(c.stud.y, 4)) for c in contacts},
                    key=lambda xy: (xy[0] - hint.x) ** 2 + (xy[1] - hint.y) ** 2 if hint else 0.0)

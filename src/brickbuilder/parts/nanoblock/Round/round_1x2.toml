@@ -1,6 +1,5 @@
 # 1x2 with rounded ends: corners rounded with a cell-wide diameter (radius half a cell).
 name = "Round 1×2"
-ldraw = "NB102R.dat"
 
 [[body]]
 shape = "box"

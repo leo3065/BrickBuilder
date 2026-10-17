@@ -1,6 +1,5 @@
 # Slope 1x3 made 2 wide: same side view, two studs on the flat row.
 name = "Slope 2×3 wedge 2×1"
-ldraw = "NB203A.dat"
 
 [[body]]
 shape = "box"

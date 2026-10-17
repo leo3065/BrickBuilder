@@ -1,7 +1,6 @@
 # 1x2 with a single stud in the middle, on the boundary between its two cells
 # (nanoblock.info "1x2 : 1/2BO-1"). A part held by one stud can turn on it.
 name = "Brick 1×2 1 stud"
-ldraw = "NB102S.dat"
 
 [[body]]
 shape = "box"

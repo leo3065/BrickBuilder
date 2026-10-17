@@ -12,6 +12,16 @@ diameter = 2.65
 height = 2.00
 hollow_diameter = 0.0         # solid
 
+# Where studs fit under a body when its part file doesn't list antistud sockets (measured from the
+# real parts, docs/part_format.md "Undersides"): 1xN and 2xN undersides are hollow slots, one per
+# row along the long side; wider footprints (the base plates) take none for now.
+[[underside]]
+max_short_side = 2
+slots = "rows"
+
+[[underside]]
+slots = "none"
+
 [socket_types]
 stud     = { mates = ["antistud"], dof = "fixed" }
 antistud = { mates = ["stud"],     dof = "fixed" }

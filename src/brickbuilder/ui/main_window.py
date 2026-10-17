@@ -271,8 +271,7 @@ class MainWindow(QMainWindow):
             parent = group_item(part.category) if part.category else self.parts_list.invisibleRootItem()
             item = QTreeWidgetItem(parent, [part.name])
             item.setData(0, Qt.ItemDataRole.UserRole, part.id)
-            tip = part.id if not part.ldraw else f"{part.id}  (LDraw {part.ldraw})"
-            item.setToolTip(0, tip)
+            item.setToolTip(0, part.id)
             if part is self.viewport.current_part:
                 self.parts_list.setCurrentItem(item)
         self.parts_list.currentItemChanged.connect(self.on_part_selected)

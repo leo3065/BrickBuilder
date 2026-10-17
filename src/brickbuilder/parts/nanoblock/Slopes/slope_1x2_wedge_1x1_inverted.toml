@@ -1,7 +1,6 @@
 # One full cell; beside it an upper triangle 1 cell x 1 layer, full height next to the box.
 # The underside is open along the slope. Pairs with slope_1x2_wedge_1x1.
 name = "Slope 1×2 wedge 1×1 inverted"
-ldraw = "NB102B.dat"
 
 [[body]]
 shape = "box"

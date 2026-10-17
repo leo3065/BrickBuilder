@@ -68,7 +68,7 @@ def test_starter_library():
     sizes = sorted(k.split("_")[1] for k in plain)
     assert sizes == sorted(["1x1", "1x2", "1x3", "1x4", "1x6", "2x2", "2x3", "2x4", "2x8"])
     b = lib["nanoblock:brick_2x4"]
-    assert b.name == "Brick 2×4" and b.category == "Bricks" and b.ldraw == "NB204.dat"
+    assert b.name == "Brick 2×4" and b.category == "Bricks"
     assert len(b.cells) == 8 and len(b.studs) == 8
     assert {c[0] for c in b.cells} == {0, 1} and {c[1] for c in b.cells} == {0, 1, 2, 3}
 

@@ -4,7 +4,7 @@ import tomllib
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 import glm
 
 DEFAULT_PROFILE_ID = "nanoblock"
@@ -23,6 +23,21 @@ class StudSpec:
     diameter: float
     height: float
     hollow_diameter: float = 0.0
+
+
+# Underside slot patterns a profile can pick (see UndersideRule). Add one here when a system needs it.
+UNDERSIDE_PATTERNS = {
+    "rows",   # one slot per row of cells, along the long side (Y on a tie); 1xN: its middle line
+    "none",   # no antistuds (e.g. Nanoblock base plates, for now)
+}
+
+
+@dataclass(frozen=True)
+class UndersideRule:
+    """Where studs fit under a body whose part doesn't list its own antistud sockets: the first
+    rule whose `max_short_side` the body's footprint fits (None = any) gives the pattern."""
+    max_short_side: Optional[int]
+    slots: str
 
 
 @dataclass(frozen=True)
@@ -56,6 +71,7 @@ class Profile:
     stud: StudSpec
     palette: Dict[str, PaletteColor] = field(default_factory=dict)
     socket_types: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    underside: Tuple[UndersideRule, ...] = ()  # how derived antistud slots are laid out
 
     def sub_to_world(self, sub) -> glm.vec3:
         """World position of the minimum corner of sub-cell `sub` (any int triple).
@@ -138,6 +154,23 @@ def _parse_palette(data: Dict[str, Any]) -> Dict[str, PaletteColor]:
     return palette
 
 
+def _parse_underside(data: Any) -> Tuple[UndersideRule, ...]:
+    if not isinstance(data, list):
+        raise ProfileError("'underside' must be an array of tables ([[underside]])")
+    rules = []
+    for n, entry in enumerate(data):
+        where = f"underside[{n}]"
+        if not isinstance(entry, dict) or set(entry) - {"max_short_side", "slots"}:
+            raise ProfileError(f"{where}: takes 'max_short_side' and 'slots'")
+        limit = entry.get("max_short_side")
+        if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool) or limit < 1):
+            raise ProfileError(f"{where}: 'max_short_side' must be a positive integer")
+        if entry.get("slots") not in UNDERSIDE_PATTERNS:
+            raise ProfileError(f"{where}: 'slots' must be one of {sorted(UNDERSIDE_PATTERNS)}")
+        rules.append(UndersideRule(limit, entry["slots"]))
+    return tuple(rules)
+
+
 def profile_from_dict(data: Dict[str, Any]) -> Profile:
     for key in ("id", "name"):
         if not isinstance(data.get(key), str):
@@ -169,6 +202,7 @@ def profile_from_dict(data: Dict[str, Any]) -> Profile:
             ),
             palette=palette,
             socket_types=dict(data.get("socket_types", {})),
+            underside=_parse_underside(data.get("underside", [])),
         )
     except KeyError as e:
         raise ProfileError(f"missing key: stud.{e.args[0]}") from None

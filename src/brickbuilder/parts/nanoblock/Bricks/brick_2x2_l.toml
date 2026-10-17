@@ -1,7 +1,6 @@
 # L shape: a 1x2 along X plus a 1x1 above its first cell, a stud on each cell. The bodies
 # follow the real underside: a slot under the 1x2 and a separate hole under the 1x1.
 name = "Brick 2×2 L"
-ldraw = "NB202L.dat"
 
 [[body]]
 shape = "box"

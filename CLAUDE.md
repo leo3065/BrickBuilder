@@ -100,8 +100,10 @@ tests/               pytest suite
 - `PartDef.studs` are stud positions in cells `(x, y, top height)`: derived ones sit at cell
   centres, explicit `[[socket]] type = "stud"` ones anywhere (e.g. on cell boundaries).
 - `PartDef.antistuds` are **slots** (segments; a point = zero length) where a stud fits anywhere
-  along: derived per body (1×N one slot, 2×N one per row along the long side, Y on a tie), or
-  `antistuds = "none"` + explicit sockets. Rules from the real parts: docs/part_format.md
+  along: derived per body by the profile's `[[underside]]` rules (system specific; Nanoblock: 1×N
+  one slot, 2×N one per row along the long side, Y on a tie, wider none), or `antistuds = "none"`
+  + explicit sockets. Part files have no `ldraw` key (dropped; the LDraw names are in
+  `docs/nanoblock_parts.md`). Rules from the real parts: docs/part_format.md
   "Undersides". Connections are derived from world positions (so they work across Z-turned
   frames), never saved.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys

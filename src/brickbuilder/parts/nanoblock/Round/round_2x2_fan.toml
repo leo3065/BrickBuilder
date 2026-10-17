@@ -3,7 +3,6 @@
 # Underside: three separate holes at the remaining cell centres.
 name = "Round 2×2 fan"
 antistuds = "none"
-ldraw = "NB202C.dat"
 
 [[body]]
 shape = "box"

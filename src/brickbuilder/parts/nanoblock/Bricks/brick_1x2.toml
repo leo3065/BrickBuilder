@@ -1,5 +1,4 @@
 name = "Brick 1×2"
-ldraw = "NB102.dat"
 
 [[body]]
 shape = "box"

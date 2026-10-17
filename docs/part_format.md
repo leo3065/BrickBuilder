@@ -2,7 +2,7 @@
 
 Status: **design notes, with ✅ marking what's implemented.** Built so far: profile + palette, box,
 rounded box and wedge (slope) bodies, explicit stud/antistud sockets, placed-part model with exact
-slope occupancy, connections, frames, groups, turning and moving (save v4). Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"` with
+slope occupancy, connections, frames, groups, turning and moving (save v4). Part files carry `name` and `[[body]]` (`shape = "box"` with
 `size`, optional `at`, `studs = "top" | "none"`; or `shape = "wedge"` with `keep` and `tall`
 too); id and category come from the file path.
 
@@ -38,6 +38,12 @@ diameter = 2.65
 height = 2.00
 hollow_diameter = 0.0         # solid
 
+[[underside]]                 # where studs fit under a body (first match by its short side)
+max_short_side = 2            # 1xN and 2xN: one slot per row, along the long side
+slots = "rows"
+[[underside]]
+slots = "none"                # wider (base plates): none for now
+
 [socket_types]
 stud     = { mates = ["antistud"], dof = "fixed" }
 antistud = { mates = ["stud"],     dof = "fixed" }
@@ -50,6 +56,14 @@ cup      = { mates = ["ball"],     dof = "spherical" }
 
 `subdiv` is how other systems stay data-only: e.g. Lego plates would be `[1, 1, 3]` in a
 Lego profile. Positions are stored as integers on this sub-grid, so there's no float drift.
+
+`[[underside]]` ✅ is the other system-specific rule: how a part's underside takes studs when the
+part file doesn't list antistud sockets. Rules are tried in order; the first whose `max_short_side`
+the body's footprint fits (omitted = any) names a pattern. Patterns are implemented in code
+(`profile.UNDERSIDE_PATTERNS`): `rows` (one slot per row of cells along the long side, Y on a tie;
+a 1×N gets its middle line, a 1×1 a point) and `none`. A system with a different underside (e.g.
+Lego's tubes between studs) adds a pattern when it's actually needed. No rules: no derived
+antistuds, so every part would list its own.
 
 ## Layer 2 — Part definition
 All lengths are in **cells** of the part's profile, not mm. That makes files readable, and if
@@ -152,8 +166,8 @@ where a complementary wedge goes (anything else is refused there by the occupanc
 
 **Reference:** `D:\Nanoblocks\LDrawData` (unofficial LDraw Nanoblock library, CCAL 2.0). Use it for
 **shapes and the part list**, not dimensions: it assumes 10 LDU per pitch and 7.5 per layer
-(nominal 4×4×3) and a Ø2.4 stud; our measured numbers win. Part files may cross-reference it,
-e.g. `ldraw = "NB102A.dat"`.
+(nominal 4×4×3) and a Ø2.4 stud; our measured numbers win. Part files don't reference it (the
+`ldraw` key was dropped); the matching LDraw file of each part is listed in `nanoblock_parts.md`.
 
 ### Sockets
 ```toml
@@ -391,7 +405,8 @@ manual's "×3" or LDraw multi-part files).
 
 ## Undersides: where studs fit ✅ (from the real parts)
 An antistud is a **slot**: a stud fits anywhere along it (a point is a slot of length 0). Derived
-from each body whose bottom isn't sitting on another body of the part:
+from each body whose bottom isn't sitting on another body of the part, laid out by the profile's
+`[[underside]]` rules; for Nanoblock (measured):
 - **1×1**: a point at the cell centre.
 - **1×N**: hollow, one slot along the middle line from the first cell's centre to the last. That's
   what lets a 1×N sit half-offset, or at an angle across two 1×1s.
@@ -451,7 +466,7 @@ to the joint angles too.
 
 ## Runtime model ✅
 ```python
-PartDef      # from a part TOML: id, name, category, bodies, cells, studs, antistud slots, ldraw
+PartDef      # from a part TOML: id, name, category, bodies, cells, studs, antistud slots
 Frame        # id, parent, origin (mm, parent space), rotation (quaternion); 0 = the root grid
 Group        # id, name, parent: user-made subassemblies, separate from frames
 PlacedPart   # id (stable int), part, frame, pos (SUB-GRID ints), turns (0..3), color (palette id),

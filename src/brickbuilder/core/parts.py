@@ -3,14 +3,14 @@
 Library layout: parts/<profile id>/<category folders>/<name>.toml. A part's id is
 "<profile id>:<file stem>"; its category is the folder path below the profile folder.
 """
-import re
 import tomllib
 from dataclasses import dataclass
 from importlib import resources
 from importlib.resources.abc import Traversable
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Sequence, Tuple, Union
 
 from brickbuilder.core.geometry import Body, outside_rounding, part_regions
+from brickbuilder.core.profile import ID_PATTERN, Profile, UndersideRule, load_builtin_profile
 
 Cell = Tuple[int, int, int]
 Point = Tuple[float, float, float]
@@ -21,8 +21,6 @@ class PartError(ValueError):
     pass
 
 
-# Ids are stable keys in save files: plain ASCII, so they're safe in any file system or tool
-ID_PATTERN = re.compile(r"[a-z0-9_]+")
 
 
 @dataclass(frozen=True)
@@ -33,13 +31,12 @@ class PartDef:
     bodies: Tuple[Body, ...]          # in part cells; origin = min corner, bottom
     cells: Tuple[Cell, ...]           # cells any body touches (partly, for wedges), in body order
     studs: Tuple[Point, ...]          # stud positions in cells: (x, y, height of the top it sits on)
-    ldraw: Optional[str] = None       # cross-reference into the LDraw Nanoblock library
     # Where a stud from below fits: slots (segments) or points, in cells (x, y, height of the
     # bottom they're in). Derived from the bodies' undersides plus explicit antistud sockets.
     antistuds: Tuple[Segment, ...] = ()
 
 
-_TOP_KEYS = {"name", "ldraw", "body", "socket", "antistuds"}
+_TOP_KEYS = {"name", "body", "socket", "antistuds"}
 _SOCKET_KEYS = {"type", "at", "to"}
 _ANTISTUD_MODES = {"derived", "none"}
 _SOCKET_TYPES = {"stud", "antistud"}  # more (ball, cup) come with joints
@@ -142,11 +139,18 @@ def _parse_socket(where: str, socket: Any) -> Tuple[str, Segment]:
     return socket["type"], (at, to)
 
 
-def _derived_antistuds(bodies, cell_set) -> List[Segment]:
-    """Slots under each body whose bottom isn't sitting on another body of the part: a 1xN
-    underside is one slot along its middle line, a 2xN one slot per row along the long side
-    (Y when the sides are equal), 1x1 a point. Wider footprints (plates) get none for now.
-    A lower wedge's bottom always sits on its base, so only boxes and upper wedges count."""
+def _underside_pattern(rules: Sequence[UndersideRule], w: int, d: int) -> str:
+    for rule in rules:
+        if rule.max_short_side is None or min(w, d) <= rule.max_short_side:
+            return rule.slots
+    return "none"
+
+
+def _derived_antistuds(bodies, cell_set, rules: Sequence[UndersideRule]) -> List[Segment]:
+    """Slots under each body whose bottom isn't sitting on another body of the part, laid out by
+    the profile's underside rules (system specific). A lower wedge's bottom always sits on its
+    base, so only boxes and upper wedges count. The "rows" pattern: one slot per row of cells
+    along the long side (Y when the sides are equal); a 1xN gets its middle line, a 1x1 a point."""
     out: List[Segment] = []
     for b in bodies:
         if b.kind == "wedge" and b.keep == "lower":
@@ -154,7 +158,7 @@ def _derived_antistuds(bodies, cell_set) -> List[Segment]:
         (x0, y0, z), (w, d) = b.lo, b.size[:2]
         if z > 0 and all((x, y, z - 1) in cell_set for x in range(x0, x0 + w) for y in range(y0, y0 + d)):
             continue
-        if min(w, d) > 2:
+        if _underside_pattern(rules, w, d) != "rows":
             continue
         along_y = d >= w
         rows = w if along_y else d
@@ -168,7 +172,10 @@ def _derived_antistuds(bodies, cell_set) -> List[Segment]:
     return out
 
 
-def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef:
+def part_from_dict(part_id: str, category: str, data: Dict[str, Any],
+                   underside: Sequence[UndersideRule] = ()) -> PartDef:
+    """A part from its TOML data. `underside`: the profile's rules for derived antistuds (none
+    given: no derived antistuds)."""
     if "params" in data:
         raise PartError(f"{part_id}: 'params' (parametric families) is reserved and not supported yet")
     unknown = set(data) - _TOP_KEYS
@@ -208,19 +215,16 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any]) -> PartDef
     mode = data.get("antistuds", "derived")
     if mode not in _ANTISTUD_MODES:
         raise PartError(f"{part_id}: 'antistuds' must be one of {sorted(_ANTISTUD_MODES)}")
-    antistuds = tuple((_derived_antistuds(bodies, cell_set) if mode == "derived" else [])
+    antistuds = tuple((_derived_antistuds(bodies, cell_set, underside) if mode == "derived" else [])
                       + [seg for kind, seg in sockets if kind == "antistud"])
-    studs_final = tuple(studs)
-    ldraw = data.get("ldraw")
-    if ldraw is not None and not isinstance(ldraw, str):
-        raise PartError(f"{part_id}: 'ldraw' must be a string")
-    return PartDef(part_id, data["name"], category, bodies, cells, studs_final, ldraw, antistuds)
+    return PartDef(part_id, data["name"], category, bodies, cells, tuple(studs), antistuds)
 
 
-def _walk(folder: Traversable, category: List[str], profile_id: str, out: Dict[str, PartDef]) -> None:
+def _walk(folder: Traversable, category: List[str], profile: Profile, out: Dict[str, PartDef]) -> None:
+    profile_id = profile.id
     for entry in sorted(folder.iterdir(), key=lambda e: e.name):
         if entry.is_dir():
-            _walk(entry, category + [entry.name], profile_id, out)
+            _walk(entry, category + [entry.name], profile, out)
         elif entry.name.endswith(".toml"):
             stem = entry.name[:-len(".toml")]
             if not ID_PATTERN.fullmatch(stem):
@@ -233,13 +237,15 @@ def _walk(folder: Traversable, category: List[str], profile_id: str, out: Dict[s
                     data = tomllib.load(f)
                 except tomllib.TOMLDecodeError as e:
                     raise PartError(f"{part_id}: {e}") from None
-            out[part_id] = part_from_dict(part_id, "/".join(category), data)
+            out[part_id] = part_from_dict(part_id, "/".join(category), data, profile.underside)
 
 
-def load_builtin_library(profile_id: str) -> Dict[str, PartDef]:
-    """All built-in parts for a profile, keyed by part id."""
-    root = resources.files("brickbuilder") / "parts" / profile_id
+def load_builtin_library(profile: Union[Profile, str]) -> Dict[str, PartDef]:
+    """All built-in parts for a profile (or a built-in profile's id), keyed by part id."""
+    if isinstance(profile, str):
+        profile = load_builtin_profile(profile)
+    root = resources.files("brickbuilder") / "parts" / profile.id
     parts: Dict[str, PartDef] = {}
     if root.is_dir():
-        _walk(root, [], profile_id, parts)
+        _walk(root, [], profile, parts)
     return parts

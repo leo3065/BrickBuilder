@@ -3,7 +3,6 @@
 # outward along its diagonal to the rim, so a stud fits anywhere from the cell centre out.
 name = "Round 2×2"
 antistuds = "none"
-ldraw = "NB202R.dat"
 
 [[body]]
 shape = "box"

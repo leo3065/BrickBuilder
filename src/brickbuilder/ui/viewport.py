@@ -29,7 +29,7 @@ class Viewport(QOpenGLWidget):
         self.renderer = Renderer()
         self.camera = Camera()
         self.profile = load_builtin_profile()
-        self.library = load_builtin_library(self.profile.id)
+        self.library = load_builtin_library(self.profile)
         self.model = Model(self.profile, self.library)
         # All edits go through the history so they can be undone
         self.history = History(self.model)

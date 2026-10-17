@@ -1,6 +1,5 @@
 # Base plate: same body height as a brick, a stud on every top cell.
 name = "Base Plate 10×10"
-ldraw = "NB10Base.dat"
 
 [[body]]
 shape = "box"

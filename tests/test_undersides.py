@@ -2,6 +2,7 @@
 import pytest
 
 from brickbuilder.core.parts import PartError, load_builtin_library, part_from_dict
+from brickbuilder.core.profile import load_builtin_profile
 
 
 @pytest.fixture(scope="module")
@@ -59,3 +60,27 @@ def test_slot_sockets_validated():
                                    "socket": [{"type": "antistud", "at": [0, 0, 0], "to": [0, 1, 1]}]})
     with pytest.raises(PartError, match="antistuds"):
         part_from_dict("t:s", "", {"name": "S", "antistuds": "some", "body": [{"shape": "box", "size": [1, 1, 1]}]})
+
+
+def test_underside_rules_come_from_the_profile():
+    """How undersides take studs is system specific: the profile's [[underside]] rules decide,
+    parts only override with explicit sockets."""
+    from brickbuilder.core.profile import UndersideRule
+    body = {"name": "B", "body": [{"shape": "box", "size": [2, 4, 1]}]}
+    rows = (UndersideRule(2, "rows"), UndersideRule(None, "none"))
+    assert len(part_from_dict("t:b", "", body, rows).antistuds) == 2          # one slot per row
+    assert part_from_dict("t:b", "", body, (UndersideRule(1, "rows"),)).antistuds == ()  # too wide
+    assert part_from_dict("t:b", "", body).antistuds == ()                    # no rules: none
+    # The built-in Nanoblock profile carries the measured rules
+    profile = load_builtin_profile()
+    assert profile.underside == rows
+
+
+def test_bad_underside_rules():
+    from brickbuilder.core.profile import ProfileError, profile_from_dict
+    data = {"id": "x", "name": "X", "cell": [4, 4, 3], "subdiv": [2, 2, 1],
+            "stud": {"diameter": 2, "height": 2}, "palette": {"red": {"name": "Red", "rgb": "#ff0000"}}}
+    for bad in ([{"slots": "tubes"}], [{"max_short_side": 0, "slots": "rows"}], [{"slots": "rows", "x": 1}], {}):
+        with pytest.raises(ProfileError):
+            profile_from_dict({**data, "underside": bad})
+    assert profile_from_dict(data).underside == ()

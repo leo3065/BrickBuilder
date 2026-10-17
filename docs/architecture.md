@@ -130,8 +130,10 @@ History      # every UI edit as undoable commands (lists of ops)
 - Display lists are keyed by (id, part, pos, turns, color, frame, box): anything else that changes a
   part's look must join the key. Parts being turned or dragged are drawn from their own lists under
   the move's matrix.
-- Measured: first draw of 1000 bricks ≈ 550 ms, then 1000 parts / 8000 studs ≈ 25 ms per frame.
-  Picking iterates every part (fine at this scale). VBOs/shaders are the longer-term plan.
+- PyOpenGL's per-call error checking is off (`brickbuilder/__init__.py`; `BRICKBUILDER_GL_DEBUG=1` turns
+  it back on): it was ~90% of a frame's CPU time. Measured CPU time per frame: 1000 parts ≈ 2.5 ms,
+  4000 ≈ 11.5 ms (20% clear); the first draw compiles lists, ≈ 250 ms per 1000 parts.
+  Picking iterates every part (1000 parts ≈ 1 ms). VBOs/shaders are the longer-term plan.
 
 ## Saving
 - `Model.to_dict` / `from_dict` (format: `part_format.md` "Save format"). Bad files raise

@@ -193,7 +193,7 @@ part's up, origin on the stud's base, so cell (0, 0)'s centre is on the stud and
 against the face. If an existing frame lines up with that grid (`Model.find_grid`: quarter turns
 about Z, whole sub-cells), the part goes into it, so side studs in one plane share a frame and a
 part can bridge them; otherwise placing creates the frame (one undo step). A part on a side stud
-turns about the stud (Turn tool). Dragging the selection onto a side stud isn't supported yet.
+turns about the stud (Turn tool). Dragging the selection onto a side stud lands it on that grid too.
 
 ### Modifiers
 A small, closed set that applies to both bodies and sockets:

@@ -604,18 +604,22 @@ class Viewport(QOpenGLWidget):
     def _update_drag(self, pos=None):
         d = self.dragging
         if pos is not None:
-            frame, target, _ = self._target_under(pos.x(), pos.y(), d["moving"], side_studs=False)
+            frame, target, grid = self._target_under(pos.x(), pos.y(), d["moving"])
             if target is not None:
-                d["target"] = (frame, target)
+                d["target"] = (frame, target, grid)
         if d["target"] is None:
             return
-        frame, target = d["target"]
+        # On a side stud the target grid may not be a frame yet (`grid`, in `frame`'s space):
+        # move_parts then makes it, as a child of `frame`
+        frame, target, on_grid = d["target"]
         c_t = self._cell_centre(target)
         # The anchor's grid onto the target's grid: anchor cell centre onto the target cell centre,
         # turned by whole quarter turns, then any fine turn about that centre
         grid = (glm.translate(glm.mat4(1.0), c_t)
                 * glm.mat4_cast(glm.angleAxis(math.radians(d["turns"] * 90 + d["angle"]), glm.vec3(0, 0, 1)))
                 * glm.translate(glm.mat4(1.0), -d["anchor"]))
+        if on_grid is not None:
+            grid = on_grid * grid
         d["transform"] = self.model.frame_matrix(frame) * grid * glm.inverse(self.model.frame_matrix(d["frame"]))
         d["valid"] = self.model.moved_overlaps(d["moving"], d["transform"]) is None
         turned = d["turns"] * 90 + d["angle"]

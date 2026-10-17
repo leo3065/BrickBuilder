@@ -171,8 +171,8 @@ tests/               pytest suite
   prisms that may enter another body only through one of its slots, base on or below the slot's
   plane (hollow undersides: a lower stud goes in less deep; it still connects with half its
   height in). Used by previews and by every
-  `move_parts` / turned-placement commit against all staying parts; the Place tool on one grid
-  still uses only the occupancy map.
+  `move_parts` / turned-placement commit against all staying parts, and by `can_place` (on one grid
+  that adds the stud rule to the occupancy map). Base plates have no slots, so they can't go on studs.
 - `Viewport.notice` is a one-line status-bar message (why something was refused, what's moving).
   A turn or drag in progress is cancelled by Esc, undo/redo, delete, tool change and New/Open.
 

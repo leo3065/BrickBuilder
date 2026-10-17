@@ -63,7 +63,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation. Stud-held parts: done (Shift+R realigns to the nearest quarter turn about the holding stud, side studs too). Ball joints: still to do.
 - [x] Tilted frames: grids turned about a horizontal axis (side studs; ball joints next). Studs and slots carry an axis (socket `axis`); contacts, the clash test, rendering, the turn finder, Shift+R and nudges work along any axis; placing against a side stud creates (or reuses) its grid.
 - [x] Dragging the selection onto a side stud (it lands on the stud's grid, like placing).
-- [ ] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above isn't caught by the Place tool (moves and turns already check it; see docs/turning.md). Side studs make it more visible: a part can be placed flush against a side-stud face, through the stud.
+- [x] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above is now refused, as is a part flush against a side-stud face (`can_place` runs the full clash test). Base plates have no slots (underside rule "none"), so they can't be placed on studs.
 - [x] Reuse a frame that lines up when turning or placing a turned part (as side studs already do, `Model.find_grid`), so parts turned to the same angle on studs in one line share a grid and can be bridged (`Model.lined_up_frames`).
 - [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.
 

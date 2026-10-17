@@ -448,11 +448,13 @@ class Model:
         return True
 
     def can_place(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> bool:
-        """Fits its frame's grid and doesn't clash with parts in other frames."""
+        """Fits its frame's grid and doesn't clash with anything: the full clash test against every
+        part (on its own grid bodies can only touch, so there it's the studs that count: a stud
+        outside the new part's slots, or the new part's stud outside another's, blocks)."""
         if not self._fits(frame, footprint_regions(self.profile, part, pos, turns)):
             return False
         geo = self.placement_geometry(part, pos, turns, self.frame_matrix(frame))
-        return not self.cross_frame_overlaps(frame, self.shape(geo))
+        return not self.clashes(self.shape(geo))
 
     def shape(self, geo) -> collision.Shape:
         """World geometry (a placement_geometry dict, or a PlacedPart) -> what the clash test needs."""

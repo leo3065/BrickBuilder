@@ -106,8 +106,9 @@ nudges (no target) and drags (`target_frame`: the grid it's put down on becomes 
 see part_format.md "Moving the selection").
 
 ## The clash test (`collision.py`)
-Used by the turn preview, `move_parts`, `can_place` (across frames), turned placement and
-View > Highlight Colliding Parts. On one grid the sub-cell occupancy map decides instead (exact).
+Used by the turn preview, `move_parts`, `can_place`, turned placement and View > Highlight
+Colliding Parts. On one grid the sub-cell occupancy map decides body overlap (exact), and the clash
+test adds the studs.
 - **Bodies**: every body is convex (box, rounded box, wedge), so two bodies are apart iff an axis
   separates them: a face normal of either, or the cross product of an edge direction from each
   (separating axis test, numpy). They clash only if they overlap by more than `PENETRATION` along
@@ -147,5 +148,3 @@ part in it, as one undo step.
   planned snapping solver does).
 - Sliding along a slot is detected (it's in the null space) but not offered.
 - Explicit pins don't exist yet; only grounded / largest.
-- Placing on one grid doesn't run the stud part of the clash test (moves and turns do): a
-  half-offset part placed so its studs miss the slots above isn't caught.

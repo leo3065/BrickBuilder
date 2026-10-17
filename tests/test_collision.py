@@ -92,3 +92,18 @@ def test_arm_turns_freely_on_a_single_stud(model):
     for degrees in (7.5, 30, 60, 82.5):
         frame = turned_about(model, stud, degrees)
         assert model.can_place(lib(model, "brick_1x4"), (1, 1, 1), 0, frame.id), degrees
+
+
+def test_placing_checks_studs_on_one_grid_too(model):
+    # Flush against a side stud's face: the stud is in the way
+    model.add_part(lib(model, "brick_1x1_side_stud"), (0, 0, 0), 0, "red")
+    assert not model.can_place(lib(model, "brick_1x1"), (2, 0, 0), 0)
+    assert model.can_place(lib(model, "brick_1x1"), (-2, 0, 0), 0)      # the other side is plain
+    # Half a cell sideways on a 2x2: a 1x2's studs would miss the slot above
+    model.add_part(lib(model, "brick_2x2"), (10, 0, 0), 0, "white")
+    assert not model.can_place(lib(model, "brick_1x2"), (11, 0, 1), 0)
+    # Half a cell along: a 1x2's end wall would sit on the second stud, but a 1x3's slot takes both
+    assert not model.can_place(lib(model, "brick_1x2"), (10, 1, 1), 0)
+    assert model.can_place(lib(model, "brick_1x3"), (10, -1, 1), 0)
+    # Plain stacking, of course
+    assert model.can_place(lib(model, "brick_2x2"), (10, 0, 1), 0)

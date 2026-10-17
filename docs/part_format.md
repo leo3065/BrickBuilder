@@ -246,7 +246,7 @@ once the hand-written library shows real duplication pain.
   sockets still line up within tolerance?); the app does not solve for joint angles. v1 may
   only *create* tree-shaped frames, but nothing in the format should assume a tree.
 
-## Moving the selection (decided ✅)
+## Moving the selection (decided ✅, built ✅)
 - **What moves: exactly the selection.** Moving is an edit, not a physical motion (unlike
   turning, nothing that hangs off it comes along); groups and Select Connected make it easy to
   take a whole subassembly. Contacts it leaves behind are simply broken.
@@ -264,6 +264,11 @@ once the hand-written library shows real duplication pain.
 - What moves stays rigid inside: turned grids within the selection keep their relative angles.
   Groups don't change (they're separate from frames). Same validity as placing: red preview on a
   clash, no stud contact required. Emptied frames are removed. One undo step.
+- As built: `History.move_parts(ids, transform, target_frame)`; a drag passes the target grid, a
+  nudge doesn't. A moved part is checked with the full clash test against everything that stays,
+  on its own grid too, so a sideways half-step that puts a stud outside a slot is refused. Parts that
+  sit half-offset on their grid (e.g. a 1×4 on a 2×2 one-stud) need H to drop things onto them, as
+  when placing.
 
 ## Groups, pins and moving subassemblies
 Two separate trees ✅ (groups implemented, save v4):

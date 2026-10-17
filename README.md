@@ -69,7 +69,9 @@ uv run pytest
     empty space goes back to the main grid.
 - **Select (W):** click a part, or its whole outermost group (outlined in blue on hover);
   double-click drills into a group; Alt+click picks a single part. Ctrl+click adds or removes;
-  drag a box to select several. **Delete** removes the selection and picking a colour recolours
+  drag a box to select several. **Drag a selected part** to move the selection onto any face or
+  grid (Space turns it, [ / ] fine turn, Esc cancels); **arrow keys** move it half a cell (H) or a
+  cell along its own grid, **PgUp / PgDown** a layer. **Delete** removes the selection and picking a colour recolours
   it (one undo step each). **Ctrl+A** selects all, **Esc** clears. Edit > Select Connected grows
   the selection to whole connected subassemblies.
   - **Ctrl+G / Ctrl+Shift+G:** group / ungroup the selection. Groups nest; the Groups dock lists

@@ -135,8 +135,9 @@ def intersect_aabb(ray: Ray, box_min: glm.vec3, box_max: glm.vec3) -> Optional[T
 
     return t_min, normal
 
-def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optional[glm.vec3], Optional[glm.vec3]]:
-    # Returns (hit part, face normal, hit point); see model.placement_target for where to place
+def intersect_model(ray: Ray, model: Model, ignore=()) -> Tuple[Optional[PlacedPart], Optional[glm.vec3], Optional[glm.vec3]]:
+    # Returns (hit part, face normal, hit point); see model.placement_target for where to place.
+    # Parts in `ignore` are looked through (e.g. the ones being dragged)
     closest_t = 100000.0
     hit_part = None
     hit_normal = None
@@ -144,7 +145,7 @@ def intersect_model(ray: Ray, model: Model) -> Tuple[Optional[PlacedPart], Optio
     # Optimization: Grid traversal is better, but iterating all parts is okay for start < 1000 parts
     for placed in model.parts.values():
         # Cheap reject on the bounding box, then the real bodies (wedges have sloped faces)
-        if not intersect_aabb(ray, *placed.box):
+        if placed.id in ignore or not intersect_aabb(ray, *placed.box):
             continue
         for solid in placed.solids:
             result = ray_convex(ray.origin, ray.direction, solid)

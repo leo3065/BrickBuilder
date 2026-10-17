@@ -161,7 +161,7 @@ def test_placing_a_turned_part(model):
     # On a full 2x4's studs: blocked
     h.add_part(lib(model, "brick_2x4"), (10, 0, 0), 0, "white")
     centre = glm.vec3(model.profile.sub_to_world((12, 2, 0)))
-    assert "overlap" in model.turned_placement_problem(lib(model, "brick_2x4"), (10, 0, 1), 0, turn(centre, 30))
+    assert "stud" in model.turned_placement_problem(lib(model, "brick_2x4"), (10, 0, 1), 0, turn(centre, 30))
 
     before = snapshot(model)
     from brickbuilder.core.model import decompose
@@ -169,3 +169,37 @@ def test_placing_a_turned_part(model):
     assert placed is not None and placed.frame != 0 and model.connections()[placed.id] == {base.id}
     h.undo()
     assert snapshot(model) == before
+
+
+def test_dropping_onto_another_grid(model):
+    """A drag puts parts down on the target's grid (move_parts with target_frame)."""
+    h = History(model)
+    base, arm, stud = on_one_stud(model, h)
+    h.move_parts([arm.id], turn(stud, 30))
+    turned = model.parts[arm.id].frame
+    loose = h.add_part(lib(model, "brick_1x1"), (20, 20, 0), 0, "white")
+
+    # The loose brick onto the turned arm's grid: lined up with it, so it joins that frame
+    w_t = model.frame_matrix(turned)
+    src = model.profile.sub_to_world((21, 21, 0))         # its cell centre (root grid)
+    dst = model.profile.sub_to_world((2, 6, 2))           # a cell centre on the arm's top (arm grid)
+    t = w_t * glm.translate(glm.mat4(1.0), dst - src)
+    assert h.move_parts([loose.id], t, turned) is None
+    moved = model.parts[loose.id]
+    assert moved.frame == turned and moved.pos == (1, 5, 2) and len(model.frames) == 2
+    assert model.connections()[loose.id] == {arm.id}
+
+    # The arm back onto the root grid's ground: its frame lines up with the root, so it merges
+    # into it and the brick on it comes along (frame emptied and removed)
+    w_a = model.frame_matrix(turned)
+    t = glm.translate(glm.mat4(1.0), glm.vec3(40, 0, -model.profile.cell.z)) * glm.inverse(w_a)
+    assert h.move_parts([arm.id, loose.id], t, 0) is None
+    assert set(model.frames) == {0}
+    assert model.parts[arm.id].frame == 0 and model.parts[loose.id].frame == 0
+
+    # Dropped with a fine turn: a new frame, child of the target
+    lone = h.add_part(lib(model, "brick_1x1"), (30, 30, 0), 0, "white")
+    t = turn(model.profile.sub_to_world((31, 31, 0)), 15)
+    assert h.move_parts([lone.id], t, 0) is None
+    f = model.parts[lone.id].frame
+    assert f != 0 and model.frames[f].parent == 0

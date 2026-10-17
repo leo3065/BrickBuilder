@@ -134,8 +134,9 @@ tests/               pytest suite
 ## Known gaps / plan-vs-code drift (verify before relying on feature_plan.md)
 - **6-view / isometric / 30° rotation buttons** were ticked in `feature_plan.md` but never
   existed in any commit (`git log -S isometric` only hits the plan). Now unticked.
-- **Moving parts** (translation) has no UI yet, though `History.move_parts` handles any rigid
-  transform; turning is done (Turn tool).
+- **Moving the selection**: drag in the Select tool (`Viewport._start_drag/_update_drag/_finish_drag`,
+  `move_parts(..., target_frame)`), arrows / PgUp / PgDown (`nudge_selection`, along its own grid).
+  `move_parts` commits check the full clash test against all staying parts (same as the preview).
 - Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
   a global floor meaningless and building from the top is legitimate. "Shift all" is planned.
 - Placement: the cell under the cursor is where the part's **anchor cell** goes (A / Shift+A

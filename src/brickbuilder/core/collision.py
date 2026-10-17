@@ -7,7 +7,7 @@ or the cross product of an edge direction from each.
 """
 import math
 from dataclasses import dataclass
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import glm
 import numpy as np
@@ -132,15 +132,15 @@ def _in_a_slot(p: glm.vec3, slots, tolerance: float) -> bool:
     return False
 
 
-def clash(a: Shape, b: Shape, tolerance: float = 1e-3) -> bool:
-    """Do two parts get in each other's way: bodies overlapping, or a stud of one inside the
-    other's body other than in one of its slots."""
+def clash(a: Shape, b: Shape, tolerance: float = 1e-3) -> Optional[str]:
+    """How two parts get in each other's way, or None: "bodies" overlapping, or a "stud" of one
+    inside the other's body other than in one of its slots."""
     if not boxes_overlap(a.box, b.box):
-        return False
+        return None
     if hulls_overlap(a.hulls, b.hulls):
-        return True
+        return "bodies"
     for x, y in ((a, b), (b, a)):
         for base, h in x.studs:
             if hulls_overlap([h], y.hulls) and not _in_a_slot(base, y.slots, tolerance):
-                return True
-    return False
+                return "stud"
+    return None

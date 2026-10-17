@@ -101,7 +101,7 @@ class MainWindow(QMainWindow):
         self.half_snap_action.toggled.connect(self.set_half_snap)
         edit_menu.addAction(self.half_snap_action)
 
-        nudge_menu = edit_menu.addMenu("Nudge Preview Half a Cell")
+        nudge_menu = edit_menu.addMenu("Nudge (Preview or Selection)")
         for label, key, dx, dy in (("Left", "Left", -1, 0), ("Right", "Right", 1, 0),
                                    ("Up (away)", "Up", 0, 1), ("Down (toward you)", "Down", 0, -1)):
             action = QAction(label, self)
@@ -137,6 +137,11 @@ class MainWindow(QMainWindow):
             action.setShortcut(key)
             action.setToolTip("Turn the selection by one snap step (7.5°) about the stud it's held by")
             action.triggered.connect(lambda _=False, s=sign: self.viewport.turn_step(s))
+            edit_menu.addAction(action)
+        for text, key, layers in (("Move Selection Up a Layer", "PgUp", 1), ("Move Selection Down a Layer", "PgDown", -1)):
+            action = QAction(text, self)
+            action.setShortcut(key)
+            action.triggered.connect(lambda _=False, n=layers: self.viewport.nudge_selection(0, 0, n))
             edit_menu.addAction(action)
         working_action = QAction("Use Grid Under Cursor", self)
         working_action.setShortcut("F")
@@ -293,7 +298,7 @@ class MainWindow(QMainWindow):
         self.update_status()
 
     def nudge(self, dx: int, dy: int):
-        self.viewport.nudge_ghost(dx, dy)
+        self.viewport.nudge_keys(dx, dy)
         self.update_status()
 
     def cycle_anchor(self, step: int):
@@ -440,6 +445,9 @@ class MainWindow(QMainWindow):
           hover); double-click drills into the group; Alt+click picks one part. Ctrl+click<br>
           adds/removes; drag a box. Delete removes the selection, picking a colour recolours it.<br>
           Ctrl+A selects all, Esc clears. Ctrl+G groups the selection, Ctrl+Shift+G ungroups;<br>
+          drag a selected part to move the selection onto another face or grid (Space turns it,<br>
+          [ / ] fine turn, Esc cancels); arrow keys move it half a cell (H) or a cell along its<br>
+          own grid, PgUp / PgDown a layer.<br>
           rename groups in the Groups dock (double-click). Edit > Select Connected grows the<br>
           selection to whole connected subassemblies.<br>
         - Turn (T): drag a part (or the selection) to turn it about the stud it's held by, in<br>

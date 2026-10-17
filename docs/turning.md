@@ -90,8 +90,11 @@ Builds one command (list of ops) for the world transform:
 
 Op order: add frames, remove parts, set frames, add parts, remove frames (so parts never collide
 with their own old positions). `_try_run` applies the ops one by one; if any fails (same-grid
-overlap via the occupancy map, or a model error), or any moved part clashes with a part on another
-grid, everything applied is undone and the reason is returned. Nothing is pushed then.
+overlap via the occupancy map, or a model error), or any moved part clashes with any part that
+stayed (the full clash test, on its own grid too, the same as the preview), everything applied is
+undone and the reason is returned. Nothing is pushed then. `move_parts` also does plain moves:
+nudges (no target) and drags (`target_frame`: the grid it's put down on becomes every part's home,
+see part_format.md "Moving the selection").
 
 ## The clash test (`collision.py`)
 Used by the turn preview, `move_parts`, `can_place` (across frames), turned placement and
@@ -129,5 +132,5 @@ part in it, as one undo step.
   planned snapping solver does).
 - Sliding along a slot is detected (it's in the null space) but not offered.
 - Explicit pins don't exist yet; only grounded / largest.
-- The stud part of the clash test only runs across grids. On one grid, a half-offset part whose
-  studs miss the slots above isn't caught.
+- Placing on one grid doesn't run the stud part of the clash test (moves and turns do): a
+  half-offset part placed so its studs miss the slots above isn't caught.

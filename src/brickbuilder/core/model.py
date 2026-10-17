@@ -386,7 +386,14 @@ class Model:
         """Parts (except those `skip` says) that a shape clashes with."""
         return [p.id for p in self.parts.values()
                 if not skip(p) and collision.boxes_overlap(shape.box, p.box, -self.profile.stud.height)
-                and collision.clash(shape, self.part_shape(p.id))]
+                and collision.clash(shape, self.part_shape(p.id)) is not None]
+
+    def clash_reason(self, a: collision.Shape, part_id: int) -> str:
+        """Words for why a shape clashes with a part (for the status bar)."""
+        kind = collision.clash(a, self.part_shape(part_id))
+        if kind == "stud":
+            return f"a stud would be outside the slots of part {part_id}"
+        return f"it would overlap part {part_id}"
 
     def cross_frame_overlaps(self, frame: int, shape: collision.Shape, ignore: Iterable[int] = ()) -> List[int]:
         """Parts outside `frame` (and not in `ignore`) that a shape clashes with. Within a frame
@@ -413,9 +420,10 @@ class Model:
         from brickbuilder.core.connections import contacts_between
         geo = self.placement_geometry(part, pos, turns, matrix)
         up = glm.vec3(matrix * glm.vec4(0, 0, 1, 0))
-        hit = self.clashes(self.shape(geo["solids"], geo["studs"], geo["antistuds"], up))
+        shape = self.shape(geo["solids"], geo["studs"], geo["antistuds"], up)
+        hit = self.clashes(shape)
         if hit:
-            return f"it would overlap part {hit[0]}"
+            return self.clash_reason(shape, hit[0])
         ghost = SimpleNamespace(id=-1, studs=geo["studs"], antistuds=geo["antistuds"])
         if not contacts_between(self.profile, [ghost], self.parts.values()):
             return "a turned part has to sit on a stud (or take one)"
@@ -455,7 +463,7 @@ class Model:
             for fb in frames[i + 1:]:
                 for a in by_frame[fa]:
                     for b in by_frame[fb]:
-                        if collision.clash(self.part_shape(a.id), self.part_shape(b.id)):
+                        if collision.clash(self.part_shape(a.id), self.part_shape(b.id)) is not None:
                             out |= {a.id, b.id}
         return out
 

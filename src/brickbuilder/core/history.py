@@ -257,9 +257,13 @@ class History:
 
     # --- moving parts across frames ----------------------------------------------------------
 
-    def move_parts(self, part_ids, transform: glm.mat4) -> Optional[str]:
+    def move_parts(self, part_ids, transform: glm.mat4, target_frame: Optional[int] = None) -> Optional[str]:
         """Move parts rigidly by a world transform, as one undo step. Returns None if done, or
         why it can't be (nothing changes then).
+
+        `target_frame`: the grid they're being put down on (a drag). Without it (turning,
+        nudging) each part's home is the grid it's on; with it, that frame is everyone's home:
+        parts lined up with it go onto it, new frames and moved frames become its children.
 
         Frames: a frame whose parts (with everything in its child frames) all move is moved
         itself. Other moving parts get a new frame, their old grid moved, as a child of it, so
@@ -308,14 +312,14 @@ class History:
             return out if all(c is not None for c in out.values()) else None
 
         for f, pids in sorted(loose.items()):
-            world = m.frame_matrix(f)
-            origin, rotation = decompose(glm.inverse(world) * transform * world)
+            home = f if target_frame is None else target_frame
+            origin, rotation = decompose(glm.inverse(m.frame_matrix(home)) * transform * m.frame_matrix(f))
             converted = on_parent_grid(origin, rotation, pids)
             if converted is not None:
-                move_into(pids, f, converted)  # e.g. a quarter turn: stays on its grid
+                move_into(pids, home, converted)  # e.g. a quarter turn: stays on (or lands on) the grid
             else:
                 new_frame_for[f] = next_frame
-                add_frames.append(AddFrameOp(next_frame, f, origin, rotation))
+                add_frames.append(AddFrameOp(next_frame, home, origin, rotation))
                 move_into(pids, next_frame)
                 next_frame += 1
 
@@ -325,9 +329,8 @@ class History:
                 parent = new_frame_for[frame.parent]
                 origin, rotation = frame.origin, frame.rotation
             else:
-                parent = frame.parent
-                world = m.frame_matrix(parent)
-                origin, rotation = decompose(glm.inverse(world) * transform * world * frame.local_matrix())
+                parent = frame.parent if target_frame is None else target_frame
+                origin, rotation = decompose(glm.inverse(m.frame_matrix(parent)) * transform * m.frame_matrix(g))
             own = [p.id for p in m.parts.values() if p.frame == g]
             converted = None if parent in new_frame_for.values() else on_parent_grid(origin, rotation, own)
             if converted is not None:
@@ -354,12 +357,14 @@ class History:
         except (OutOfSync, ModelError) as e:
             reason = str(e)
         if reason is None:
+            # Against everything that stayed, not only other grids: the same test as the preview
+            # (Model.moved_overlaps), so a stud outside a slot blocks on one grid too
             moved = set(moved)
             for pid in sorted(moved):
-                p = self.model.parts[pid]
-                hit = self.model.cross_frame_overlaps(p.frame, self.model.part_shape(pid), ignore=moved)
+                shape = self.model.part_shape(pid)
+                hit = self.model.clashes(shape, lambda q: q.id in moved)
                 if hit:
-                    reason = f"part {pid} would overlap part {hit[0]}"
+                    reason = self.model.clash_reason(shape, hit[0])
                     break
         if reason is not None:
             for op in reversed(done):

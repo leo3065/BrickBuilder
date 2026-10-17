@@ -13,7 +13,8 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Multi-select: click, Ctrl+click, box drag, select all, Edit > Select Connected; delete, recolour and turn the selection as one undo step.
 - [x] Groups: named, nestable subassemblies (Ctrl+G / Ctrl+Shift+G), a Groups dock, hover outline; click selects the outermost group, double-click drills in, Alt+click picks one part. Saved in the file. See docs/part_format.md "Groups, pins and moving subassemblies".
 - [x] Turning already placed parts: the Turn tool (see Intermediate, fine rotation).
-- [ ] Moving the selection (or everything) by half or whole cells, with the arrow keys or by dragging (decided: docs/part_format.md "Moving the selection"), e.g. to make room below a model that was built from the top down. `History.move_parts` already does a pure shift (and merges parts back onto a grid they land on); this needs the UI. Includes sliding along a slot: the turn finder already detects that freedom but doesn't offer it.
+- [x] Moving the selection (or everything, Ctrl+A) by half or whole cells, with the arrow keys (along its own grid; PgUp / PgDown for layers) or by dragging a selected part onto any face or grid, e.g. to make room below a model that was built from the top down. See docs/part_format.md "Moving the selection".
+- [ ] Sliding along a slot (a constrained move): the turn finder already detects that freedom but doesn't offer it.
 - [ ] Copy, paste and duplicate a selection, keeping its groups and frames. Circular arrays and instances build on it.
 - [x] Highlight parts that aren't connected to the main build (View > Highlight Unconnected Parts, U): parts outside the largest connected group get an orange outline.
 
@@ -60,7 +61,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
 - [x] Add a view option that highlights colliding parts in different frames (rotated parts, joints): View > Highlight Colliding Parts (O), in red. Within one frame, overlaps are already refused when placing and loading; across frames the placement preview turns red too.
 - [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation. Z-turned parts: done (Shift+R realigns to the nearest quarter turn of the grid they're held on). Ball joints: still to do.
-- [ ] Stud check on one grid: a half-offset part whose studs miss the slots of the part above isn't caught (the stud part of the clash test only runs across frames; see docs/turning.md).
+- [ ] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above isn't caught by the Place tool (moves and turns already check it; see docs/turning.md).
 - [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.
 
 ### Advanced

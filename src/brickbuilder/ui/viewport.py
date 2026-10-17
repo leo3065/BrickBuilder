@@ -58,7 +58,9 @@ class Viewport(QOpenGLWidget):
         # Selected part ids (Select tool), and the box being dragged: (x0, y0, x1, y1) widget px
         self.selection: set = set()
         self.select_rect = None
-        self._press = None  # (position, modifiers) of a left press in the Select tool
+        self._press = None  # (position, modifiers, hit part, hit point, normal) of a left press, Select tool
+        # A drag of the selection (pick up, put down): see _start_drag
+        self.dragging: Optional[dict] = None
         # The group double-click drilled into: clicks inside it select one level below it.
         # None = top level (clicks select whole outermost groups)
         self.select_context: Optional[int] = None
@@ -109,8 +111,7 @@ class Viewport(QOpenGLWidget):
                              if self.highlight_unconnected else (),
                              collided=[self.model.parts[pid].edges for pid in self.model.collisions()]
                              if self.highlight_collisions else (),
-                             turning=(self.turning["moving"], self.turning["transform"], self.turning["valid"])
-                             if self.turning else None,
+                             turning=self._moving_preview(),
                              pivot=self.turning["pivot"] if self.turning else None,
                              grid_matrix=self.model.frame_matrix(self.working_frame) if self.working_frame else None)
 
@@ -118,6 +119,7 @@ class Viewport(QOpenGLWidget):
         self.current_tool = tool
         self.ghost_pos = None
         self.turning = None
+        self.dragging = None
         self.notice = ""
         if tool not in (Tool.SELECT, Tool.TURN):
             self.selection = set()
@@ -176,6 +178,10 @@ class Viewport(QOpenGLWidget):
         self.refresh_ghost()
 
     def rotate_current_part(self, quarter_turns: int):
+        if self.dragging:  # Space while dragging the selection turns it
+            self.dragging["turns"] = (self.dragging["turns"] + quarter_turns) % 4
+            self._update_drag()
+            return
         # The anchor cell stays on the cell under the cursor, so the part turns around it
         self.current_turns = (self.current_turns + quarter_turns) % 4
         self.refresh_ghost()
@@ -206,9 +212,11 @@ class Viewport(QOpenGLWidget):
         self.edited.emit()
 
     def clear_selection(self):
-        if self.turning:  # Esc while turning cancels the turn
-            self.turning = None
+        if self.turning or self.dragging:  # Esc while turning or dragging cancels it
+            self.turning = self.dragging = None
+            self.notice = ""
             self.update()
+            self.edited.emit()
             return
         self.selection = set()
         self.select_context = None
@@ -311,6 +319,15 @@ class Viewport(QOpenGLWidget):
         return self._commit_turn(plan.moving, self.turn_matrix(pivot, degrees))
 
     def turn_step(self, sign: int):
+        if self.dragging:
+            d = self.dragging
+            angle = d["angle"] + sign * self.rotation_snap
+            d["turns"] = (d["turns"] + math.floor(angle / 90 + 1e-9)) % 4
+            d["angle"] = angle - 90 * math.floor(angle / 90 + 1e-9)
+            if abs(d["angle"]) < 1e-9 or abs(d["angle"] - 90) < 1e-9:
+                d["angle"] = 0.0
+            self._update_drag()
+            return
         if self.current_tool == Tool.PLACE:
             self.turn_ghost(sign * self.rotation_snap)
         else:
@@ -359,6 +376,13 @@ class Viewport(QOpenGLWidget):
         """Shift+R: turn the selection to the nearest quarter turn of the grid it's held on (the
         root grid if it isn't held), which puts it back on that grid. In the Place tool: the
         preview back onto its grid."""
+        if self.dragging:
+            d = self.dragging
+            if d["angle"] > 45:
+                d["turns"] = (d["turns"] + 1) % 4
+            d["angle"] = 0.0
+            self._update_drag()
+            return True
         if self.current_tool == Tool.PLACE:
             if self.ghost_angle:
                 self.turn_ghost(90 - self.ghost_angle if self.ghost_angle > 45 else -self.ghost_angle)
@@ -444,6 +468,130 @@ class Viewport(QOpenGLWidget):
             self.update()
             self.edited.emit()
 
+    # --- moving the selection -------------------------------------------------------------------
+
+    def _moving_preview(self):
+        """(part ids, world transform, valid) for whatever is being turned or dragged, or None."""
+        for state in (self.turning, self.dragging):
+            if state and state.get("transform") is not None:
+                return state["moving"], state["transform"], state["valid"]
+        return None
+
+    def _home_frame(self, part_ids) -> int:
+        """The frame most of the given parts are in (ties: the lower id)."""
+        counts = {}
+        for pid in part_ids:
+            f = self.model.parts[pid].frame
+            counts[f] = counts.get(f, 0) + 1
+        return min(counts, key=lambda f: (-counts[f], f))
+
+    def _grid_axes(self, frame: int):
+        """Grid axes (as (x, y) steps) of a frame that best match screen right and screen up from
+        the current view: right gets the closer one (X on a tie), up the other."""
+        x = glm.vec3(self.model.frame_matrix(frame) * glm.vec4(1, 0, 0, 0))
+        yaw = self.camera.yaw - math.atan2(x.y, x.x)  # the camera's yaw seen from that grid
+        right = glm.vec2(-math.sin(yaw), math.cos(yaw))
+        up = glm.vec2(-math.cos(yaw), -math.sin(yaw))
+        if abs(right.x) >= abs(right.y):
+            return (int(math.copysign(1, right.x)), 0), (0, int(math.copysign(1, up.y)))
+        return (0, int(math.copysign(1, right.y))), (int(math.copysign(1, up.x)), 0)
+
+    def nudge_keys(self, screen_dx: int, screen_dy: int):
+        """Arrow keys: move the selection (Select / Turn tool) or nudge the placement preview."""
+        if self.current_tool in (Tool.SELECT, Tool.TURN) and self.selection and not self.dragging:
+            self.nudge_selection(screen_dx, screen_dy, 0)
+        elif self.current_tool == Tool.PLACE:
+            self.nudge_ghost(screen_dx, screen_dy)
+
+    def nudge_selection(self, screen_dx: int, screen_dy: int, layers: int) -> bool:
+        """Move the selection along its own grid (never changing frames): half a cell (H on) or
+        a whole cell along the grid axis nearest the screen direction, or `layers` layers up."""
+        if not self.selection:
+            return False
+        frame = self._home_frame(self.selection)
+        nx, ny, nz = self.profile.subdiv
+        right, up = self._grid_axes(frame)
+        dx = (right[0] * screen_dx + up[0] * screen_dy) * (1 if self.half_snap else nx)
+        dy = (right[1] * screen_dx + up[1] * screen_dy) * (1 if self.half_snap else ny)
+        offset = self.profile.sub_to_world((dx, dy, layers * nz)) - self.profile.sub_to_world((0, 0, 0))
+        world = glm.vec3(self.model.frame_matrix(frame) * glm.vec4(offset, 0.0))
+        reason = self.history.move_parts(self.selection, glm.translate(glm.mat4(1.0), world))
+        self.notice = f"can't move: {reason}" if reason else ""
+        self.update()
+        self.edited.emit()
+        return reason is None
+
+    def _target_under(self, x, y, ignore=()):
+        """Where something placed under the cursor goes: (frame, target sub-cell) or (frame, None).
+        Against the face under the cursor, on that part's grid; else on the working grid's
+        ground, when looking down at it."""
+        ray = picking.get_mouse_ray(x, y, self.width(), self.height(), self.camera)
+        hit, normal, point = picking.intersect_model(ray, self.model, ignore)
+        if hit:
+            point, normal = self.model.to_frame(hit.frame, point, normal)
+            return hit.frame, placement_target(self.profile, point, normal, self.half_snap)
+        frame = self.working_frame
+        m = self.model.frame_matrix(frame)
+        up = glm.normalize(glm.vec3(m * glm.vec4(0, 0, 1, 0)))
+        if glm.dot(ray.direction, up) < -1e-6:
+            t = picking.intersect_plane(ray, up, glm.vec3(m * glm.vec4(0, 0, 0, 1)))
+            if t:
+                point, _ = self.model.to_frame(frame, ray.origin + ray.direction * t, up)
+                return frame, placement_target(self.profile, point, glm.vec3(0, 0, 1), self.half_snap)
+        return frame, None
+
+    def _cell_centre(self, sub) -> glm.vec3:
+        """Centre of the bottom of the cell whose min-corner sub-cell is `sub` (grid space)."""
+        nx, ny, _ = self.profile.subdiv
+        return self.profile.sub_to_world((sub[0] + nx / 2, sub[1] + ny / 2, sub[2]))
+
+    def _start_drag(self, part, point, normal):
+        """Pick up the selection by `part`: its bottom-layer cell under the cursor is the anchor,
+        which goes where a placed part's anchor cell would."""
+        frame = part.frame
+        local, n = self.model.to_frame(frame, point, normal)
+        s = self.profile.world_to_sub(local - n * 0.01)  # just inside the face that was hit
+        nx, ny, _ = self.profile.subdiv
+        cell = (part.pos[0] + math.floor((s[0] - part.pos[0]) / nx) * nx,
+                part.pos[1] + math.floor((s[1] - part.pos[1]) / ny) * ny,
+                part.pos[2])
+        self.dragging = {"moving": set(self.selection), "frame": frame, "anchor": self._cell_centre(cell),
+                         "turns": 0, "angle": 0.0, "target": None, "transform": None, "valid": False}
+        self.select_rect = None
+
+    def _update_drag(self, pos=None):
+        d = self.dragging
+        if pos is not None:
+            frame, target = self._target_under(pos.x(), pos.y(), d["moving"])
+            if target is not None:
+                d["target"] = (frame, target)
+        if d["target"] is None:
+            return
+        frame, target = d["target"]
+        c_t = self._cell_centre(target)
+        # The anchor's grid onto the target's grid: anchor cell centre onto the target cell centre,
+        # turned by whole quarter turns, then any fine turn about that centre
+        grid = (glm.translate(glm.mat4(1.0), c_t)
+                * glm.mat4_cast(glm.angleAxis(math.radians(d["turns"] * 90 + d["angle"]), glm.vec3(0, 0, 1)))
+                * glm.translate(glm.mat4(1.0), -d["anchor"]))
+        d["transform"] = self.model.frame_matrix(frame) * grid * glm.inverse(self.model.frame_matrix(d["frame"]))
+        d["valid"] = self.model.moved_overlaps(d["moving"], d["transform"]) is None
+        turned = d["turns"] * 90 + d["angle"]
+        self.notice = (f"moving {len(d['moving'])} part{'s' if len(d['moving']) != 1 else ''}"
+                       + (f", turned {turned:g}°" if turned else "") + ("" if d["valid"] else " (overlaps)"))
+        self.update()
+        self.edited.emit()
+
+    def _finish_drag(self):
+        d, self.dragging = self.dragging, None
+        if d["transform"] is None:
+            self.notice = ""
+        else:
+            reason = self.history.move_parts(d["moving"], d["transform"], d["target"][0])
+            self.notice = f"can't move: {reason}" if reason else ""
+        self.update()
+        self.edited.emit()
+
     def delete_selection(self):
         if self.selection:
             self.history.remove_parts(self.selection)
@@ -455,8 +603,11 @@ class Viewport(QOpenGLWidget):
         self.last_mouse_pos = event.position()
 
         if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.SELECT:
-            # Click or box: decided on release (or once the mouse moves far enough)
-            self._press = (event.position(), event.modifiers())
+            # Click, box or drag: decided on release (or once the mouse moves far enough)
+            ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(),
+                                        self.camera)
+            hit, normal, point = picking.intersect_model(ray, self.model)
+            self._press = (event.position(), event.modifiers(), hit, point, normal)
             return
         if event.button() == Qt.MouseButton.LeftButton and self.current_tool == Tool.TURN:
             self._start_turn(event)
@@ -495,9 +646,13 @@ class Viewport(QOpenGLWidget):
         if event.button() == Qt.MouseButton.LeftButton and self.turning is not None:
             self._finish_turn()
             return
+        if event.button() == Qt.MouseButton.LeftButton and self.dragging is not None:
+            self._press = None
+            self._finish_drag()
+            return
         if event.button() != Qt.MouseButton.LeftButton or self._press is None:
             return
-        start, modifiers = self._press
+        start, modifiers = self._press[:2]
         add = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
         single = bool(modifiers & Qt.KeyboardModifier.AltModifier)  # Alt: one part, ignoring groups
         self._press = None
@@ -561,11 +716,19 @@ class Viewport(QOpenGLWidget):
         current_pos = event.position()
         self.hover_pos = current_pos
 
-        # Dragging in the Select tool draws a selection box once it's more than a few pixels
-        if self._press is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            start = self._press[0]
+        # Dragging in the Select tool, once it's more than a few pixels: from a selected part it
+        # moves the selection, from anywhere else it draws a selection box
+        if self.dragging is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self._update_drag(current_pos)
+        elif self._press is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            start, modifiers, hit, point, normal = self._press
             if self.select_rect or (current_pos - start).manhattanLength() > 4:
-                self.select_rect = (start.x(), start.y(), current_pos.x(), current_pos.y())
+                plain = not modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
+                if not self.select_rect and plain and hit is not None and hit.id in self.selection:
+                    self._start_drag(hit, point, normal)
+                    self._update_drag(current_pos)
+                else:
+                    self.select_rect = (start.x(), start.y(), current_pos.x(), current_pos.y())
 
         # Tool-specific hover logic
         if self.current_tool == Tool.PLACE:
@@ -661,16 +824,9 @@ class Viewport(QOpenGLWidget):
         self.refresh_ghost()
 
     def nudge_ghost(self, screen_dx: int, screen_dy: int):
-        """Move the preview one sub-cell (half a cell) along the world axis that best matches the
-        screen direction (right = +screen_dx, up = +screen_dy) from the current view."""
-        # Screen-right and screen-up (away from the viewer) projected onto the ground plane
-        right = glm.vec2(-math.sin(self.camera.yaw), math.cos(self.camera.yaw))
-        up = glm.vec2(-math.cos(self.camera.yaw), -math.sin(self.camera.yaw))
-        # Right gets the closer world axis (X on a tie), up gets the other one
-        if abs(right.x) >= abs(right.y):
-            right_axis, up_axis = (int(math.copysign(1, right.x)), 0), (0, int(math.copysign(1, up.y)))
-        else:
-            right_axis, up_axis = (0, int(math.copysign(1, right.y))), (int(math.copysign(1, up.x)), 0)
+        """Move the preview one sub-cell (half a cell) along the axis of its grid that best matches
+        the screen direction (right = +screen_dx, up = +screen_dy) from the current view."""
+        right_axis, up_axis = self._grid_axes(self.ghost_frame if self.ghost_pos is not None else 0)
         dx = right_axis[0] * screen_dx + up_axis[0] * screen_dy
         dy = right_axis[1] * screen_dx + up_axis[1] * screen_dy
         self.nudge = (self.nudge[0] + dx, self.nudge[1] + dy)

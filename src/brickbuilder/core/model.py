@@ -474,6 +474,13 @@ class Model:
                 if not skip(p) and collision.boxes_overlap(shape.box, p.box, -self.profile.stud.height)
                 and collision.clash(shape, self.part_shape(p.id)) is not None]
 
+    def blocking_studs(self, shape: collision.Shape) -> List[Tuple[glm.vec3, glm.vec3]]:
+        """Studs (base, axis), of the shape or of any part, that stop the shape going where it is."""
+        out = []
+        for pid in self.clashes(shape):
+            out += collision.blocking_studs(shape, self.part_shape(pid))
+        return out
+
     def clash_reason(self, a: collision.Shape, part_id: int) -> str:
         """Words for why a shape clashes with a part (for the status bar)."""
         kind = collision.clash(a, self.part_shape(part_id))

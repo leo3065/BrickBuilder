@@ -357,7 +357,9 @@ class Renderer:
         gl.glDepthFunc(gl.GL_LESS)
         gl.glEnable(gl.GL_LIGHTING)
 
-    def render_ghost(self, profile, solids, studs, valid, stud_axes=None):
+    def render_ghost(self, profile, solids, studs, valid, stud_axes=None, slots=(), blocking=()):
+        # slots: the preview's antistud slots (world), drawn on its underside so the way its rows
+        # run is visible; blocking: (base, axis) of studs in the way, ringed in red
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
@@ -374,6 +376,50 @@ class Renderer:
 
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_BLEND)
+        if slots:
+            self.draw_slots(slots, profile)
+        if blocking:
+            self.draw_blocking(blocking, profile)
+
+    def draw_slots(self, slots, profile):
+        # Where studs fit under the preview: a line per slot, a small cross for a point, seen
+        # through everything
+        gl.glPushAttrib(gl.GL_ENABLE_BIT | gl.GL_CURRENT_BIT | gl.GL_LINE_BIT)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glLineWidth(3.0)
+        gl.glColor3f(0.1, 0.35, 1.0)
+        r = profile.stud.diameter / 2
+        gl.glBegin(gl.GL_LINES)
+        for a, b, axis in slots:
+            if glm.distance(a, b) < 1e-6:
+                for d in plane_basis(axis):
+                    d = d * r
+                    gl.glVertex3f(*(a - d))
+                    gl.glVertex3f(*(a + d))
+            else:
+                gl.glVertex3f(a.x, a.y, a.z)
+                gl.glVertex3f(b.x, b.y, b.z)
+        gl.glEnd()
+        gl.glPopAttrib()
+
+    def draw_blocking(self, studs, profile):
+        # A red ring around the top of each stud that's in the way, seen through everything
+        gl.glPushAttrib(gl.GL_ENABLE_BIT | gl.GL_CURRENT_BIT | gl.GL_LINE_BIT)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glLineWidth(3.0)
+        gl.glColor3f(1.0, 0.1, 0.1)
+        r = profile.stud.diameter / 2 + 0.3
+        for base, axis in studs:
+            u, v = plane_basis(axis)
+            gl.glBegin(gl.GL_LINE_LOOP)
+            for i in range(24):
+                t = 2 * math.pi * i / 24
+                p = base + axis * profile.stud.height + (u * math.cos(t) + v * math.sin(t)) * r
+                gl.glVertex3f(p.x, p.y, p.z)
+            gl.glEnd()
+        gl.glPopAttrib()
 
     def draw_pivot(self, pivot, axis, profile):
         # The turning axis through the pivot and a ring around it, seen through everything

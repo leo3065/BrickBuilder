@@ -17,7 +17,9 @@ data, not code, so other micro-brick systems could be added without changing the
     patterns from real sets.
   - **Round:** 1×1 and 2×2 cylinders, 1×2, 1×3 and 1×4 with rounded ends, and the 2×2 quarter-circle fan.
   - **Plates:** 10×10 and 20×20 base plates.
-- **Placement preview** that turns red when a part would overlap something.
+- **Placement preview** that turns red when a part would overlap something. It shows its underside
+  slots as blue lines (crosses for single points), so you can see which way a 2×2's rows run, and
+  rings any stud in the way in red.
 - **Turning placed parts** to any angle about the stud they're held by (Turn tool), with
   their own grid for what's built on them.
 - **Rotation** in 90° steps, a choice of which cell of the part sits under the cursor, and

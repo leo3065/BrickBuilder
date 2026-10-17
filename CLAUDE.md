@@ -173,6 +173,8 @@ tests/               pytest suite
   height in). Used by previews and by every
   `move_parts` / turned-placement commit against all staying parts, and by `can_place` (on one grid
   that adds the stud rule to the occupancy map). Base plates have no slots, so they can't go on studs.
+- The ghost also draws its antistud slots (`Renderer.draw_slots`) and, when blocked, rings the
+  studs in the way (`Model.blocking_studs`, `Renderer.draw_blocking`).
 - `Viewport.notice` is a one-line status-bar message (why something was refused, what's moving).
   A turn or drag in progress is cancelled by Esc, undo/redo, delete, tool change and New/Open.
 

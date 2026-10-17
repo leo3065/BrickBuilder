@@ -139,6 +139,14 @@ def clash(a: Shape, b: Shape) -> Optional[str]:
     return None
 
 
+def blocking_studs(a: Shape, b: Shape) -> List[Tuple[glm.vec3, glm.vec3]]:
+    """The studs (base, axis) of either shape that are inside the other's body outside its slots."""
+    if not boxes_overlap(a.box, b.box):
+        return []
+    return [(base, axis) for x, y in ((a, b), (b, a)) for base, axis, h in x.studs
+            if hulls_overlap([h], y.hulls) and not any(in_slot(base, axis, slot) for slot in y.slots)]
+
+
 def in_slot(base: glm.vec3, axis: glm.vec3, slot) -> bool:
     """Does a stud go into a slot's hollow: pointing the slot's way, its centre line through the
     slot, and its base on or below the slot's plane (a lower stud just goes in less deep; a higher

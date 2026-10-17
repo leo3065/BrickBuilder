@@ -96,7 +96,9 @@ class Viewport(QOpenGLWidget):
         if self.ghost_pos is not None:
             geo = self.model.placement_geometry(self.current_part, self.ghost_pos, self.current_turns,
                                                 self.ghost_matrix())
-            ghost = (geo["solids"], geo["studs"], self.ghost_valid, geo["stud_axes"])
+            # Show where its studs fit, and what's in the way when it's red
+            blocking = () if self.ghost_valid else self.model.blocking_studs(self.model.shape(geo))
+            ghost = (geo["solids"], geo["studs"], self.ghost_valid, geo["stud_axes"], [(a, b, n) for (a, b), n in zip(geo["antistuds"], geo["antistud_axes"])], blocking)
         rect = None
         if self.select_rect:
             rect = tuple(v * pixel_ratio for v in self.select_rect)

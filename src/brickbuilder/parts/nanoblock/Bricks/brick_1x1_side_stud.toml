@@ -1,0 +1,13 @@
+# nanoblock.info "1x1 : 2凸" (block 27): a 1×1 with its top stud plus one on a side. Measured:
+# the side stud is centred across the face, its centre 0.875 mm above the bottom (0.28 of a
+# 3.125 mm layer), base flush with the face; same size as a top stud.
+name = "Brick 1×1 side stud"
+
+[[body]]
+shape = "box"
+size = [1, 1, 1]
+
+[[socket]]
+type = "stud"
+at = [1.0, 0.5, 0.28]
+axis = "+x"

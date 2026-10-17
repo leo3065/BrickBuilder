@@ -37,7 +37,7 @@ The largest gap is the 1×1 with a side stud (`1x1 : 2凸`, in 173 kits), then t
 |---|---|---|---|---|
 | 1x1 : 1/2E | 34 | `brick_1x1` | NB101 | plain 1×1 |
 | 1x1 : 1/2F | 32 | `round_1x1` | NB101R | round 1×1 |
-| 1x1 : 2凸 | 27 | | NB101S | 1×1 with a side stud (planned, after frame placement and rotation) |
+| 1x1 : 2凸 | 27 | `brick_1x1_side_stud` | NB101S | 1×1 with a top stud and a side stud (centre 0.875 mm above the bottom) |
 | 1x1 : Cylinder | 17 | | | tall thin cylinder ❓ |
 | 1x2 : 1/2C | 29 | `brick_1x2` | NB102 | plain 1×2 |
 | 1x2 : 1/2BO-1 | 33 | `brick_1x2_1_stud` | NB102S | 1×2 with one centre stud (half-offset stud; fine rotation) |

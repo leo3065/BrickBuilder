@@ -390,6 +390,36 @@ class Model:
             inside |= more
         return inside
 
+    def side_stud_grid(self, part_id: int, stud: int) -> glm.mat4:
+        """The grid (grid space -> world) for building on a part's side stud: Z along the stud,
+        Y along the part's own up (its frame's Z), origin on the stud's base, so cell (0, 0)'s
+        centre is on the stud and layer 0 sits against the face."""
+        p = self.parts[part_id]
+        z = glm.normalize(p.stud_axes[stud])
+        up = glm.vec3(self.frame_matrix(p.frame) * glm.vec4(0, 0, 1, 0))
+        y = glm.normalize(up - z * glm.dot(up, z))
+        x = glm.cross(y, z)
+        return glm.mat4(glm.vec4(x, 0), glm.vec4(y, 0), glm.vec4(z, 0), glm.vec4(p.studs[stud], 1))
+
+    def find_grid(self, grid: glm.mat4) -> Optional[Tuple[int, Sub]]:
+        """An existing frame whose grid lines up with `grid` (grid space -> world): turned by
+        whole quarter turns about Z and offset by whole sub-cells. Returns (frame, the sub-cell
+        that `grid`'s cell (0, 0, 0) is there), or None. Lets parts on side studs in one plane share
+        a frame (so a part can bridge them)."""
+        nx, ny, _ = self.profile.subdiv
+        centre = self.profile.sub_to_world((nx / 2, ny / 2, 0))
+        for f in sorted(self.frames):
+            rel = glm.inverse(self.frame_matrix(f)) * grid
+            origin, rotation = decompose(rel)
+            if to_parent_grid(self.profile, origin, rotation, (0, 0, 0), 0) is None:
+                continue
+            s = self.profile.world_to_sub(glm.vec3(rel * glm.vec4(centre, 1.0)))
+            cell = (s[0] - nx / 2, s[1] - ny / 2, s[2])
+            snapped = tuple(round(v) for v in cell)
+            if all(abs(a - b) < 1e-3 for a, b in zip(cell, snapped)):
+                return f, (snapped[0], snapped[1], snapped[2])
+        return None
+
     def remove_frame(self, frame_id: int) -> None:
         """Remove an empty frame with no child frames."""
         if frame_id == 0:

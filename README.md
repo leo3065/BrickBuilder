@@ -10,7 +10,7 @@ data, not code, so other micro-brick systems could be added without changing the
 ## Features
 - **3D view** with orbit, pan and zoom, orthographic, Z up, and a grid on the ground plane.
 - **Parts** in groups:
-  - **Bricks:** 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8, flat (studless) 1×2 and 2×4,
+  - **Bricks:** 1×1, 1×1 with a side stud, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8, flat (studless) 1×2 and 2×4,
     2×2 L, 2×3 T, and the 1×2 and 2×2 with a single centre stud and the 1×3 with 2 studs.
   - **Slopes:** 1×2 (with a 1- or 2-layer wedge), 1×3, 2×2, 2×3 and 2×4, plus inverted versions of
     the two 1×2 slopes. A slope and its inverted partner can share a cell, as in two-colour
@@ -67,6 +67,8 @@ uv run pytest
     on a stud); **Shift+R** puts it back.
   - **F:** use the grid of the part under the cursor for empty space and the ground too; F over
     empty space goes back to the main grid.
+  - **Side studs:** hover the face a side stud sticks out of to build on the stud (side studs in
+    one plane share a grid, so a part can bridge them).
 - **Select (W):** click a part, or its whole outermost group (outlined in blue on hover);
   double-click drills into a group; Alt+click picks a single part. Ctrl+click adds or removes;
   drag a box to select several. **Drag a selected part** to move the selection onto any face or

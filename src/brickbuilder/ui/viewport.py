@@ -72,7 +72,10 @@ class Viewport(QOpenGLWidget):
         # Place tool: the preview turned off its grid by this many degrees (0 <= angle < 90) about
         # the centre of its anchor cell; placing it then gives the part a grid of its own
         self.ghost_angle = 0.0
-        self._ghost_pivot = None  # that centre, in the ghost frame's grid space
+        self._ghost_pivot = None  # that centre, in the ghost's grid space
+        # A grid the preview is on that isn't a frame yet (built on a side stud): its transform in
+        # ghost_frame's space, or None. Placing creates the frame.
+        self._ghost_grid: Optional[glm.mat4] = None
         # Working frame: whose grid empty space and the ground use when placing (F toggles it)
         self.working_frame = 0
 
@@ -354,7 +357,8 @@ class Viewport(QOpenGLWidget):
 
     def ghost_matrix(self) -> glm.mat4:
         """Grid space of the preview -> world."""
-        return self.model.frame_matrix(self.ghost_frame) * self.ghost_local_turn()
+        grid = self._ghost_grid if self._ghost_grid is not None else glm.mat4(1.0)
+        return self.model.frame_matrix(self.ghost_frame) * grid * self.ghost_local_turn()
 
     def toggle_working_frame(self):
         """F: use the grid of the part under the cursor for empty space and the ground (again
@@ -532,15 +536,21 @@ class Viewport(QOpenGLWidget):
         self.edited.emit()
         return reason is None
 
-    def _target_under(self, x, y, ignore=()):
-        """Where something placed under the cursor goes: (frame, target sub-cell) or (frame, None).
-        Against the face under the cursor, on that part's grid; else on the working grid's
-        ground, when looking down at it."""
+    def _target_under(self, x, y, ignore=(), side_studs=True):
+        """Where something placed under the cursor goes: (frame, target sub-cell, new grid). Against
+        the face under the cursor, on that part's grid; on a face with a side stud, on the stud's
+        grid (an existing frame that lines up with it, or a new grid: its transform in `frame`'s
+        space, else None); else on the working grid's ground, when looking down at it. The target is
+        None when there's nowhere to put it."""
         ray = picking.get_mouse_ray(x, y, self.width(), self.height(), self.camera)
         hit, normal, point = picking.intersect_model(ray, self.model, ignore)
         if hit:
+            if side_studs:
+                on_stud = self._side_stud_target(hit, point, normal)
+                if on_stud is not None:
+                    return on_stud
             point, normal = self.model.to_frame(hit.frame, point, normal)
-            return hit.frame, placement_target(self.profile, point, normal, self.half_snap)
+            return hit.frame, placement_target(self.profile, point, normal, self.half_snap), None
         frame = self.working_frame
         m = self.model.frame_matrix(frame)
         up = glm.normalize(glm.vec3(m * glm.vec4(0, 0, 1, 0)))
@@ -548,8 +558,29 @@ class Viewport(QOpenGLWidget):
             t = picking.intersect_plane(ray, up, glm.vec3(m * glm.vec4(0, 0, 0, 1)))
             if t:
                 point, _ = self.model.to_frame(frame, ray.origin + ray.direction * t, up)
-                return frame, placement_target(self.profile, point, glm.vec3(0, 0, 1), self.half_snap)
-        return frame, None
+                return frame, placement_target(self.profile, point, glm.vec3(0, 0, 1), self.half_snap), None
+        return frame, None, None
+
+    def _side_stud_target(self, part, point, normal):
+        """If the face under the cursor has a side stud (one not along the part's own up), the
+        target on that stud's grid; else None."""
+        up = glm.vec3(self.model.frame_matrix(part.frame) * glm.vec4(0, 0, 1, 0))
+        best = None
+        for i, (stud, axis) in enumerate(zip(part.studs, part.stud_axes)):
+            if abs(glm.dot(axis, up)) > 0.999 or glm.dot(axis, normal) < 0.999:
+                continue  # a top (or bottom) stud, or not on this face
+            if abs(glm.dot(point - stud, axis)) > 0.05:
+                continue
+            d = glm.distance(point, stud)
+            if best is None or d < best[0]:
+                best = (d, i)
+        if best is None:
+            return None
+        grid = self.model.side_stud_grid(part.id, best[1])
+        found = self.model.find_grid(grid)
+        if found is not None:
+            return found[0], found[1], None
+        return part.frame, (0, 0, 0), glm.inverse(self.model.frame_matrix(part.frame)) * grid
 
     def _cell_centre(self, sub) -> glm.vec3:
         """Centre of the bottom of the cell whose min-corner sub-cell is `sub` (grid space)."""
@@ -573,7 +604,7 @@ class Viewport(QOpenGLWidget):
     def _update_drag(self, pos=None):
         d = self.dragging
         if pos is not None:
-            frame, target = self._target_under(pos.x(), pos.y(), d["moving"])
+            frame, target, _ = self._target_under(pos.x(), pos.y(), d["moving"], side_studs=False)
             if target is not None:
                 d["target"] = (frame, target)
         if d["target"] is None:
@@ -644,8 +675,9 @@ class Viewport(QOpenGLWidget):
             # Quick erase override in Place mode
             self._handle_erase_tool(ray)
         elif self.ghost_pos is not None and self.ghost_valid:
-            if self.ghost_angle:
-                origin, rotation = decompose(self.ghost_local_turn())
+            if self.ghost_angle or self._ghost_grid is not None:
+                grid = self._ghost_grid if self._ghost_grid is not None else glm.mat4(1.0)
+                origin, rotation = decompose(grid * self.ghost_local_turn())
                 self.history.add_part_in_new_frame(self.current_part, self.ghost_pos, self.current_turns,
                                                    self.current_color, self.ghost_frame, origin, rotation)
             else:
@@ -772,7 +804,7 @@ class Viewport(QOpenGLWidget):
     def update_ghost(self, mouse_x, mouse_y):
         # Parts placed against a part go on that part's grid (its frame), so building on a turned
         # part follows its turn; in empty space, the working grid's ground
-        frame, target = self._target_under(mouse_x, mouse_y)
+        frame, target, grid = self._target_under(mouse_x, mouse_y)
 
         # A keyboard nudge applies to the spot it was made at; moving elsewhere drops it
         if target != self._nudge_base:
@@ -789,8 +821,9 @@ class Viewport(QOpenGLWidget):
             anchor = anchor_cells(self.current_part)[self.current_anchor]
             self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, target)
             self.ghost_frame = frame
+            self._ghost_grid = grid
             self._ghost_pivot = self._cell_centre(target)
-            if self.ghost_angle:
+            if self.ghost_angle or grid is not None:  # on a grid of its own: no frame to check against
                 problem = self.model.turned_placement_problem(self.current_part, self.ghost_pos,
                                                               self.current_turns, self.ghost_matrix())
                 self.ghost_valid = problem is None

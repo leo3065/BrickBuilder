@@ -174,7 +174,7 @@ where a complementary wedge goes (anything else is refused there by the occupanc
 [[socket]]
 type = "stud"          # key into profile.socket_types
 at = [0.5, 0.5, 1]     # cells
-normal = "+z"
+axis = "+z"            # which way the stud points
 ```
 Ordinary bricks need no explicit sockets: `studs = "top"` / `antistuds = "bottom"` derive
 them. Explicit sockets are for irregular layouts and joints.
@@ -182,7 +182,18 @@ them. Explicit sockets are for irregular layouts and joints.
 ✅ Implemented so far: `type = "stud"` with `at` (cells: x, y, and the height of the top the stud
 sits on), e.g. the single centre stud of a 1×2 at `[0.5, 1.0, 1]`; and `type = "antistud"`
 (the height of the bottom it's in), e.g. the extra centre antistud of the 2×2 round at
-`[1.0, 1.0, 0]`. With `to`, an antistud is a **slot** (see below). `normal` and the joint socket types come later.
+`[1.0, 1.0, 0]`. With `to`, an antistud is a **slot** (see below). ✅ `axis` (`+x` … `-z`,
+default `+z`): which way the stud points; for an antistud, which way a stud sitting in it points
+(so an underside slot is `+z`). A slot must lie across its axis. E.g. the side stud of the 1×1
+"2凸": `at = [1.0, 0.5, 0.28]`, `axis = "+x"`. Joint socket types come later.
+
+**Building on a side stud ✅.** Hovering the face a side stud sticks out of (one whose axis isn't
+the part's own up) targets the stud's grid (`Model.side_stud_grid`): Z along the stud, Y along the
+part's up, origin on the stud's base, so cell (0, 0)'s centre is on the stud and layer 0 lies
+against the face. If an existing frame lines up with that grid (`Model.find_grid`: quarter turns
+about Z, whole sub-cells), the part goes into it, so side studs in one plane share a frame and a
+part can bridge them; otherwise placing creates the frame (one undo step). A part on a side stud
+turns about the stud (Turn tool). Dragging the selection onto a side stud isn't supported yet.
 
 ### Modifiers
 A small, closed set that applies to both bodies and sockets:

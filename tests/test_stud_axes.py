@@ -78,3 +78,33 @@ def test_part_on_a_side_stud_turns_about_it(model):
     assert model.connections()[brick.id] == {side.id}     # still on the stud
     moved = model.parts[brick.id]
     assert moved.frame == frame.id                         # its own grid turned, not merged
+
+
+def test_side_stud_brick_and_shared_frames(model):
+    """The real part, and side studs in one plane sharing a frame so a part can bridge them."""
+    from brickbuilder.core.history import History
+    from brickbuilder.core.model import decompose
+    side = model.library["nanoblock:brick_1x1_side_stud"]
+    assert side.stud_axes == ((0, 0, 1), (1, 0, 0)) and side.studs[1] == (1.0, 0.5, 0.28)
+    h = History(model)
+    a = h.add_part(side, (0, 0, 0), 0, "red")
+    b = h.add_part(side, (0, 2, 0), 0, "red")          # next to it, side faces in one plane
+    c = h.add_part(side, (0, 8, 1), 0, "red")          # a layer up (elsewhere: its stud would clash)
+    assert abs(a.studs[1].z - 0.875) < 1e-6
+
+    grid_a = model.side_stud_grid(a.id, 1)
+    assert model.find_grid(grid_a) is None              # nothing lines up with it yet
+    origin, rotation = decompose(grid_a)
+    first = h.add_part_in_new_frame(model.library["nanoblock:brick_1x1"], (0, 0, 0), 0, "white", 0, origin, rotation)
+    assert first is not None and model.connections()[first.id] == {a.id}
+
+    # b's side stud is one cell along that grid's X: the same frame, cell (2, 0, 0)
+    assert model.find_grid(model.side_stud_grid(b.id, 1)) == (first.frame, (2, 0, 0))
+    # c's is a layer (3.125 mm) up, off that grid's 4 mm pitch: no shared frame
+    assert model.find_grid(model.side_stud_grid(c.id, 1)) is None
+
+    # A 1x2 lying along that grid's X bridges a and b... where `first` is; take it off first
+    h.remove_part(first.id)
+    assert first.frame not in model.frames               # emptied frame removed
+    bridge = h.add_part_in_new_frame(model.library["nanoblock:brick_1x2"], (0, 2, 0), 3, "white", 0, origin, rotation)
+    assert bridge is not None and model.connections()[bridge.id] == {a.id, b.id}

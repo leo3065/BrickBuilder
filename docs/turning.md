@@ -2,7 +2,7 @@
 
 What happens between "the user drags a part with the Turn tool" and "the turn is committed or
 refused", and which tolerances decide it. Design reasons are in `part_format.md` ("Pins", "Step B",
-"Snapping solver"); this file describes the code as built (step B: turns about Z only).
+"Snapping solver"); this file describes the code as built (turns about any stud axis).
 
 ## Pipeline
 
@@ -28,18 +28,22 @@ the plan is **free**, and the Turn tool turns about the centre of the moving par
 
 ### 2. Contacts (`connections.iter_contacts`, `contacts_between`)
 A contact is a stud of one part whose base lies on an antistud slot of another (a segment; a
-point slot has zero length), at the same height. Positions are world space, so contacts work
-across frames. Studs are bucketed by (height, cell column); a slot looks at the columns it
-crosses and the neighbouring height buckets (float noise can push a height across a bucket edge).
+point slot has zero length), with the stud pointing the way the slot expects (their axes within
+`AXIS_TOLERANCE`; a side stud touching an underside doesn't count). Positions and axes are world
+space, so contacts work across frames, tilted ones too. Studs are bucketed by cell-sized world
+boxes; a slot looks at the boxes it passes through.
 `contacts_between(moving, staying)` collects both directions: moving studs in staying slots and
 staying studs in moving slots.
 
 ### 3. Free motion (`motion.plan_turn`)
-The moving set moves rigidly in the plane: angle θ about a vertical axis through a reference point
-`c` (the first contact's stud), plus a translation (x, y). For each contact, the error that must
-stay zero is:
+All contacts must share one stud axis (top studs: vertical; a side stud: horizontal), else the
+plan is **locked** ("held by studs pointing different ways"). Everything below happens in the
+plane across that axis, with coordinates (u, v) from `model.plane_basis(axis)` (X and Y for a
+vertical axis). The moving set moves rigidly in that plane: angle θ about the axis through a
+reference point `c` (the first contact's stud), plus a translation (x, y). For each contact, the
+error that must stay zero is:
 - a stud in a long slot: the stud's distance from the slot's line, i.e. `n · stud` with `n` the
-  slot's horizontal normal: **one row**;
+  slot's normal in the plane: **one row**;
 - a stud in a point antistud: both coordinates: **two rows**.
 
 The stud's velocity for a motion (ω, vx, vy) is `(vx − ω·r.y, vy + ω·r.x)` with `r = stud − c`, so
@@ -125,9 +129,11 @@ part's grid). It's valid if it doesn't clash with anything and has at least one 
 (either way round). Placing adds a frame (that grid turned about the anchor cell centre) and the
 part in it, as one undo step.
 
-## Limits (as of step B)
-- Turns are about the vertical axis only; all frames are Z-turned. Tilted frames come with ball
-  joints, which also need their own contact rows (ball centre on cup pivot) and joint limits.
+## Limits
+- One shared stud axis per turn: a part held by studs pointing different ways is locked. Ball
+  joints will need their own contact rows (ball centre on cup pivot) and joint limits.
+- Merging back onto the parent grid only happens for quarter turns about Z (parts only store Z
+  turns), so a part on a side stud keeps its own frame.
 - Only one moving body: the free-motion step doesn't solve chains or closed loops yet (the
   planned snapping solver does).
 - Sliding along a slot is detected (it's in the null space) but not offered.

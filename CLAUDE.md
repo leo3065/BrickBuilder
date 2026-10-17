@@ -130,7 +130,11 @@ tests/               pytest suite
   other moving parts a new child frame, merges anything lined up with its parent grid back into it
   (`model.to_parent_grid`), and refuses (unchanged, returns the reason) on a clash. With
   `target_frame` (a drag) that frame becomes the home grid. Deleting parts removes emptied frames.
-  Turns are about world Z only for now (`model.turn_about_z`); all frames are Z-turned.
+  Turns are about the shared axis of the holding studs (`model.turn_about(pivot, axis, deg)`;
+  vertical for top studs, horizontal for a side stud). Studs and slots carry axes (`stud_axes`,
+  `antistud_axes`, from socket `axis`); contacts need matching axes. A face with a side stud
+  targets `Model.side_stud_grid` (reusing a lined-up frame via `Model.find_grid`); the Place tool
+  previews it as `Viewport._ghost_grid` until placing creates the frame.
 - Save format v4 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,
   origin, rotation}...], groups: [{id, name, parent}...], parts: [{id, part, frame, pos (cells,
   0.5 allowed), turns, color, group?}]}`; frames and groups listed parent-first. v3 (no groups),

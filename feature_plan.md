@@ -40,7 +40,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Base plates: 10×10 and 20×20.
 - [x] More box-based parts from `docs/nanoblock_parts.md`: flat 1×2 and 2×4, 2×2 L, 2×3 T, and the 1×3 with 2 studs and single-centre-stud 1×2 and 2×2 (explicit stud sockets off the cell centres).
 - [x] Round parts: round 1×1, 1×2, 1×3, 1×4, 2×2 and the 2×2 fan (boxes with `corner_radius`).
-- [ ] 1×1 with a side stud (nanoblock.info "1x1 : 2凸", in 173 of 671 kits: the biggest gap). Parts built on the side stud go in a frame turned 90° about a horizontal axis. Groups, frames and placement/turning on frames are done; what's left first is tilted frames (see Intermediate).
+- [x] 1×1 with a side stud (nanoblock.info "1x1 : 2凸", in 173 of 671 kits: the biggest gap). Hovering its side face places on the stud's grid (a frame turned 90° about a horizontal axis, shared by side studs in one plane); parts on it turn about the stud.
 - [ ] Joint parts: ball and socket on 1×2 and 2×2 (nanoblock.info JO-C / JO-D). Needs new body shapes (a sphere and a cup) or mesh bodies, and tilted frames; the joint behaviour is under Intermediate.
 - [ ] A menu for browsing the part library, with a tree view, thumbnail previews and mark-as-favorite. (The tree view grouped by category is done; thumbnails and favorites are not.)
 
@@ -61,7 +61,8 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
 - [x] Add a view option that highlights colliding parts in different frames (rotated parts, joints): View > Highlight Colliding Parts (O), in red. Within one frame, overlaps are already refused when placing and loading; across frames the placement preview turns red too. Studs count as well: one inside another part's body is only fine on one of its slots.
 - [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation. Z-turned parts: done (Shift+R realigns to the nearest quarter turn of the grid they're held on). Ball joints: still to do.
-- [ ] Tilted frames: grids turned about a horizontal axis (side studs, ball joints). Today everything assumes vertical stud axes: contacts bucket studs by height, the clash test stands studs up along Z, turns are about world Z. Needs a stud axis per stud (from its socket), contacts and the clash test along any axis, and placement against a side stud creating the turned frame.
+- [x] Tilted frames: grids turned about a horizontal axis (side studs; ball joints next). Studs and slots carry an axis (socket `axis`); contacts, the clash test, rendering, the turn finder, Shift+R and nudges work along any axis; placing against a side stud creates (or reuses) its grid.
+- [ ] Dragging the selection onto a side stud (placing does it; a drag goes against the face for now).
 - [ ] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above isn't caught by the Place tool (moves and turns already check it; see docs/turning.md).
 - [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.
 

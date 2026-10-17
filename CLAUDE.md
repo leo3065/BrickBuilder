@@ -168,7 +168,8 @@ tests/               pytest suite
   PgDown (`nudge_selection`, along its own grid, never changing frames).
 - **Clash test** (`collision.clash` via `Model.part_shape`, cached): bodies by SAT, studs as
   prisms that may enter another body only through one of its slots, base on or below the slot's
-  plane (hollow undersides: a lower stud goes in less deep). Used by previews and by every
+  plane (hollow undersides: a lower stud goes in less deep; it still connects with half its
+  height in). Used by previews and by every
   `move_parts` / turned-placement commit against all staying parts; the Place tool on one grid
   still uses only the occupancy map.
 - `Viewport.notice` is a one-line status-bar message (why something was refused, what's moving).

@@ -29,7 +29,8 @@ the plan is **free**, and the Turn tool turns about the centre of the moving par
 ### 2. Contacts (`connections.iter_contacts`, `contacts_between`)
 A contact is a stud of one part whose base lies on an antistud slot of another (a segment; a
 point slot has zero length), with the stud pointing the way the slot expects (their axes within
-`AXIS_TOLERANCE`; a side stud touching an underside doesn't count). Positions and axes are world
+`AXIS_TOLERANCE`; a side stud touching an underside doesn't count). The base may also be up to
+half a stud height *below* the slot's plane: the underside is hollow, and half a stud in still holds. Positions and axes are world
 space, so contacts work across frames, tilted ones too. Studs are bucketed by cell-sized world
 boxes; a slot looks at the boxes it passes through.
 `contacts_between(moving, staying)` collects both directions: moving studs in staying slots and
@@ -113,8 +114,8 @@ View > Highlight Colliding Parts. On one grid the sub-cell occupancy map decides
   the slot's way, its centre line through the slot, and its base on or *below* the slot's plane. A
   lower stud just goes in less deep (e.g. a side stud 0.25 mm below the top stud a 1×3 sits on);
   a higher one would push into the ceiling and clashes, as does a stud off the slots (a part turned
-  on a brick with several studs: the others poke into it). Only a stud exactly at the slot's plane
-  counts as a contact (connection).
+  on a brick with several studs: the others poke into it). A stud counts as a contact (it holds)
+  when at least half its height is in: base no more than half a stud height below the slot's plane.
 - Broad phase: bounding boxes (part boxes widened by the stud height).
 
 ## Tolerances

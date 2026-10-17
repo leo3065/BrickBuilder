@@ -135,7 +135,18 @@ def test_lower_stud_fits_into_a_hollow_slot(model):
     pos = origin_for_anchor(model.profile, (0, 0, 0), 3, (0, 0, 2))   # along +X from the red top stud
     assert model.can_place(bar, pos, 3, 0)
     placed = h.add_part(bar, pos, 3, "gray")
-    assert red.id in model.connections()[placed.id]
+    # Both hold it: the lower stud is 0.25 mm down, well within half a stud height
+    assert model.connections()[placed.id] == {red.id, right.id}
     # A stud that would stick up *into* the ceiling still blocks: lift the bar's grid 0.5 mm down
     lowered = glm.translate(glm.mat4(1.0), glm.vec3(0, 0, -0.5))
     assert model.moved_overlaps({placed.id}, lowered) is not None
+
+
+def test_a_stud_holds_with_half_its_height_in(model):
+    from types import SimpleNamespace
+    from brickbuilder.core.connections import iter_contacts
+    slot = SimpleNamespace(id=2, antistuds=[(glm.vec3(0, 0, 3), glm.vec3(0, 8, 3))], antistud_axes=[glm.vec3(0, 0, 1)])
+    half = model.profile.stud.height / 2
+    for below, holds in ((0.0, True), (0.25, True), (half - 0.01, True), (half + 0.01, False), (-0.1, False)):
+        stud = SimpleNamespace(id=1, studs=[glm.vec3(0, 4, 3 - below)], stud_axes=[glm.vec3(0, 0, 1)])
+        assert bool(list(iter_contacts(model.profile, [stud], [slot]))) == holds, below

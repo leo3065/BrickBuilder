@@ -129,7 +129,8 @@ tests/               pytest suite
   `History.move_parts(ids, world transform)` does this: moves frames the set owns outright, gives
   other moving parts a new child frame, merges anything lined up with its parent grid back into it
   (`model.to_parent_grid`), and refuses (unchanged, returns the reason) on a clash. With
-  `target_frame` (a drag) that frame becomes the home grid. Deleting parts removes emptied frames.
+  `target_frame` (a drag) that frame becomes the home grid. Anything not lined up with its home goes
+  onto another frame that lines up (`Model.lined_up_frames`) before a new frame is made. Deleting parts removes emptied frames.
   Turns are about the shared axis of the holding studs (`model.turn_about(pivot, axis, deg)`;
   vertical for top studs, horizontal for a side stud). Studs and slots carry axes (`stud_axes`,
   `antistud_axes`, from socket `axis`); contacts need matching axes. A face with a side stud

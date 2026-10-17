@@ -257,12 +257,20 @@ class History:
 
     def add_part_in_new_frame(self, part: PartDef, pos: Sub, turns: int, color: str, parent: int,
                               origin: glm.vec3, rotation: glm.quat) -> Optional[PlacedPart]:
-        """Place a part on a new grid of its own (a child of `parent`), as one undo step; None if
-        it would overlap something (nothing changes then)."""
-        frame_id = max(self.model.frames) + 1
+        """Place a part on a grid of its own (a child of `parent`), as one undo step; None if it
+        would overlap something (nothing changes then). If an existing frame lines up with that
+        grid, the part goes into it instead (so parts turned alike can be bridged)."""
         part_id = self.model._next_id
-        command = [AddFrameOp(frame_id, parent, glm.vec3(origin), glm.quat(rotation)),
-                   AddOp(part_id, part, pos, turns, color, frame_id)]
+        grid = self.model.frame_matrix(parent) * glm.translate(glm.mat4(1.0), origin) * glm.mat4_cast(rotation)
+        for frame, o, r in self.model.lined_up_frames(grid):
+            converted = to_parent_grid(self.model.profile, o, r, pos, turns)
+            if converted is not None:
+                command = [AddOp(part_id, part, converted[0], converted[1], color, frame)]
+                break
+        else:
+            frame_id = max(self.model.frames) + 1
+            command = [AddFrameOp(frame_id, parent, glm.vec3(origin), glm.quat(rotation)),
+                       AddOp(part_id, part, pos, turns, color, frame_id)]
         if self._try_run(command, [part_id]) is not None:
             return None
         return self.model.parts[part_id]
@@ -281,7 +289,8 @@ class History:
         itself. Other moving parts get a new frame, their old grid moved, as a child of it, so
         they keep their grid positions; moved frames hanging off that grid go into the new frame.
         Anything that ends up lined up with its parent's grid (a multiple of 90 degrees, on the
-        sub-grid) goes onto that grid instead, and an emptied frame is removed."""
+        sub-grid) goes onto that grid instead, else onto any other frame it lines up with (so parts
+        turned alike share a grid), and an emptied frame is removed."""
         m = self.model
         moving = set(part_ids) & set(m.parts)
         if not moving:
@@ -323,12 +332,34 @@ class History:
                    for pid in pids}
             return out if all(c is not None for c in out.values()) else None
 
+        def lined_up_elsewhere(grid, pids, skip):
+            """A frame that stays put and that `grid` lines up with, and the parts' positions on it."""
+            for frame, o, r in m.lined_up_frames(grid, exclude=under_owned | {skip}):
+                converted = on_parent_grid(o, r, pids)
+                if converted is not None:
+                    return frame, converted
+            return None
+
+        def merge(g, into, rel, converted):
+            """Frame g's parts onto frame `into` (rel: g's moved grid in `into`'s space), its child
+            frames re-parented, g removed."""
+            frame = m.frames[g]
+            for child in sorted(f.id for f in m.frames.values() if f.parent == g):
+                set_frames.append(SetFrameOp(child, frame_tuple(child),
+                                             (into, *decompose(rel * m.frames[child].local_matrix()))))
+            move_into([p.id for p in m.parts.values() if p.frame == g], into, converted)
+            remove_frames.append(RemoveFrameOp(g, frame.parent, frame.origin, frame.rotation))
+
         for f, pids in sorted(loose.items()):
             home = f if target_frame is None else target_frame
             origin, rotation = decompose(glm.inverse(m.frame_matrix(home)) * transform * m.frame_matrix(f))
             converted = on_parent_grid(origin, rotation, pids)
+            elsewhere = None if converted is not None else \
+                lined_up_elsewhere(transform * m.frame_matrix(f), pids, home)
             if converted is not None:
                 move_into(pids, home, converted)  # e.g. a quarter turn: stays on (or lands on) the grid
+            elif elsewhere is not None:
+                move_into(pids, *elsewhere)
             else:
                 new_frame_for[f] = next_frame
                 add_frames.append(AddFrameOp(next_frame, home, origin, rotation))
@@ -344,15 +375,17 @@ class History:
                 parent = frame.parent if target_frame is None else target_frame
                 origin, rotation = decompose(glm.inverse(m.frame_matrix(parent)) * transform * m.frame_matrix(g))
             own = [p.id for p in m.parts.values() if p.frame == g]
+            moved_grid = transform * m.frame_matrix(g)
             converted = None if parent in new_frame_for.values() else on_parent_grid(origin, rotation, own)
+            elsewhere = None
+            if converted is None and parent not in new_frame_for.values():
+                elsewhere = lined_up_elsewhere(moved_grid, own, parent)
             if converted is not None:
                 # Lined up with its parent again: merge into it
-                local = glm.translate(glm.mat4(1.0), origin) * glm.mat4_cast(rotation)
-                for child in sorted(f.id for f in m.frames.values() if f.parent == g):
-                    set_frames.append(SetFrameOp(child, frame_tuple(child),
-                                                 (parent, *decompose(local * m.frames[child].local_matrix()))))
-                move_into(own, parent, converted)
-                remove_frames.append(RemoveFrameOp(g, frame.parent, frame.origin, frame.rotation))
+                merge(g, parent, glm.translate(glm.mat4(1.0), origin) * glm.mat4_cast(rotation), converted)
+            elif elsewhere is not None:
+                # Lined up with another grid that stays put: merge into that
+                merge(g, elsewhere[0], glm.inverse(m.frame_matrix(elsewhere[0])) * moved_grid, elsewhere[1])
             else:
                 set_frames.append(SetFrameOp(g, frame_tuple(g), (parent, origin, rotation)))
         return self._try_run(add_frames + removes + set_frames + adds + remove_frames, moving)

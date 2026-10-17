@@ -92,6 +92,10 @@ Builds one command (list of ops) for the world transform:
   and they move into it unchanged. Owned frames hanging off F move into that new frame.
 - An owned frame that ends up lined up with its parent is merged into it (its child frames are
   re-parented, its parts converted, the frame removed).
+- Frame reuse: parts or frames that don't line up with their home grid are checked against every
+  other frame that stays put (`Model.lined_up_frames`). If one lines up, they go onto it instead of
+  a new frame, so parts turned alike share a grid and can be bridged. Turned placement
+  (`add_part_in_new_frame`) does the same.
 
 Op order: add frames, remove parts, set frames, add parts, remove frames (so parts never collide
 with their own old positions). `_try_run` applies the ops one by one; if any fails (same-grid

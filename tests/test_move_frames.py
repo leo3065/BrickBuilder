@@ -198,3 +198,40 @@ def test_dropping_onto_another_grid(model):
     assert h.move_parts([lone.id], t, 0) is None
     f = model.parts[lone.id].frame
     assert f != 0 and model.frames[f].parent == 0
+
+
+def test_turns_reuse_a_frame_that_lines_up(model):
+    """Parts turned alike end up on one grid, so something can bridge them."""
+    h = History(model)
+    base, arm, stud = on_one_stud(model, h)
+    h.move_parts([arm.id], turn(stud, 30))
+    frame = model.parts[arm.id].frame
+    frames = set(model.frames)
+
+    # A loose brick far away, turned about the same axis by the same angle: its grid is the arm's
+    # grid, so it joins that frame instead of getting its own
+    lone = h.add_part(lib(model, "brick_1x1"), (20, 0, 0), 0, "white")
+    assert h.move_parts([lone.id], turn(stud, 30)) is None
+    assert model.parts[lone.id].frame == frame and set(model.frames) == frames
+
+    # A brick in a frame of its own (10 degrees), turned on to 30: its frame merges into the arm's
+    other = h.add_part(lib(model, "brick_1x1"), (0, 20, 0), 0, "white")
+    h.move_parts([other.id], turn(stud, 10))
+    own = model.parts[other.id].frame
+    assert own not in frames
+    assert h.move_parts([other.id], turn(stud, 20)) is None
+    assert model.parts[other.id].frame == frame and own not in model.frames
+    h.undo()
+    assert model.parts[other.id].frame == own
+
+
+def test_turned_placement_reuses_a_frame_that_lines_up(model):
+    from brickbuilder.core.model import decompose
+    h = History(model)
+    base, arm, stud = on_one_stud(model, h)
+    h.move_parts([arm.id], turn(stud, 30))
+    frame = model.parts[arm.id].frame
+    # A part placed on the root grid turned 30 degrees about the same axis: onto the arm's frame
+    placed = h.add_part_in_new_frame(lib(model, "brick_1x1"), (20, 20, 0), 0, "white", 0,
+                                     *decompose(turn(glm.vec3(stud.x, stud.y, 0), 30)))
+    assert placed is not None and placed.frame == frame and len(model.frames) == 2

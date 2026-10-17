@@ -25,7 +25,8 @@ data, not code, so other micro-brick systems could be added without changing the
 - **Turned parts.** Turn a placed part to any angle about the stud it's held by, slide it along
   the slot it's in, or place a part already turned. Whatever is built on a turned part follows its
   grid, and parts turned alike share one, so they can be bridged.
-- **Ball joints.** Cup and ball parts that snap together straight (posing them is next).
+- **Ball joints.** Cup and ball parts that snap together straight, then pose within the real
+  parts' limits (a 30° cone, or up to 90° in the cup's slot); two joints on a line act as a hinge.
 - **Side studs.** Build sideways off the 1×1 side-stud brick. Side studs in one plane share a
   grid, so a part can bridge them, and a part on a side stud turns about it.
 - **Moving and grouping.** Select parts or whole named, nestable groups; move them by dragging
@@ -74,7 +75,6 @@ Click to place the part chosen in the Parts list; Ctrl + click removes a part.
   **Shift+R** puts it back.
 - **Side studs:** hover the face a side stud sticks out of to build on the stud.
 - **Joints:** with a ball part chosen, hover a cup (or with a cup part, a ball) to put it on straight.
-  Posing joints is coming next.
 - **F:** use the grid of the part under the cursor for empty space and the ground too; F over
   empty space goes back to the main grid.
 
@@ -94,8 +94,11 @@ Click to place the part chosen in the Parts list; Ctrl + click removes a part.
 - **Drag** a part (or the selection) to turn it about the stud it's held by, in 7.5° steps;
   **Shift** turns freely. **Ctrl+drag** slides it along the slot it's held in.
 - **[ / ]** turn the selection a step; **Shift+R** turns it back onto its grid.
+- **On a ball joint:** drag points the part at the cursor (tilt and direction in 7.5° steps,
+  inside the cup's cone or its slot), **Ctrl+drag** rolls it, **[ / ]** roll a step, **Shift+R**
+  straightens. Two joints on one line turn like a hinge.
 - If the contacts lock it (studs on different axes, two studs in one slot), the status bar says
-  why; a red preview means it would overlap something.
+  why; a red preview means it would overlap something or bend a joint too far.
 
 ### Paint (E) and Erase (R)
 Click to recolour a part with the current colour, or to remove it.

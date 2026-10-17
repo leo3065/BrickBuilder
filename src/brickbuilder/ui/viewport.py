@@ -14,7 +14,8 @@ from brickbuilder.core.model import (Model, Sub, anchor_cells, decompose, defaul
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
-from brickbuilder.core.motion import plan_turn
+from brickbuilder.core.connections import joint_limits
+from brickbuilder.core.motion import clamp_arm, joint_angles, min_rotation, plan_turn
 from brickbuilder.core.tools import Tool
 
 DEFAULT_PART = "brick_1x1"
@@ -397,6 +398,15 @@ class Viewport(QOpenGLWidget):
         if plan is None:
             self.edited.emit()
             return False
+        if plan.kind == "pose":  # straighten the joint (the roll stays)
+            j = plan.joint
+            q = (min_rotation(j.ball_axis, -j.cup_axis) if j.ball_part in plan.moving
+                 else min_rotation(j.cup_axis, -j.ball_axis))
+            if glm.length(glm.vec3(q.x, q.y, q.z)) < 1e-6:
+                self.notice = "the joint is already straight"
+                self.edited.emit()
+                return False
+            return self._commit_turn(plan.moving, self._about(pivot, q))
         held = plan.contacts[0] if plan.contacts else None
         if held is not None:
             mine, other = ((held.stud_part, held.slot_part) if held.stud_part in plan.moving
@@ -417,7 +427,17 @@ class Viewport(QOpenGLWidget):
             return False
         return self._commit_turn(plan.moving, turn_about(pivot, plan.axis, delta))
 
+    @staticmethod
+    def _about(pivot: glm.vec3, q: glm.quat) -> glm.mat4:
+        """A rotation `q` about `pivot`, as a world transform."""
+        return glm.translate(glm.mat4(1.0), pivot) * glm.mat4_cast(q) * glm.translate(glm.mat4(1.0), -pivot)
+
     def _commit_turn(self, moving, transform) -> bool:
+        if not self.model.joints_within_limits(moving, transform):
+            self.notice = "can't turn: a joint can't bend that far"
+            self.update()
+            self.edited.emit()
+            return False
         reason = self.history.move_parts(moving, transform)
         self.notice = f"can't turn: {reason}" if reason else ""
         self.update()
@@ -446,10 +466,23 @@ class Viewport(QOpenGLWidget):
             return
         if hit.id not in self.selection:
             self.selection = self._unit(hit.id, bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
-        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        if ctrl and plan_turn(self.model, self.selection, point).kind != "pose":
             self._start_slide(event, point)
             return
         plan, pivot = self._turn_plan(point)
+        if plan is not None and plan.kind == "pose":
+            j = plan.joint
+            arm = glm.normalize(j.ball_axis)
+            self.turning = {"moving": plan.moving, "pivot": pivot, "axis": arm, "joint": j,
+                            "mode": "roll" if ctrl else "pose", "ball_moves": j.ball_part in plan.moving,
+                            "last": self._turn_angle(event.position(), pivot, arm) or 0.0, "raw": 0.0,
+                            "angle": 0.0, "transform": glm.mat4(1.0), "valid": True, "moved": False}
+            theta, phi = joint_angles(j.ball_axis, j.cup_axis, j.cup_slot)
+            self.notice = f"joint: tilt {theta:.3g}°, direction {phi:.3g}°" if not ctrl else "rolling 0°"
+            self.update()
+            self.edited.emit()
+            return
         if plan is not None:
             start = self._turn_angle(event.position(), pivot, plan.axis)
             self.turning = {"moving": plan.moving, "pivot": pivot, "axis": plan.axis, "last": start or 0.0,
@@ -495,10 +528,72 @@ class Viewport(QOpenGLWidget):
             self.notice = f"sliding {distance:.3g} mm" + ("" if t["valid"] else " (overlaps)")
             self.edited.emit()
 
+    def _pose_valid(self, t) -> bool:
+        return (self.model.moved_overlaps(t["moving"], t["transform"]) is None
+                and self.model.joints_within_limits(t["moving"], t["transform"]))
+
+    def _drag_pose(self, event: QMouseEvent):
+        """Drag on a ball joint: the part points at the cursor (the cursor's spot on the plane facing
+        the camera through the joint's centre), snapped as tilt and direction and kept inside the
+        cup's cone, or else in its slot."""
+        t, j = self.turning, self.turning["joint"]
+        view = self.camera.get_view_matrix()
+        facing = glm.vec3(view[0][2], view[1][2], view[2][2])  # toward the viewer
+        ray = picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera)
+        hit = picking.intersect_plane(ray, facing, t["pivot"])
+        if hit is None:
+            return
+        towards = ray.origin + ray.direction * hit - t["pivot"]
+        if glm.length(towards) < 0.5:
+            return  # too close to the centre to tell a direction
+        towards = glm.normalize(towards)
+        cone, slot = joint_limits(self.profile)
+        step = None if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else self.rotation_snap
+        if t["ball_moves"]:
+            # The ball part hangs on the far side of its arm: the arm points away from the cursor
+            arm, theta, phi = clamp_arm(-towards, j.cup_axis, j.cup_slot, cone, slot, step)
+            q = min_rotation(j.ball_axis, arm)
+        else:
+            # The cup part moves: its body is behind the cup. Turn it, see where the (still) arm
+            # would sit in it, clamp that, and turn the cup so the arm sits there
+            s = min_rotation(-j.cup_axis, towards)
+            relative, theta, phi = clamp_arm(glm.inverse(s) * j.ball_axis, j.cup_axis, j.cup_slot, cone, slot, step)
+            q = min_rotation(relative, j.ball_axis)
+        t["transform"] = self._about(t["pivot"], q)
+        t["moved"] = True
+        t["valid"] = self._pose_valid(t)
+        self.notice = f"joint: tilt {theta:.3g}°, direction {phi:.3g}°" + ("" if t["valid"] else " (overlaps)")
+        self.update()
+        self.edited.emit()
+
+    def _drag_roll(self, event: QMouseEvent):
+        """Ctrl+drag on a ball joint: roll about the arm."""
+        t = self.turning
+        a = self._turn_angle(event.position(), t["pivot"], t["axis"])
+        if a is None:
+            return
+        t["raw"] += (a - t["last"] + 180) % 360 - 180
+        t["last"] = a
+        free = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        angle = t["raw"] if free else round(t["raw"] / self.rotation_snap) * self.rotation_snap
+        if angle != t["angle"]:
+            t["angle"] = angle
+            t["transform"] = turn_about(t["pivot"], t["axis"], angle)
+            t["moved"] = abs(angle) > 1e-9
+            t["valid"] = self._pose_valid(t)
+            self.notice = f"rolling {angle:.4g}°" + ("" if t["valid"] else " (blocked)")
+            self.edited.emit()
+
     def _drag_turn(self, event: QMouseEvent):
         t = self.turning
         if t.get("slide") is not None:
             self._drag_slide(event)
+            return
+        if t.get("mode") == "pose":
+            self._drag_pose(event)
+            return
+        if t.get("mode") == "roll":
+            self._drag_roll(event)
             return
         a = self._turn_angle(event.position(), t["pivot"], t["axis"])
         if a is None:
@@ -511,13 +606,13 @@ class Viewport(QOpenGLWidget):
         if angle != t["angle"]:
             t["angle"] = angle
             t["transform"] = turn_about(t["pivot"], t["axis"], angle)
-            t["valid"] = self.model.moved_overlaps(t["moving"], t["transform"]) is None
-            self.notice = f"turning {angle:.4g}°" + ("" if t["valid"] else " (overlaps)")
+            t["valid"] = self._pose_valid(t)  # no clash, and any joints within their limits
+            self.notice = f"turning {angle:.4g}°" + ("" if t["valid"] else " (blocked)")
             self.edited.emit()
 
     def _finish_turn(self):
         t, self.turning = self.turning, None
-        if abs(t["angle"]) > 1e-9 or abs(t.get("distance", 0.0)) > 1e-9:
+        if abs(t["angle"]) > 1e-9 or abs(t.get("distance", 0.0)) > 1e-9 or t.get("moved"):
             self._commit_turn(t["moving"], t["transform"])
         else:
             self.notice = ""

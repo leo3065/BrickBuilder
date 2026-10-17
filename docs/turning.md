@@ -37,41 +37,35 @@ boxes; a slot looks at the boxes it passes through.
 staying studs in moving slots.
 
 ### 3. Free motion (`motion.plan_turn`)
-All contacts must share one stud axis (top studs: vertical; a side stud: horizontal), else the
-plan is **locked** ("held by studs pointing different ways"). Everything below happens in the
-plane across that axis, with coordinates (u, v) from `model.plane_basis(axis)` (X and Y for a
-vertical axis). The moving set moves rigidly in that plane: angle θ about the axis through a
-reference point `c` (the first contact's stud), plus a translation (x, y). For each contact, the
-error that must stay zero is:
-- a stud in a long slot: the stud's distance from the slot's line, i.e. `n · stud` with `n` the
-  slot's normal in the plane: **one row**;
-- a stud in a point antistud: both coordinates: **two rows**.
+The moving set moves rigidly: a turn **w** (about any axis) plus a shift **v** of a reference
+point `c` (the first contact), six numbers. Each contact, linearised, gives rows that must stay
+zero (the velocity of a point `r` away from `c` is `v + w × r`, so along a direction `d` it's
+`d·v + w·(r × d)`):
+- **a stud in a long slot**: its base doesn't move across the slot or along the stud's axis (two
+  rows), and the stud doesn't tilt off the slot's axis (`w` has no part across the axis: two rows);
+- **a stud in a point antistud**: its base doesn't move at all (three rows) and doesn't tilt (two);
+- **a ball in a cup**: its centre doesn't move (three rows).
 
-The stud's velocity for a motion (ω, vx, vy) is `(vx − ω·r.y, vy + ω·r.x)` with `r = stud − c`, so
-each row is `n · [[−r.y, 1, 0], [r.x, 0, 1]]`. It doesn't matter which side the stud is on: only
-the relative motion counts, and the sign of a row doesn't change its null space.
+Stack the rows into `A` (k × 6); the free motions are its null space (singular values ≤ `EPS`).
+What's left decides the plan, from the turning parts of the free motions:
+- **one turning axis** → **turn** about it: a stud or several on one axis (the Seregios fold), a
+  side stud, two ball joints on one line (a hinge). The pivot is a contact on that line if turning
+  about it is free (so the contact holds exactly, not just to first order); else a point worked out
+  from the free motion. The axis points the way the holding studs do.
+- **turning every way about a joint's centre** → **pose** (a single ball joint).
+- **no turning** → **locked**; "only sliding" if a shift is free, else "held by studs on different
+  axes" (e.g. two studs in one slot, or a top stud and a side stud).
+- two turning axes, or three not about one joint: locked for now ("can't be posed yet").
+Separately, a free motion with no turning in it (`TurnPlan.slide`) is a slide along a slot.
 
-Stack the rows into `A` (k × 3) and take its singular values:
-- **rank 3**: nothing moves: **locked** ("held by studs on different axes").
-- Otherwise look for a turn about one of the contact studs: turning about point `p` is the motion
-  `q = (1, r.y, −r.x)` with `r = p − c`. If `|A·q| < EPS·|q|`, that turn keeps every contact to
-  first order, and since `p` is a stud on the axis it keeps it exactly. The first stud that passes
-  (nearest the cursor when a hint is given) is the **pivot**: plan **turn**.
-- Rank below 3 but no stud passes: the contacts only allow sliding (e.g. two studs in one long
-  slot): **locked** ("only sliding").
-- Either way, a free motion with no turning in it (`TurnPlan.slide`: the null-space combination
-  whose angle part is zero) is a slide along the slot. Ctrl+drag in the Turn tool offers it, in
-  half-cell steps (Shift: free); the clash test stops it at the slot's end (the stud would leave
-  the slot).
-
-Examples:
-
-| Situation | Rows | Result |
-|---|---|---|
-| 1×4 on a 2×2 one-stud brick | 1 (slot line) | turn about the stud (sliding along the slot also free, not offered) |
-| 1×4 on two studs of a 2×2 | 2, same normal | slide only → locked |
-| Stud hinge (Seregios fold): A's stud in B's slot and B's stud in A's slot, one column | 2, different normals, both at the axis | turn about the column |
-| Arm bridging two grounded 1×1s | 2, same normal | locked (wedged) |
+| Situation | Rows | Free | Result |
+|---|---|---|---|
+| 1×4 on a 2×2 one-stud brick | 4 | turn about the stud, slide | turn (Ctrl+drag slides) |
+| 1×4 on two studs of a 2×2 | 8, rank 5 | slide | locked, slides |
+| Stud hinge (Seregios fold) | 8, rank 5 | turn about the column | turn |
+| Arm bridging two grounded 1×1s | 8, rank 5 | slide (along the arm) | locked |
+| One ball joint | 3 | turn any way about its centre | pose |
+| Two ball joints on a line (Dragon wing) | 6, rank 5 | turn about the line | turn (a hinge) |
 
 ### 4. Drag and snap (`Viewport._start_turn`, `_drag_turn`, `_finish_turn`)
 The cursor ray meets the horizontal plane through the pivot; its angle around the pivot is
@@ -80,6 +74,16 @@ tracked with unwrapping, so the drag can go round more than once. The angle is r
 **Shift+R** (`realign_selection`) measures the moving part's frame rotation against the frame of
 the part it's held by (the first contact's other side; the root grid if free) and turns by the
 difference to the nearest multiple of 90°.
+
+**Posing a joint** (`_drag_pose`): the cursor's spot on the plane facing the camera through the
+joint's centre gives a direction; the moving part points that way (a ball part's arm points away
+from it, a cup part's body toward it). The arm direction relative to the cup is split into tilt θ
+(from straight) and direction φ (around the cup's axis, from its slot), snapped to `rotation_snap`
+(Shift: free) and clamped by `motion.clamp_arm`: inside the cone, else in the slot's plane (φ = 0 or
+180) up to the slot's range. The turn is the smallest rotation that gets there, so the roll stays.
+Ctrl+drag rolls about the arm (`_drag_roll`); `[ / ]` roll a step; Shift+R straightens. Any turn
+that moves a joint (posing, rolling, a hinge, a turn elsewhere that drags a joint along) must keep
+every joint within its limits (`Model.joints_within_limits`), else it's refused.
 
 ### 5. Preview (`Model.moved_overlaps`)
 The moving parts' world geometry is transformed by the turn and tested with the **clash test**
@@ -144,10 +148,8 @@ part's grid). It's valid if it doesn't clash with anything and has at least one 
 part in it, as one undo step.
 
 ## Limits
-- One shared stud axis per turn: a part held by studs pointing different ways is locked. Ball
-  joints will need their own contact rows (ball centre on cup pivot) and joint limits.
+- One moving body: chains of joints (turning inside a chain) and closed loops (Koraidon) need the
+  full snapping solver, which would also solve for several frames at once.
 - Merging back onto the parent grid only happens for quarter turns about Z (parts only store Z
   turns), so a part on a side stud keeps its own frame.
-- Only one moving body: the free-motion step doesn't solve chains or closed loops yet (the
-  planned snapping solver does).
 - Explicit pins don't exist yet; only grounded / largest.

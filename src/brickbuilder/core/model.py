@@ -590,6 +590,22 @@ class Model:
                 return hit[0]
         return None
 
+    def joints_within_limits(self, part_ids, transform: glm.mat4) -> bool:
+        """Would the joints between the given parts and the rest stay within their limits if the
+        parts were moved by a world transform (their centres move with them, so only the angles
+        are checked)?"""
+        from brickbuilder.core.connections import joint_contacts, joint_limits, within_limits
+        moving = set(part_ids)
+        rest = [p for p in self.parts.values() if p.id not in moving]
+        rot = glm.mat3(transform)
+        cone, slot = joint_limits(self.profile)
+        for j in joint_contacts(self.profile, [self.parts[p] for p in moving], rest):
+            ball = rot * j.ball_axis if j.ball_part in moving else j.ball_axis
+            cup, cup_slot = (rot * j.cup_axis, rot * j.cup_slot) if j.cup_part in moving else (j.cup_axis, j.cup_slot)
+            if not within_limits(ball, cup, cup_slot, cone, slot):
+                return False
+        return True
+
     def collisions(self) -> Set[int]:
         """Parts clashing with a part in another frame (within a frame, overlaps can't happen).
         Cached until the next change."""

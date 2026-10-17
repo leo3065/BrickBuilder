@@ -434,9 +434,9 @@ A part can replace the derived ones with `antistuds = "none"` plus explicit `ant
 a centre point plus four **diagonal** slots, from each cell centre out to the rim (the holes are
 cut open at the rim, so e.g. a 1×3 lying diagonally across it fits).
 
-## Ball joints (parts and placing built ✅; posing planned)
+## Ball joints ✅
 ✅ Built: the four parts (`Joints/joint_{1x2,2x2}_{cup,ball}`), round bodies, ball / cup sockets,
-joint contacts and placing straight onto a joint. Posing (turning a part about its joint) is next.
+joint contacts, placing straight onto a joint, and posing (see docs/turning.md).
 
 **Round bodies ✅.** `shape = "sphere"` or `"cylinder"`: `at` (cells, a point on the face it starts
 from), `axis`, `offset_mm` (along the axis to where it starts; a sphere's centre), `length_mm`
@@ -454,12 +454,12 @@ arm is within the cup's limits (profile: `cup = {…, cone = 30, slot = 90}`).
 for its cup) puts it on straight: pivots together, arm into the cup, tops the same way
 (`Model.joint_grid`). It gets a grid of its own (or a frame that lines up with it).
 
-**Posing (planned, J5).** Turning a part held by a joint is locked for now. Plan: the turn finder
-goes from turning in a plane to full 3D motion (a turn about any axis plus a shift); a ball joint
-pins its centre, so one joint gives turning any way about it, two on a line a hinge, three off a
-line nothing. One joint: drag points the arm at the cursor (on the plane facing the camera
-through the ball), snapped as tilt θ and direction φ in 7.5° steps, limited to the cone or else
-the slot; Ctrl+drag rolls; [ / ] roll a step; Shift+R straightens, keeping the roll.
+**Posing ✅.** The turn finder works in full 3D (a turn about any axis plus a shift); a ball joint
+pins its centre, so one joint gives turning any way about it (posing), two on a line a hinge, three
+off a line nothing. Posing one joint: drag points the part at the cursor (on the plane facing the
+camera through the joint), snapped as tilt θ and direction φ in 7.5° steps, inside the cone or
+else in the slot; Ctrl+drag rolls; [ / ] roll a step; Shift+R straightens, keeping the roll. Turns
+that would bend a joint past its limits are refused.
 
 Parts: nanoblock.info JO-C (cup / socket) and JO-D (ball), each on a 1×2 or a 2×2, with the cup or
 ball on a side face. The Kawada manual calls them NAJO-C / NAJO-D.

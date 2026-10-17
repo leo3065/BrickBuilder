@@ -350,8 +350,8 @@ class MainWindow(QMainWindow):
                     "arrows: nudge; F: grid under cursor",
         Tool.SELECT: "drag a selected part: move; arrows / PgUp / PgDown: nudge; Ctrl+G: group; "
                      "double-click: into a group, Alt: one part",
-        Tool.TURN: "drag: turn about the stud, Shift: free; Ctrl+drag: slide along the slot; [ / ]: a step; "
-                   "Shift+R: realign",
+        Tool.TURN: "drag: turn about the stud (on a ball joint: point it), Shift: free; Ctrl+drag: slide "
+                   "(on a joint: roll); [ / ]: a step; Shift+R: realign / straighten",
         Tool.PAINT: "click: paint with the current colour",
         Tool.ERASE: "click: remove",
     }
@@ -494,6 +494,9 @@ class MainWindow(QMainWindow):
         - Turn (T): drag a part (or the selection) to turn it about the stud it's held by, in<br>
           7.5° steps; Shift turns freely. Ctrl+drag slides it along the slot it's held in (half<br>
           cells; Shift: free). [ / ] turn the selection a step, Shift+R turns it back onto its grid.<br>
+          On a ball joint: drag points the part at the cursor (tilt and direction in 7.5° steps,<br>
+          inside the cup's 30° cone or its 90° slot), Ctrl+drag rolls, [ / ] roll a step, Shift+R<br>
+          straightens. Two joints on one line turn like a hinge.<br>
           Locked parts say why in the status bar; red = it would overlap.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>

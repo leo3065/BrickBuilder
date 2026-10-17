@@ -98,3 +98,41 @@ def test_joint_grid_puts_a_part_straight_on_a_joint(model, cup_name, ball_name):
     cup_part = lib(model, "joint_1x2_cup")
     grid = model.joint_grid(cup_part, 0, 0, other.joints[0], glm.vec3(0, 0, 1))
     assert model.turned_placement_problem(cup_part, (0, 0, 0), 0, grid) is None
+
+
+def test_one_joint_poses_two_on_a_line_hinge(model):
+    from brickbuilder.core.motion import plan_turn
+    h = History(model)
+    cup = h.add_part(lib(model, "joint_1x2_cup"), (0, 0, 0), 0, "red")
+    ball = straight_on(model, h, cup)
+    plan = plan_turn(model, {ball.id})
+    assert plan.kind == "pose" and glm.distance(plan.pivot, cup.joints[0][1]) < 1e-4
+
+    # A second cup / ball pair next to it (cups 2 cells along Y), the two ball parts tied by a brick
+    # on top: two joints on one line make a hinge about it
+    cup2 = h.add_part(lib(model, "joint_1x2_cup"), (0, 4, 0), 0, "red")
+    ball2 = straight_on(model, h, cup2)
+    assert ball2.frame == ball.frame                                   # lined up: one grid
+    tie = h.add_part(lib(model, "brick_1x4"), (ball2.pos[0], ball2.pos[1], 1), ball2.turns, "white", ball2.frame)
+    assert tie is not None and {ball.id, ball2.id} <= model.connections()[tie.id]
+    plan = plan_turn(model, {ball.id, ball2.id, tie.id})
+    assert plan.kind == "turn"
+    line = glm.normalize(cup2.joints[0][1] - cup.joints[0][1])
+    assert abs(abs(glm.dot(plan.axis, line)) - 1) < 1e-5
+    # The pivot is on that line
+    off = plan.pivot - cup.joints[0][1]
+    assert glm.length(off - line * glm.dot(off, line)) < 1e-3
+
+
+def test_clamp_arm_to_the_cone_or_the_slot():
+    from brickbuilder.core.motion import clamp_arm, joint_angles
+    cup_axis, slot = glm.vec3(1, 0, 0), glm.vec3(0, 0, 1)
+    straight = glm.vec3(-1, 0, 0)
+    sideways_40 = glm.vec3(-glm.cos(glm.radians(40)), glm.sin(glm.radians(40)), 0)
+    arm, theta, phi = clamp_arm(sideways_40, cup_axis, slot, 30, 90, 7.5)
+    # Too far sideways for the cone: it goes into the slot's plane instead (up, since φ = ±90 -> 0)
+    assert abs(arm.y) < 1e-6 and phi in (0.0, 180.0) and theta == 37.5
+    up_100 = glm.vec3(glm.cos(glm.radians(80)), 0, glm.sin(glm.radians(80)))   # 100° from straight
+    arm, theta, phi = clamp_arm(up_100, cup_axis, slot, 30, 90, 7.5)
+    assert theta == 90.0 and phi == 0.0
+    assert joint_angles(straight, cup_axis, slot)[0] < 1e-6

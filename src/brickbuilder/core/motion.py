@@ -1,34 +1,37 @@
-"""What a turn moves and how it may turn: about the axis its holding studs share.
+"""What a turn moves and how it may move: the free motions its contacts leave.
 
 Moving set: the selection always moves, plus whatever hangs only off it; the rest of its connected
 component stays if it's pinned (grounded: a part on the root grid's layer 0), otherwise the
 largest piece of the rest stays (docs/part_format.md, "Pins").
 
-Free motion: the contacts between the moving and the staying parts, linearised. Each stud in a
-slot is an error that must stay zero (the stud's distance from the slot's line; both directions
-for a point antistud), measured in the plane across the studs' shared axis (vertical for top
-studs, horizontal for a side stud). The moving set's motion in that plane is (angle, x, y); the
-motions that keep every error at zero are the null space of the errors' Jacobian. A turn about a contact stud that's in
-that null space is the turn the tool offers (it keeps the contact exactly, not just to first
-order). No null space with a turn in it: locked.
+Free motion: the moving set's motion is a turn w (about any axis) plus a shift v of a reference
+point, six numbers. Each contact, linearised, is a set of rows that must stay zero: a stud in a slot
+keeps its base on the slot's line and at its depth, and doesn't tilt off the slot's axis; a ball in
+a cup keeps its centre still. The free motions are the null space of those rows. What's left:
+one turning axis -> "turn" about it (studs, a side stud, two joints on a line: a hinge); turning
+every way about a joint's centre -> "pose"; only shifting -> a slide; nothing -> locked.
+A pivot on a contact (a stud, a joint's centre) is preferred: turning about it keeps that contact
+exactly, not just to first order. See docs/turning.md.
 """
 from dataclasses import dataclass, field
-from typing import List, Optional, Set
+import math
+from typing import List, Optional, Set, Tuple
 
 import glm
 import numpy as np
 
-from brickbuilder.core.connections import AXIS_TOLERANCE, Contact, contacts_between, joint_contacts
+from brickbuilder.core.connections import Contact, JointContact, contacts_between, joint_contacts
 from brickbuilder.core.model import plane_basis
 
 # Errors are in mm, from float32 positions: a turned frame puts studs ~1e-6 mm off, so anything
 # below this counts as zero (well under connections.TOLERANCE)
 EPS = 1e-4
+ROT_EPS = 1e-6  # turning parts of the free motions are unit-less: below this, no turning
 
 
 @dataclass
 class TurnPlan:
-    kind: str                       # "free" (not held), "turn" (about pivot) or "locked"
+    kind: str                       # "free" (not held), "turn" (about pivot), "pose" (a ball joint) or "locked"
     moving: Set[int]
     fixed: Set[int] = field(default_factory=set)
     pivot: Optional[glm.vec3] = None  # a point on the line to turn about ("turn")
@@ -36,6 +39,8 @@ class TurnPlan:
     reason: str = ""
     contacts: List[Contact] = field(default_factory=list)
     slide: Optional[glm.vec3] = None  # a direction it can slide along without turning (a slot), if any
+    joints: List[JointContact] = field(default_factory=list)
+    joint: Optional[JointContact] = None  # "pose": the joint it turns about (its pivot is `pivot`)
 
 
 def grounded(placed) -> bool:
@@ -74,22 +79,34 @@ def moving_set(model, selection) -> (Set[int], Set[int]):
     return component - fixed, fixed
 
 
-def _jacobian_rows(contact: Contact, centre: glm.vec3, basis) -> List[List[float]]:
-    """Rows d(error)/d(angle, x, y) for one contact, turning about `centre` in the plane spanned by
-    `basis` (u, v). The stud and the slot move relative to each other, so it doesn't matter which
-    one is on the moving side."""
-    bu, bv = basis
-    d = contact.stud - centre
-    rx, ry = glm.dot(d, bu), glm.dot(d, bv)
-    j = np.array([[-ry, 1.0, 0.0],    # d(stud.u)
-                  [rx, 0.0, 1.0]])    # d(stud.v)
+def _skew_rows(r: glm.vec3, directions) -> List[List[float]]:
+    """Rows keeping the point at `r` (from the reference point) still along each direction: the
+    velocity there is v + w x r, so along d it's d.v + w.(r x d)."""
+    rows = []
+    for d in directions:
+        rd = glm.cross(r, d)
+        rows.append([rd.x, rd.y, rd.z, d.x, d.y, d.z])
+    return rows
+
+
+def _stud_rows(contact: Contact, centre: glm.vec3) -> List[List[float]]:
+    """A stud in a slot: its base stays on the slot's line (and at its depth), and it can't tilt
+    off the slot's axis. Free: turning about the stud, and sliding along a long slot."""
+    n = glm.normalize(contact.axis)
+    u, v = plane_basis(n)
     a, b = contact.slot
-    s = glm.vec2(glm.dot(b - a, bu), glm.dot(b - a, bv))
-    if glm.length(s) < 1e-9:
-        return j.tolist()             # a point antistud: both directions
-    s = glm.normalize(s)
-    n = np.array([-s.y, s.x])         # across the slot
-    return [list(n @ j)]
+    t = b - a
+    if glm.length(t) < 1e-9:
+        directions = [n, u, v]                                   # a point: held every way
+    else:
+        directions = [n, glm.normalize(glm.cross(glm.normalize(t), n))]  # free along the slot
+    tilt = [[u.x, u.y, u.z, 0.0, 0.0, 0.0], [v.x, v.y, v.z, 0.0, 0.0, 0.0]]
+    return _skew_rows(contact.stud - centre, directions) + tilt
+
+
+def _joint_rows(joint: JointContact, centre: glm.vec3) -> List[List[float]]:
+    """A ball in a cup: its centre stays put. Free: turning any way about it."""
+    return _skew_rows(joint.pivot - centre, [glm.vec3(1, 0, 0), glm.vec3(0, 1, 0), glm.vec3(0, 0, 1)])
 
 
 def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
@@ -101,52 +118,105 @@ def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
     if not fixed:
         return TurnPlan("free", moving, reason="not held by anything else")
     moving_parts, fixed_parts = [model.parts[p] for p in moving], [model.parts[p] for p in fixed]
-    if joint_contacts(model.profile, moving_parts, fixed_parts):
-        return TurnPlan("locked", moving, fixed, reason="posing ball joints isn't built yet")
     contacts = contacts_between(model.profile, moving_parts, fixed_parts)
-    if not contacts:  # connected through the selection but no contact between the two sides
+    joints = joint_contacts(model.profile, moving_parts, fixed_parts)
+    if not contacts and not joints:  # connected through the selection but no contact between the sides
         return TurnPlan("free", moving, fixed, reason="not held by anything else")
-    axis = contacts[0].axis
-    if any(abs(glm.dot(c.axis, axis)) < 1 - AXIS_TOLERANCE for c in contacts):
-        return TurnPlan("locked", moving, fixed, reason="held by studs pointing different ways", contacts=contacts)
-    basis = plane_basis(axis)
-    bu, bv = basis
-    centre = contacts[0].stud
-    a = np.array([row for c in contacts for row in _jacobian_rows(c, centre, basis)])
+    centre = contacts[0].stud if contacts else joints[0].pivot
+    a = np.array([row for c in contacts for row in _stud_rows(c, centre)]
+                 + [row for j in joints for row in _joint_rows(j, centre)])
     _, s, vh = np.linalg.svd(a)
     rank = int(np.sum(s > EPS))
-    if rank >= 3:
-        return TurnPlan("locked", moving, fixed, reason="held by studs on different axes", contacts=contacts)
-    slide = _slide(vh[rank:], bu, bv)
+    null = vh[rank:]                                  # free motions (w, v)
+    plan = TurnPlan("locked", moving, fixed, contacts=contacts, joints=joints)
+    if len(null) == 0:
+        plan.reason = "held by studs on different axes"
+        return plan
 
-    def in_plane(p: glm.vec3):
-        d = p - centre
-        return round(glm.dot(d, bu), 4), round(glm.dot(d, bv), 4)
-
-    def turns_freely_about(x: float, y: float) -> bool:
-        q = np.array([1.0, y, -x])  # turning about (x, y): velocity at the centre = -n x (p - centre)
+    def free(w: glm.vec3, p: glm.vec3) -> bool:
+        """Is turning about the line through p along w a free motion?"""
+        vel = glm.cross(w, centre - p)  # velocity of the reference point
+        q = np.array([w.x, w.y, w.z, vel.x, vel.y, vel.z])
         return float(np.linalg.norm(a @ q)) < EPS * float(np.linalg.norm(q))
 
-    hint_xy = in_plane(hint) if hint is not None else None
-    studs = sorted({in_plane(c.stud) for c in contacts},
-                   key=lambda xy: (xy[0] - hint_xy[0]) ** 2 + (xy[1] - hint_xy[1]) ** 2 if hint_xy else 0.0)
-    for x, y in studs:
-        if turns_freely_about(x, y):
-            return TurnPlan("turn", moving, fixed, pivot=centre + bu * x + bv * y, axis=glm.vec3(axis),
-                            contacts=contacts, slide=slide)
-    return TurnPlan("locked", moving, fixed, reason="the contacts only allow sliding, not turning",
-                    axis=glm.vec3(axis), contacts=contacts, slide=slide)
+    turning = null[:, :3]
+    tu, ts, tvh = np.linalg.svd(turning)
+    turn_rank = int(np.sum(ts > ROT_EPS))
+    # Sliding: free motions with no turning in them
+    shifts = tu[:, turn_rank:].T @ null[:, 3:] if turn_rank < len(null) else np.zeros((0, 3))
+    shifts = [glm.vec3(*map(float, x)) for x in shifts if np.linalg.norm(x) > EPS]
+    if len(shifts) == 1:
+        plan.slide = glm.normalize(shifts[0])
+
+    candidates = [c.stud for c in contacts] + [j.pivot for j in joints]
+    if hint is not None:
+        candidates.sort(key=lambda p: glm.distance(p, hint))
+    if turn_rank == 1:
+        w = glm.normalize(glm.vec3(*map(float, tvh[0])))
+        if contacts and glm.dot(w, contacts[0].axis) < 0:
+            w = -w  # point it the way the studs do
+        elif not contacts and w.z < -1e-6:
+            w = -w
+        pivot = next((p for p in candidates if free(w, p)), None)
+        if pivot is None:  # a line through none of the contacts: from the free motion itself
+            coeffs = np.linalg.lstsq(turning.T, np.array([w.x, w.y, w.z]), rcond=None)[0]
+            q = coeffs @ null
+            vel = glm.vec3(*map(float, q[3:]))
+            pivot = centre + glm.cross(w, vel - w * glm.dot(vel, w))
+        plan.kind, plan.pivot, plan.axis = "turn", pivot, w
+        return plan
+    if turn_rank == 3:
+        for j in joints:
+            if all(free(glm.vec3(*e), j.pivot) for e in ((1, 0, 0), (0, 1, 0), (0, 0, 1))):
+                plan.kind, plan.pivot, plan.joint = "pose", j.pivot, j
+                plan.axis = glm.normalize(j.ball_axis)
+                return plan
+    if turn_rank == 0:
+        plan.reason = "the contacts only allow sliding, not turning" if plan.slide else "held by studs on different axes"
+    else:
+        plan.reason = "it can turn more than one way here, which can't be posed yet"
+    return plan
 
 
-def _slide(null: np.ndarray, bu: glm.vec3, bv: glm.vec3) -> Optional[glm.vec3]:
-    """A motion in the null space (rows: angle, x, y) with no turning in it, as a world
-    direction; None if every free motion turns."""
-    if len(null) == 0:
-        return None
-    if len(null) == 1:
-        q = null[0] if abs(null[0][0]) < EPS else None
-    else:  # two free motions: the combination whose angle part cancels
-        q = null[1][0] * null[0] - null[0][0] * null[1]
-    if q is None or float(np.hypot(q[1], q[2])) < EPS:
-        return None
-    return glm.normalize(bu * float(q[1]) + bv * float(q[2]))
+# --- posing a ball joint -------------------------------------------------------------------
+
+def min_rotation(a: glm.vec3, b: glm.vec3) -> glm.quat:
+    """The smallest rotation taking direction a onto direction b."""
+    a, b = glm.normalize(a), glm.normalize(b)
+    axis = glm.cross(a, b)
+    d = max(-1.0, min(1.0, glm.dot(a, b)))
+    if glm.length(axis) < 1e-9:
+        if d > 0:
+            return glm.quat()
+        u, _ = plane_basis(a)
+        return glm.angleAxis(math.pi, u)
+    return glm.angleAxis(math.acos(d), glm.normalize(axis))
+
+
+def joint_angles(arm: glm.vec3, cup_axis: glm.vec3, cup_slot: glm.vec3) -> Tuple[float, float]:
+    """(tilt θ, direction φ) in degrees of an arm direction relative to a cup: θ from straight (the
+    arm pointing into the cup), φ around it from the slot direction."""
+    straight = -glm.normalize(cup_axis)
+    e1 = glm.normalize(cup_slot - straight * glm.dot(cup_slot, straight))
+    e2 = glm.cross(straight, e1)
+    d = glm.normalize(arm)
+    theta = math.degrees(math.acos(max(-1.0, min(1.0, glm.dot(d, straight)))))
+    phi = math.degrees(math.atan2(glm.dot(d, e2), glm.dot(d, e1)))
+    return theta, phi
+
+
+def clamp_arm(arm: glm.vec3, cup_axis: glm.vec3, cup_slot: glm.vec3, cone: float, slot: float,
+              step: Optional[float]) -> Tuple[glm.vec3, float, float]:
+    """The allowed arm direction nearest `arm`: θ and φ snapped to `step` (None: free), inside the
+    cone, else in the slot's plane (φ = 0 or 180) up to the slot's range. Returns (arm, θ, φ)."""
+    theta, phi = joint_angles(arm, cup_axis, cup_slot)
+    if step:
+        theta, phi = round(theta / step) * step, round(phi / step) * step
+    if theta > cone + 1e-6:
+        phi = 0.0 if abs(phi) <= 90 else 180.0
+        theta = min(theta, slot)
+    straight = -glm.normalize(cup_axis)
+    e1 = glm.normalize(cup_slot - straight * glm.dot(cup_slot, straight))
+    e2 = glm.cross(straight, e1)
+    t, p = math.radians(theta), math.radians(phi)
+    return straight * math.cos(t) + (e1 * math.cos(p) + e2 * math.sin(p)) * math.sin(t), theta, phi

@@ -179,8 +179,9 @@ tests/               pytest suite
   appended to `PlacedPart.solids`, flagged in `joint_solids`) and `PartDef.joints` (ball / cup:
   pivot = `at` + `offset` mm along `axis`; world copies in `PlacedPart.joints`). Joint contacts:
   `connections.joint_contacts` (limits from `profile.socket_types["cup"]`); a joined pair's joint
-  bodies may overlap. Placing on a joint: `Viewport._joint_target` → `Model.joint_grid`. Turning a
-  joint-held part is locked until posing (J5).
+  bodies may overlap. Placing on a joint: `Viewport._joint_target` → `Model.joint_grid`. Posing: plan kind "pose"
+  (`motion.plan_turn` is full 3D: stud and joint rows, null space), `Viewport._drag_pose` / `_drag_roll`,
+  `motion.clamp_arm`; joint limits via `Model.joints_within_limits` on every turn.
 - `Viewport.notice` is a one-line status-bar message (why something was refused, what's moving).
   A turn or drag in progress is cancelled by Esc, undo/redo, delete, tool change and New/Open.
 

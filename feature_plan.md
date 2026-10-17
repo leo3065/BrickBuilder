@@ -6,7 +6,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 
 #### Editing
 - [x] Building with parts that snap to the grid, including adding and removing them. When adding, the new part goes against the face under the cursor, or on the grid if nothing is under the cursor. Keep the outline of the model clean.
-- [x] When in placing mode, showing a preview of the brick block to be placed.
+- [x] When in placing mode, showing a preview of the brick block to be placed. It shows its underside slots (blue) and rings any stud in its way (red).
 - [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.
 - [x] Half-offset placement: a toggle (H) that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell.
 - [x] Undo/redo.
@@ -42,6 +42,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Round parts: round 1×1, 1×2, 1×3, 1×4, 2×2 and the 2×2 fan (boxes with `corner_radius`).
 - [x] 1×1 with a side stud (nanoblock.info "1x1 : 2凸", in 173 of 671 kits: the biggest gap). Hovering its side face places on the stud's grid (a frame turned 90° about a horizontal axis, shared by side studs in one plane); parts on it turn about the stud.
 - [ ] Joint parts: ball and socket on 1×2 and 2×2 (nanoblock.info JO-C / JO-D). Needs new body shapes (a sphere and a cup) or mesh bodies, and ball / cup socket types (tilted frames are done); the joint behaviour is under Intermediate.
+- [ ] Base plate undersides: real plates grip studs in places, but the profile gives plates no slots (underside rule "none"), so they can't be placed on studs. Measure where they grip and add explicit antistud sockets.
 - [ ] A menu for browsing the part library, with a tree view, thumbnail previews and mark-as-favorite. (The tree view grouped by category is done; thumbnails and favorites are not.)
 
 #### Colors
@@ -51,10 +52,10 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Allowing semi-transparent brick blocks. (Data is ready: palette colors are flagged `clear` and carry an `alpha`.)
 
 ### Intermediate
-- [x] Connections: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Works across Z-turned frames too (world-space contacts); joints still to come.
+- [x] Connections: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Works across any frames (world-space contacts with stud directions, side studs included); a stud holds with half its height in. Joints still to come.
 - [x] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it. Done as step B (see docs/part_format.md "Step B"): Turn tool (T; Shift = free, [ / ] = one step, Shift+R = realign), placing parts already turned ([ / ] in the Place tool), and a working grid (F). Turns are about Z; the turn finder covers stud contacts (ball joints come with the joint parts).
 - [ ] Adding support for brick block to align to another brick block by rotating around the stud it's held by (any axis, e.g. a side stud). This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
-- [ ] Snapping solver: contacts as errors minimised by least squares over the dragged frames; free motions from the same setup (hinges, locks, slides); keeps loops closed. Used by turning, align, ball joints and circular arrays. See docs/part_format.md. Partly built (`motion.plan_turn`, docs/turning.md): one moving body, turns about one shared stud axis (any direction), stud contacts incl. half-inserted studs. Still open: several moving frames, chains and closed loops, ball joints, offering slides.
+- [ ] Snapping solver: contacts as errors minimised by least squares over the dragged frames; free motions from the same setup (hinges, locks, slides); keeps loops closed. Used by turning, align, ball joints and circular arrays. See docs/part_format.md. Partly built (`motion.plan_turn`, docs/turning.md): one moving body, turns about one shared stud axis (any direction), stud contacts incl. half-inserted studs. Slides are offered (Ctrl+drag in the Turn tool). Still open: several moving frames, chains and closed loops, ball joints.
 - [ ] Pins and joint chains: each connected component has one pin (explicit, else grounded, else the larger side); turning at a joint moves the unpinned side. Built: grounded / largest, with the selection always moving (`motion.moving_set`). Still open: explicit pins (a "pin group" command) and turning inside joint chains.
 - [ ] Instances: define a subassembly once, place it several times, editing it updates every copy (like LDraw multi-part files).
 - [ ] Circular array: copy a selection of parts (a subassembly, possibly spanning several frames) n times, each copy turned 360/n° about a centre, e.g. rings of rounded 1×N and the alternating round 1×4 / 1×3 body segments of the Rayquaza DX set. Copies turned by a multiple of 90° reuse existing frames (that ring needs only the root grid and one 45° frame). Checks the closing contacts and reports any gap. Each copy can reuse `History.move_parts`; needs copy/paste.
@@ -65,6 +66,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Dragging the selection onto a side stud (it lands on the stud's grid, like placing).
 - [x] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above is now refused, as is a part flush against a side-stud face (`can_place` runs the full clash test). Base plates have no slots (underside rule "none"), so they can't be placed on studs.
 - [x] Reuse a frame that lines up when turning or placing a turned part (as side studs already do, `Model.find_grid`), so parts turned to the same angle on studs in one line share a grid and can be bridged (`Model.lined_up_frames`).
+- [ ] A view option showing the underside slots of placed parts (all, or the selection), like the preview does for itself, to check orientations after building. Low priority.
 - [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.
 
 ### Maintenance

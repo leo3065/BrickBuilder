@@ -195,9 +195,9 @@ class Viewport(QOpenGLWidget):
         self.refresh_ghost()
 
     def rotate_current_part(self, quarter_turns: int):
-        if self.dragging:  # Space while dragging the selection turns it
+        if self.dragging:  # Space while dragging the selection turns it (on a joint: rolls it 180°)
             self.dragging["turns"] = (self.dragging["turns"] + quarter_turns) % 4
-            self._update_drag()
+            self._update_drag(self.dragging.get("pos"))
             return
         # The anchor cell stays on the cell under the cursor, so the part turns around it
         self.current_turns = (self.current_turns + quarter_turns) % 4
@@ -757,16 +757,37 @@ class Viewport(QOpenGLWidget):
                 part.pos[1] + math.floor((s[1] - part.pos[1]) / ny) * ny,
                 part.pos[2])
         self.dragging = {"moving": set(self.selection), "frame": frame, "anchor": self._cell_centre(cell),
-                         "turns": 0, "angle": 0.0, "target": None, "transform": None, "valid": False}
+                         "grab": part.id, "turns": 0, "angle": 0.0, "target": None, "transform": None,
+                         "valid": False, "joint_grid": None}
         self.select_rect = None
 
     def _update_drag(self, pos=None):
         d = self.dragging
         if pos is not None:
-            frame, target, grid = self._target_under(pos.x(), pos.y(), d["moving"])
-            if target is not None:
-                d["target"] = (frame, target, grid)
+            d["pos"] = pos
+            grab = self.model.parts[d["grab"]]
+            # Onto a joint the grabbed part has the mate for: straight on (Space: rolled 180°)
+            on_joint = self._joint_target(pos.x(), pos.y(), grab.part, grab.turns, d["moving"], d["turns"] % 2 == 1)
+            if on_joint is not None:
+                d["target"], d["joint_grid"] = (on_joint[0], None, None), on_joint[2]
+            else:
+                d["joint_grid"] = None
+                frame, target, grid = self._target_under(pos.x(), pos.y(), d["moving"])
+                if target is not None:
+                    d["target"] = (frame, target, grid)
         if d["target"] is None:
+            return
+        if d["joint_grid"] is not None:
+            # The grabbed part at pos 0 on that grid; everything moves with it
+            grab = self.model.parts[d["grab"]]
+            offset = self.profile.sub_to_world(grab.pos) - self.profile.sub_to_world((0, 0, 0))
+            placed = self.model.frame_matrix(grab.frame) * glm.translate(glm.mat4(1.0), offset)
+            d["transform"] = d["joint_grid"] * glm.inverse(placed)
+            d["valid"] = self.model.moved_overlaps(d["moving"], d["transform"]) is None
+            self.notice = ("onto the joint" + (", rolled 180°" if d["turns"] % 2 else " (Space: roll 180°)")
+                           + ("" if d["valid"] else " (overlaps)"))
+            self.update()
+            self.edited.emit()
             return
         # On a side stud the target grid may not be a frame yet (`grid`, in `frame`'s space):
         # move_parts then makes it, as a child of `frame`
@@ -1017,21 +1038,25 @@ class Viewport(QOpenGLWidget):
 
         self.update()
 
-    def _joint_target(self, mouse_x, mouse_y):
-        """If the cursor is on a joint that the current part has the mate for (a cup for its ball,
-        a ball for its cup): (frame, the current part's grid in that frame's space) putting it on
-        the joint straight; else None."""
-        mates = range(len(self.current_part.joints))
+    def _joint_target(self, mouse_x, mouse_y, part=None, turns=None, ignore=(), flip=False):
+        """If the cursor is on a joint that `part` (default: the current part, at `turns`) has the
+        mate for (a cup for its ball, a ball for its cup): (frame, the part's grid in that frame's
+        space, the grid in world space) putting it on the joint straight, its top the same way as the
+        other part's (`flip`: rolled 180°, tops swapped: the joint is at mid-height, so it lines up
+        too); else None. Parts in `ignore` are looked through."""
+        part = part or self.current_part
+        turns = self.current_turns if turns is None else turns
+        mates = range(len(part.joints))
         if not mates:
             return None
         ray = picking.get_mouse_ray(mouse_x, mouse_y, self.width(), self.height(), self.camera)
-        hit, _, point = picking.intersect_model(ray, self.model)
+        hit, _, point = picking.intersect_model(ray, self.model, ignore)
         if hit is None or not hit.joints:
             return None
         best = None
         for target in hit.joints:
             for i in mates:
-                if {self.current_part.joints[i].kind, target[0]} != {"ball", "cup"}:
+                if {part.joints[i].kind, target[0]} != {"ball", "cup"}:
                     continue
                 d = glm.distance(point, target[1])
                 if d < 6.0 and (best is None or d < best[0]):  # on or near the ball / cup
@@ -1039,22 +1064,24 @@ class Viewport(QOpenGLWidget):
         if best is None:
             return None
         up = glm.vec3(self.model.frame_matrix(hit.frame) * glm.vec4(0, 0, 1, 0))
-        grid = self.model.joint_grid(self.current_part, self.current_turns, best[1], best[2], up)
-        return hit.frame, glm.inverse(self.model.frame_matrix(hit.frame)) * grid
+        grid = self.model.joint_grid(part, turns, best[1], best[2], -up if flip else up)
+        return hit.frame, glm.inverse(self.model.frame_matrix(hit.frame)) * grid, grid
 
     def update_ghost(self, mouse_x, mouse_y):
-        on_joint = self._joint_target(mouse_x, mouse_y)
+        # On a joint, Space (an odd number of quarter turns) puts the part on rolled 180°
+        on_joint = self._joint_target(mouse_x, mouse_y, flip=self.current_turns % 2 == 1)
         if on_joint is not None:
             # Straight onto the joint: the part's own position is fixed by the joint
-            self.ghost_frame, self._ghost_grid = on_joint
+            self.ghost_frame, self._ghost_grid, _ = on_joint
             self.ghost_pos = (0, 0, 0)
             self._ghost_pivot = None  # no fine turn on a joint (posing comes later)
             problem = self.model.turned_placement_problem(self.current_part, self.ghost_pos, self.current_turns,
                                                           self.ghost_matrix())
             self.ghost_valid = problem is None
-            self.notice = f"can't place: {problem}" if problem else "on the joint"
+            self.notice = f"can't place: {problem}" if problem else (
+                "on the joint, rolled 180° (Space)" if self.current_turns % 2 else "on the joint (Space: roll 180°)")
             return
-        if self.notice == "on the joint":
+        if self.notice.startswith("on the joint"):
             self.notice = ""
         # Parts placed against a part go on that part's grid (its frame), so building on a turned
         # part follows its turn; in empty space, the working grid's ground

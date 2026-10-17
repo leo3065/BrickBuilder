@@ -76,7 +76,8 @@ Click to place the part chosen in the Parts list; Ctrl + click removes a part.
 - **[ / ]:** turn the preview off the grid in 7.5° steps (it then needs a stud to sit on);
   **Shift+R** puts it back.
 - **Side studs:** hover the face a side stud sticks out of to build on the stud.
-- **Joints:** with a ball part chosen, hover a cup (or with a cup part, a ball) to put it on straight.
+- **Joints:** with a ball part chosen, hover a cup (or with a cup part, a ball) to put it on straight;
+  **Space** puts it on rolled 180° (tops swapped).
 - **F:** use the grid of the part under the cursor for empty space and the ground too; F over
   empty space goes back to the main grid.
 
@@ -85,8 +86,8 @@ Click to place the part chosen in the Parts list; Ctrl + click removes a part.
   drills into a group; **Alt+click** picks a single part; **Ctrl+click** adds or removes; **drag**
   from empty space for a box. **Ctrl+A** selects all, **Esc** clears; Edit > Select Connected grows
   the selection to whole connected subassemblies.
-- **Drag a selected part** to move the selection onto any face, grid or side stud (Space turns it
-  90°, [ / ] a fine turn, Esc cancels). **Arrow keys** move it half a cell (H) or a cell along its
+- **Drag a selected part** to move the selection onto any face, grid, side stud or joint (Space turns
+  it 90°, or on a joint rolls it 180°; [ / ] a fine turn; Esc cancels). **Arrow keys** move it half a cell (H) or a cell along its
   own grid, **PgUp / PgDown** a layer.
 - **Delete** removes the selection; picking a colour recolours it.
 - **Ctrl+G / Ctrl+Shift+G:** group / ungroup. The Groups dock lists the groups with part counts

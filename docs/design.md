@@ -159,7 +159,8 @@ part on its side turns the 90° range from up/down into left/right (the manual's
 90° pictures). The limits belong to the profile's `cup` socket type.
 
 **Placing:** with a joint part chosen, hovering a matching joint puts it on straight: pivots together,
-arm into the cup, tops the same way.
+arm into the cup, tops the same way; Space puts it on rolled 180° (tops swapped: the joint is at
+mid-height, so it lines up too). Dragging a selection onto a joint does the same for the grabbed part.
 
 **Posing:** the turn finder works in full 3D (a turn about any axis plus a shift). A ball joint pins its
 centre, so one joint gives turning any way about it (posing), two on a line a hinge, three off a line

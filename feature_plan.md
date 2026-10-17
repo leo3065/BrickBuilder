@@ -75,6 +75,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Switch to `from pyglm import glm` (PyGLM warns that `import glm` will be deprecated). Touches every module.
 - [ ] Move rendering to VBOs/shaders before mesh-heavy features (imported meshes). Frames are now GPU-bound: 1000 parts ≈ 12 ms, 4000 ≈ 48 ms (the CPU side is ≈ 11 ms at 4000 since PyOpenGL error checking is off).
 - [ ] Use the spatial index for the connection graph too (now ≈ 22 ms per 1000 parts after every edit, rebuilt from scratch).
+- [ ] Keep the performance benchmark in the repo (e.g. `tools/bench.py`: rendering, placement preview, turning with many parts and child frames, connections, save/load at 500–4000 parts), so changes can be re-measured against the numbers in docs/architecture.md.
 - [x] Split `ui/viewport.py`: the widget shell stays; placing, selecting / moving, turning and camera controls are mixins in their own modules (`ui/placing.py`, `selecting.py`, `turning.py`, `view_controls.py`).
 
 ### Advanced

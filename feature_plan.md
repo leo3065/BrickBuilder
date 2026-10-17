@@ -68,13 +68,13 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Placing on a joint rolled 180° (tops swapped) with Space: the joint sits at mid-height, so the flipped part lines up too.
 - [x] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above is now refused, as is a part flush against a side-stud face (`can_place` runs the full clash test). Base plates grip on their side slots and let studs into their hollow middle.
 - [x] Reuse a frame that lines up when turning or placing a turned part (as side studs already do, `Model.find_grid`), so parts turned to the same angle on studs in one line share a grid and can be bridged (`Model.lined_up_frames`).
-- [ ] A view option showing the underside slots of placed parts (all, or the selection), like the preview does for itself, to check orientations after building. Low priority.
+- [ ] A view option showing the underside slots and hollows of placed parts (all, or the selection), like the preview does for itself, to check orientations after building. Low priority.
 - [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.
 
 ### Maintenance
 - [ ] Switch to `from pyglm import glm` (PyGLM warns that `import glm` will be deprecated). Touches every module.
 - [ ] Move rendering to VBOs/shaders before mesh-heavy features (imported meshes); display lists are fine for now (1000 parts ≈ 25 ms per frame; the joint parts' round bodies are low-poly).
-- [ ] Split `ui/viewport.py` (now ~1,100 lines): turning, posing, sliding and moving into their own module(s).
+- [ ] Split `ui/viewport.py` (now ~1,150 lines): turning, posing, sliding and moving into their own module(s); the joint and side-stud targeting (`_joint_target`, `_side_stud_target`) could join the placement code.
 
 ### Advanced
 - [ ] Exporting the model for the current view as an image, both raster and vector formats.

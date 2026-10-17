@@ -63,7 +63,7 @@ borrows from the Koraidon/Miraidon sets (regular + sloped bricks bracing beyond 
 - Palette RGB values are approximate; clear colours render opaque.
 - Bricks can go below the grid (`z < 0`) on purpose: no hard floor (`docs/design.md`).
 - Chains and closed loops of joints need the full snapping solver (`docs/design.md`).
-- `ui/viewport.py` is ~1,100 lines; splitting turning / posing / moving out is on the todo list.
+- `ui/viewport.py` is ~1,150 lines; splitting turning / posing / moving out is on the todo list.
 - Prefer migrating to VBOs/shaders before mesh-heavy features (imported meshes). Raise such
   trade-offs with the user before restructuring; don't silently rewrite.
 

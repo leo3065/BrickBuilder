@@ -1,6 +1,20 @@
 import glm
 import math
 
+# Preset views as (yaw, pitch) in degrees. Yaw is where the eye is around the target (0 = on +X),
+# pitch how high (90 = straight above). Top and bottom keep +Y up on screen.
+VIEWS = {
+    "front": (-90.0, 0.0),    # from -Y, looking toward +Y
+    "back": (90.0, 0.0),
+    "right": (0.0, 0.0),      # from +X
+    "left": (180.0, 0.0),
+    "top": (-90.0, 90.0),
+    "bottom": (-90.0, -90.0),
+    "isometric": (-45.0, math.degrees(math.atan(1 / math.sqrt(2)))),  # equal angles to all three axes
+}
+PITCH_LIMIT = math.pi / 2 - 0.01  # straight up or down would leave "up" undefined
+
+
 class Camera:
     def __init__(self):
         self.reset()
@@ -49,8 +63,33 @@ class Camera:
         self.pitch += delta_pitch
         
         # Clamp pitch to avoid gimbal lock/flipping
-        limit = math.pi / 2 - 0.01
-        self.pitch = max(-limit, min(limit, self.pitch))
+        self.pitch = max(-PITCH_LIMIT, min(PITCH_LIMIT, self.pitch))
+
+    def set_view(self, name: str):
+        """Look from one of the preset directions (VIEWS), keeping the target and zoom."""
+        yaw, pitch = VIEWS[name]
+        self.yaw = math.radians(yaw)
+        self.pitch = max(-PITCH_LIMIT, min(PITCH_LIMIT, math.radians(pitch)))
+
+    def is_view(self, name: str) -> bool:
+        yaw, pitch = VIEWS[name]
+        p = max(-PITCH_LIMIT, min(PITCH_LIMIT, math.radians(pitch)))
+        dyaw = (self.yaw - math.radians(yaw) + math.pi) % (2 * math.pi) - math.pi
+        return abs(dyaw) < 1e-6 and abs(self.pitch - p) < 1e-6
+
+    def fit(self, lo: glm.vec3, hi: glm.vec3, margin: float = 1.2):
+        """Centre on a box and zoom so it fills the view (with a margin)."""
+        self.target = (lo + hi) * 0.5
+        view = self.get_view_matrix()
+        xs, ys = [], []
+        for x in (lo.x, hi.x):
+            for y in (lo.y, hi.y):
+                for z in (lo.z, hi.z):
+                    p = view * glm.vec4(x, y, z, 1.0)
+                    xs.append(p.x)
+                    ys.append(p.y)
+        height = max(max(ys) - min(ys), (max(xs) - min(xs)) / self.aspect_ratio)
+        self.scale = max(10.0, min(height * margin, 2000.0))
 
     def zoom(self, delta):
         # For ortho, zoom means changing the scale (view size).

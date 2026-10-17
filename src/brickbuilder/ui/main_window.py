@@ -182,6 +182,34 @@ class MainWindow(QMainWindow):
         self.collisions_action.toggled.connect(self.toggle_collisions)
         view_menu.addAction(self.collisions_action)
 
+        # Camera: presets, orbit steps and fitting. Top-row digits or the numpad (Blender's layout);
+        # clicking an axis of the corner gizmo also looks along it
+        camera_menu = view_menu.addMenu("Camera")
+        for label, key, name in (("Front", "1", "front"), ("Back", "Ctrl+1", "back"),
+                                 ("Right", "3", "right"), ("Left", "Ctrl+3", "left"),
+                                 ("Top", "7", "top"), ("Bottom", "Ctrl+7", "bottom"),
+                                 ("Isometric", "5", "isometric")):
+            action = QAction(label, self)
+            action.setShortcuts([QKeySequence(key), QKeySequence(key.replace(key[-1], "Num+" + key[-1]))])
+            action.triggered.connect(lambda _=False, n=name: self.viewport.set_view(n))
+            camera_menu.addAction(action)
+        camera_menu.addSeparator()
+        for label, key, yaw, pitch in (("Orbit Left 30°", "4", -30, 0), ("Orbit Right 30°", "6", 30, 0),
+                                       ("Orbit Up 30°", "8", 0, 30), ("Orbit Down 30°", "2", 0, -30)):
+            action = QAction(label, self)
+            action.setShortcuts([QKeySequence(key), QKeySequence("Num+" + key)])
+            action.triggered.connect(lambda _=False, y=yaw, p=pitch: self.viewport.orbit_view(y, p))
+            camera_menu.addAction(action)
+        camera_menu.addSeparator()
+        fit_all = QAction("Fit All", self)
+        fit_all.setShortcut("Home")
+        fit_all.triggered.connect(lambda: self.viewport.fit_view(False))
+        camera_menu.addAction(fit_all)
+        fit_selected = QAction("Fit Selection", self)
+        fit_selected.setShortcuts([QKeySequence("."), QKeySequence("Num+.")])
+        fit_selected.triggered.connect(lambda: self.viewport.fit_view(True))
+        camera_menu.addAction(fit_selected)
+
         # Help Menu
         help_menu = menu_bar.addMenu("Help")
         help_action = QAction("Controls", self)
@@ -471,6 +499,9 @@ class MainWindow(QMainWindow):
         - Erase (R): Click to remove brick.<br>
         <br>
         <b>View:</b><br>
+        - 1 / 3 / 7: front / right / top view (Ctrl: back / left / bottom); 5: isometric<br>
+        - 4 / 6: orbit left / right 30°; 8 / 2: orbit up / down 30° (top row or numpad)<br>
+        - Home: fit everything; . (period): fit the selection; click a gizmo axis to look along it<br>
         - U: highlight parts not connected to the main build (in orange)<br>
         - O: highlight parts overlapping parts on another grid (in red)<br>
         <br>

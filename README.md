@@ -59,9 +59,11 @@ uv run pytest
 ## Controls
 
 ### Camera
-- **Orbit:** middle mouse drag
-- **Pan:** Shift + middle mouse drag
-- **Zoom:** scroll wheel
+- **Orbit:** middle mouse drag. **Pan:** Shift + middle mouse drag. **Zoom:** scroll wheel.
+- **Views** (top-row digits or numpad): **1** front, **3** right, **7** top (with **Ctrl**: back,
+  left, bottom), **5** isometric; **4 / 6** orbit left / right and **8 / 2** up / down by 30°.
+  Clicking an axis of the corner gizmo looks along it (again: from the other side).
+- **Home** fits everything in view; **.** fits the selection.
 
 ### Place (Q)
 Click to place the part chosen in the Parts list; Ctrl + click removes a part.

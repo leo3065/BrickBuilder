@@ -190,7 +190,8 @@ tests/               pytest suite
 - Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
   a global floor meaningless and building from the top is legitimate.
 - Palette RGB values are eyeballed approximations; clear colors render opaque.
-- Camera controls are middle mouse only (README and Help match); Alt+Left goes to the active tool.
+- Camera: middle mouse orbit/pan, wheel zoom (Alt+Left goes to the active tool); presets and fitting in
+  `Camera.set_view` / `fit` (`camera.VIEWS`), View > Camera keys, gizmo clicks (`Viewport._gizmo_axis_at`).
 - **Section view**: `Renderer.render(section_z=...)` supports a clip plane, but the
   viewport never passes it and there's no UI for it.
 - Profile `clearance`, `body_height` and `grid_rotation` aren't used yet.

@@ -1,0 +1,23 @@
+# nanoblock.info "2x2 : JO-C" (block 3): a 2×2 with a cup (socket) centred on a side, pointing along
+# its slots (in line with the ridge between them), at mid-height. Measured: the cup is a Ø5.20 mm
+# cylinder sticking out 5.90 mm; a ball's centre sits 4.25 mm from the face. The cup's slot opens
+# up and down (90° either way), else a 30° cone.
+name = "Joint 2×2 cup"
+
+[[body]]
+shape = "box"
+size = [2, 2, 1]
+
+[[body]]
+shape = "cylinder"
+at = [1.0, 2.0, 0.5]
+axis = "+y"
+length_mm = 5.9
+diameter_mm = 5.2
+joint = true
+
+[[socket]]
+type = "cup"
+at = [1.0, 2.0, 0.5]
+axis = "+y"
+offset_mm = 4.25

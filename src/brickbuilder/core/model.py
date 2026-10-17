@@ -6,7 +6,7 @@ import math
 import os
 import glm
 from brickbuilder.core import collision
-from brickbuilder.core.geometry import (Cut, body_faces, compatible, part_outline, part_regions,
+from brickbuilder.core.geometry import (Cut, body_faces, compatible, part_outline, part_regions, round_edges, round_faces,
                                         rotate_cut, rotate_sub, transform_faces, transform_segments,
                                         translate_cut)
 from brickbuilder.core.parts import PartDef
@@ -64,6 +64,8 @@ class PlacedPart:
     antistuds: Tuple[Tuple[glm.vec3, glm.vec3], ...] = ()  # world slots where a stud fits
     stud_axes: Tuple[glm.vec3, ...] = ()      # world direction each stud points
     antistud_axes: Tuple[glm.vec3, ...] = ()  # world direction a stud in each slot points
+    joint_solids: Tuple[bool, ...] = ()       # per solid: part of a joint (ball, arm, cup)
+    joints: Tuple = ()                        # (kind, world pivot, axis, slot) per ball / cup socket
     group: Optional[int] = None    # the innermost group it belongs to, if any
 
 
@@ -99,11 +101,29 @@ def footprint(profile: Profile, part: PartDef, pos: Sub, turns: int) -> List[Sub
 
 
 def part_solids(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[Solid, ...]:
-    """World-space bodies (outward faces) of a part placed at `pos`, turned `turns` times."""
+    """World-space bodies (outward faces) of a part placed at `pos`, turned `turns` times: its boxes
+    and wedges, then its round bodies (balls, arms, cups)."""
     key = (part, profile.subdiv)
     if key not in _FACE_CACHE:
         _FACE_CACHE[key] = [body_faces(b, profile.subdiv) for b in part.bodies]
-    return tuple(transform_faces(faces, turns, pos, profile.sub_to_world) for faces in _FACE_CACHE[key])
+    grid = tuple(transform_faces(faces, turns, pos, profile.sub_to_world) for faces in _FACE_CACHE[key])
+    return grid + tuple(round_faces(rb, part_point_to_world(profile, rb.at, pos, turns), turn_axis(rb.axis, turns))
+                        for rb in part.round_bodies)
+
+
+def joint_solid_flags(part: PartDef) -> Tuple[bool, ...]:
+    """Which of part_solids' solids belong to a joint."""
+    return (False,) * len(part.bodies) + tuple(rb.joint for rb in part.round_bodies)
+
+
+def joint_sockets(profile: Profile, part: PartDef, pos: Sub, turns: int):
+    """(kind, pivot, axis, slot) of a part's ball / cup sockets, in its grid's space."""
+    out = []
+    for j in part.joints:
+        axis = turn_axis(j.axis, turns)
+        out.append((j.kind, part_point_to_world(profile, j.at, pos, turns) + axis * j.offset, axis,
+                    turn_axis(j.slot, turns)))
+    return tuple(out)
 
 
 def part_edges(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[Tuple[glm.vec3, glm.vec3], ...]:
@@ -111,7 +131,9 @@ def part_edges(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[T
     key = (part, profile.subdiv)
     if key not in _OUTLINE_CACHE:
         _OUTLINE_CACHE[key] = part_outline(part.bodies, profile.subdiv)
-    return tuple(transform_segments(_OUTLINE_CACHE[key], turns, pos, profile.sub_to_world))
+    rings = [seg for rb in part.round_bodies
+             for seg in round_edges(rb, part_point_to_world(profile, rb.at, pos, turns), turn_axis(rb.axis, turns))]
+    return tuple(transform_segments(_OUTLINE_CACHE[key], turns, pos, profile.sub_to_world)) + tuple(rings)
 
 
 def anchor_cells(part: PartDef) -> List[Tuple[int, int, int]]:
@@ -461,7 +483,7 @@ class Model:
         g = geo if isinstance(geo, dict) else vars(geo)
         st = self.profile.stud
         return collision.make_shape(g["solids"], g["studs"], g["stud_axes"], g["antistuds"], g["antistud_axes"],
-                                    st.diameter / 2, st.height)
+                                    st.diameter / 2, st.height, g.get("joint_solids", ()), g.get("joints", ()))
 
     def part_shape(self, part_id: int) -> collision.Shape:
         if part_id not in self._shapes:
@@ -509,21 +531,24 @@ class Model:
             "antistuds": tuple((pt(a), pt(b)) for a, b in antistud_slots(self.profile, part, pos, turns)),
             "stud_axes": tuple(axis(a) for a in stud_axes(part, turns)),
             "antistud_axes": tuple(axis(a) for a in antistud_axes(part, turns)),
+            "joint_solids": joint_solid_flags(part),
+            "joints": tuple((k, pt(p), axis(a), axis(s)) for k, p, a, s in joint_sockets(self.profile, part, pos, turns)),
         }
 
     def turned_placement_problem(self, part: PartDef, pos: Sub, turns: int, matrix: glm.mat4) -> Optional[str]:
         """Why a part can't go on a grid of its own placed by `matrix` (None if it can): it must
         not clash with anything and must be held by a real stud contact."""
         from types import SimpleNamespace
-        from brickbuilder.core.connections import contacts_between
+        from brickbuilder.core.connections import contacts_between, joint_contacts
         geo = self.placement_geometry(part, pos, turns, matrix)
         shape = self.shape(geo)
         hit = self.clashes(shape)
         if hit:
             return self.clash_reason(shape, hit[0])
         ghost = SimpleNamespace(id=-1, **geo)
-        if not contacts_between(self.profile, [ghost], self.parts.values()):
-            return "a turned part has to sit on a stud (or take one)"
+        if not contacts_between(self.profile, [ghost], self.parts.values()) and \
+                not joint_contacts(self.profile, [ghost], self.parts.values()):
+            return "a part on a grid of its own has to sit on a stud or a joint (or take one)"
         return None
 
     def moved_overlaps(self, part_ids, transform: glm.mat4) -> Optional[int]:
@@ -541,7 +566,9 @@ class Model:
             shape = self.shape({"solids": [[[pt(v) for v in face] for face in solid] for solid in p.solids],
                                 "studs": [pt(v) for v in p.studs], "stud_axes": [axis(a) for a in p.stud_axes],
                                 "antistuds": [(pt(a), pt(b)) for a, b in p.antistuds],
-                                "antistud_axes": [axis(a) for a in p.antistud_axes]})
+                                "antistud_axes": [axis(a) for a in p.antistud_axes],
+                                "joint_solids": p.joint_solids,
+                                "joints": [(k, pt(q), axis(a), axis(s)) for k, q, a, s in p.joints]})
             hit = self.clashes(shape, lambda q: q.id in moving)
             if hit:
                 return hit[0]
@@ -568,11 +595,12 @@ class Model:
                             out |= {a.id, b.id}
         return out
 
-    def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=(), stud_axes=(), antistud_axes=()):
+    def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=(), stud_axes=(), antistud_axes=(),
+                  joints=()):
         """Move frame-space geometry into the world (a no-op for the root frame)."""
         if frame == 0:
             return {"solids": solids, "edges": edges, "studs": studs, "antistuds": antistuds,
-                    "stud_axes": stud_axes, "antistud_axes": antistud_axes}
+                    "stud_axes": stud_axes, "antistud_axes": antistud_axes, "joints": joints}
         m = self.frame_matrix(frame)
 
         def pt(p):
@@ -587,6 +615,7 @@ class Model:
             "antistuds": tuple((pt(a), pt(b)) for a, b in antistuds),
             "stud_axes": tuple(axis(a) for a in stud_axes),
             "antistud_axes": tuple(axis(a) for a in antistud_axes),
+            "joints": tuple((k, pt(p), axis(a), axis(s)) for k, p, a, s in joints),
         }
 
     def connections(self) -> Dict[int, set]:
@@ -627,15 +656,16 @@ class Model:
                                studs=stud_positions(self.profile, part, pos, turns),
                                antistuds=antistud_slots(self.profile, part, pos, turns),
                                stud_axes=stud_axes(part, turns),
-                               antistud_axes=antistud_axes(part, turns))
-        if frame == 0:
+                               antistud_axes=antistud_axes(part, turns),
+                               joints=joint_sockets(self.profile, part, pos, turns))
+        if frame == 0 and not part.round_bodies:
             box = subcells_box(self.profile, (s for s, _ in regions))
         else:
             box = collision.solids_box(world["solids"])
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, frame,
                             tuple(regions), box, world["solids"], world["edges"],
                             world["studs"], world["antistuds"], world["stud_axes"], world["antistud_axes"],
-                            group)
+                            joint_solid_flags(part), world["joints"], group)
         self.parts[part_id] = placed
         for sub, cut in regions:
             self.occupancy.setdefault((frame, sub), []).append((part_id, cut))

@@ -9,7 +9,7 @@ from importlib import resources
 from importlib.resources.abc import Traversable
 from typing import Any, Dict, List, Sequence, Tuple, Union
 
-from brickbuilder.core.geometry import Body, outside_rounding, part_regions
+from brickbuilder.core.geometry import Body, RoundBody, outside_rounding, part_regions
 from brickbuilder.core.profile import ID_PATTERN, Profile, UndersideRule, load_builtin_profile
 
 Cell = Tuple[int, int, int]
@@ -41,6 +41,8 @@ class PartDef:
     # points (parallel to `antistuds`): +z for top studs and undersides, e.g. +x for a side stud
     stud_axes: Tuple[Axis, ...] = ()
     antistud_axes: Tuple[Axis, ...] = ()
+    round_bodies: Tuple[RoundBody, ...] = ()  # spheres and cylinders off the grid (joints)
+    joints: Tuple["Joint", ...] = ()          # ball and cup sockets
 
     def __post_init__(self):
         # Parts built without axes (tests, older code) point everything up
@@ -50,13 +52,30 @@ class PartDef:
             object.__setattr__(self, "antistud_axes", (UP,) * len(self.antistuds))
 
 
+@dataclass(frozen=True)
+class Joint:
+    """A ball or cup socket: its pivot is `offset` mm along `axis` from `at` (cells, on a face).
+    A ball's axis points from its part to the ball; a cup's out of the cup. `slot`: the direction
+    the cup's slot opens toward (the cup part's up by default)."""
+    kind: str        # "ball" | "cup"
+    at: Point
+    axis: Axis
+    offset: float
+    slot: Axis = (0, 0, 1)
+
+
 _TOP_KEYS = {"name", "body", "socket", "antistuds"}
-_SOCKET_KEYS = {"type", "at", "to", "axis"}
+_SOCKET_KEYS = {"type", "at", "to", "axis", "offset_mm", "slot"}
+_JOINT_TYPES = {"ball", "cup"}
 _ANTISTUD_MODES = {"derived", "none"}
-_SOCKET_TYPES = {"stud", "antistud"}  # more (ball, cup) come with joints
+_SOCKET_TYPES = {"stud", "antistud", "ball", "cup"}
 _BODY_KEYS = {
     "box": {"shape", "size", "at", "studs", "corner_radius"},
     "wedge": {"shape", "size", "at", "studs", "keep", "tall"},
+}
+_ROUND_KEYS = {
+    "sphere": {"shape", "at", "axis", "offset_mm", "diameter_mm", "joint"},
+    "cylinder": {"shape", "at", "axis", "offset_mm", "length_mm", "diameter_mm", "joint"},
 }
 _STUD_MODES = {"top", "none"}
 _TALL = {"+x": (0, 1), "-x": (0, -1), "+y": (1, 1), "-y": (1, -1)}
@@ -126,6 +145,29 @@ def _parse_body(where: str, body: Any) -> Body:
     return Body("wedge", at, size, studs == "top", keep, axis, sign)
 
 
+def _mm(where: str, value: Any, positive: bool = True) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or (value <= 0 if positive else value < 0):
+        raise PartError(f"{where} must be a {'positive ' if positive else ''}number (mm)")
+    return float(value)
+
+
+def _parse_round_body(where: str, body: Dict[str, Any]) -> RoundBody:
+    shape = body["shape"]
+    unknown = set(body) - _ROUND_KEYS[shape]
+    if unknown:
+        raise PartError(f"{where}: unknown keys {sorted(unknown)}")
+    axis = body.get("axis", "+z")
+    if axis not in AXES:
+        raise PartError(f"{where}.axis must be one of {sorted(AXES)}")
+    joint = body.get("joint", False)
+    if not isinstance(joint, bool):
+        raise PartError(f"{where}.joint must be true or false")
+    length = _mm(f"{where}.length_mm", body.get("length_mm")) if shape == "cylinder" else 0.0
+    return RoundBody(shape, _point(f"{where}.at", body.get("at")), AXES[axis],
+                     _mm(f"{where}.offset_mm", body.get("offset_mm", 0), positive=False), length,
+                     _mm(f"{where}.diameter_mm", body.get("diameter_mm")) / 2, joint)
+
+
 def _point(where: str, value: Any) -> Point:
     if not (isinstance(value, list) and len(value) == 3
             and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)):
@@ -148,6 +190,16 @@ def _parse_socket(where: str, socket: Any) -> Tuple[str, Segment, Axis]:
     if axis not in AXES:
         raise PartError(f"{where}.axis must be one of {sorted(AXES)}")
     axis = AXES[axis]
+    if socket["type"] in _JOINT_TYPES:
+        slot = socket.get("slot", "+z")
+        if slot not in AXES or sum(a * b for a, b in zip(AXES[slot], axis)) != 0:
+            raise PartError(f"{where}.slot must be one of {sorted(AXES)}, across the axis")
+        if "to" in socket:
+            raise PartError(f"{where}.to: a joint is a point")
+        offset = _mm(f"{where}.offset_mm", socket.get("offset_mm", 0), positive=False)
+        return socket["type"], Joint(socket["type"], at, axis, offset, AXES[slot]), axis
+    if "offset_mm" in socket or "slot" in socket:
+        raise PartError(f"{where}: offset_mm and slot are for ball and cup sockets")
     to = at
     if "to" in socket:
         if socket["type"] != "antistud":
@@ -205,7 +257,12 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any],
     raw_bodies = data.get("body")
     if not isinstance(raw_bodies, list) or not raw_bodies:
         raise PartError(f"{part_id}: needs at least one [[body]]")
-    bodies = tuple(_parse_body(f"{part_id}: body[{n}]", b) for n, b in enumerate(raw_bodies))
+    round_bodies = tuple(_parse_round_body(f"{part_id}: body[{n}]", b) for n, b in enumerate(raw_bodies)
+                         if isinstance(b, dict) and b.get("shape") in _ROUND_KEYS)
+    bodies = tuple(_parse_body(f"{part_id}: body[{n}]", b) for n, b in enumerate(raw_bodies)
+                   if not (isinstance(b, dict) and b.get("shape") in _ROUND_KEYS))
+    if not bodies:
+        raise PartError(f"{part_id}: needs at least one box or wedge body")
     if len(bodies) > 1 and any(b.rounded for b in bodies):
         raise PartError(f"{part_id}: a rounded box must be the part's only body (for now)")
 
@@ -230,6 +287,8 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any],
     if not isinstance(raw_sockets, list):
         raise PartError(f"{part_id}: 'socket' must be an array of tables ([[socket]])")
     sockets = [_parse_socket(f"{part_id}: socket[{n}]", s) for n, s in enumerate(raw_sockets)]
+    joints = tuple(seg for kind, seg, _ in sockets if kind in _JOINT_TYPES)
+    sockets = [s for s in sockets if s[0] not in _JOINT_TYPES]
     stud_axes = [UP] * len(studs) + [axis for kind, _, axis in sockets if kind == "stud"]
     studs += [seg[0] for kind, seg, _ in sockets if kind == "stud"]
     mode = data.get("antistuds", "derived")
@@ -239,7 +298,7 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any],
     antistuds = tuple(derived + [seg for kind, seg, _ in sockets if kind == "antistud"])
     antistud_axes = tuple([UP] * len(derived) + [axis for kind, _, axis in sockets if kind == "antistud"])
     return PartDef(part_id, data["name"], category, bodies, cells, tuple(studs), antistuds,
-                   tuple(stud_axes), antistud_axes)
+                   tuple(stud_axes), antistud_axes, round_bodies, joints)
 
 
 def _walk(folder: Traversable, category: List[str], profile: Profile, out: Dict[str, PartDef]) -> None:

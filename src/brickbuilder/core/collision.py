@@ -98,6 +98,8 @@ class Shape:
     studs: List[Tuple[glm.vec3, glm.vec3, Hull]]  # stud base, its axis and its prism
     slots: List[Tuple[glm.vec3, glm.vec3, glm.vec3]]  # antistud slots (world): ends and stud axis
     box: Tuple[glm.vec3, glm.vec3]                # around bodies and studs
+    joint_hulls: Tuple[bool, ...] = ()            # per hull: part of a joint (ball, arm, cup)
+    joints: Tuple = ()                            # (kind, pivot, axis, slot) per joint socket
 
 
 def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> Hull:
@@ -114,15 +116,37 @@ def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> H
     return hull(faces)
 
 
-def make_shape(solids, studs, stud_axes, slots, slot_axes, stud_radius: float, stud_height: float) -> Shape:
+def make_shape(solids, studs, stud_axes, slots, slot_axes, stud_radius: float, stud_height: float,
+               joint_solids=(), joints=()) -> Shape:
     stud_hulls = [(s, axis, stud_hull(s, axis, stud_radius, stud_height)) for s, axis in zip(studs, stud_axes)]
     lo, hi = solids_box(solids)
     for s, axis in zip(studs, stud_axes):
         for p in (s, s + axis * stud_height):  # widened by the radius in every direction: a bound
             lo = glm.vec3(min(lo.x, p.x - stud_radius), min(lo.y, p.y - stud_radius), min(lo.z, p.z - stud_radius))
             hi = glm.vec3(max(hi.x, p.x + stud_radius), max(hi.y, p.y + stud_radius), max(hi.z, p.z + stud_radius))
+    flags = tuple(joint_solids) + (False,) * (len(solids) - len(joint_solids))
     return Shape([hull(s) for s in solids], stud_hulls,
-                 [(a, b, axis) for (a, b), axis in zip(slots, slot_axes)], (lo, hi))
+                 [(a, b, axis) for (a, b), axis in zip(slots, slot_axes)], (lo, hi), flags, tuple(joints))
+
+
+def _joined(a: Shape, b: Shape) -> bool:
+    """A ball of one on a cup of the other (centres together): their joint bodies may overlap."""
+    for x, y in ((a, b), (b, a)):
+        for kind, point, _, _ in x.joints:
+            if kind == "ball" and any(k == "cup" and glm.distance(point, p) <= TOLERANCE for k, p, _, _ in y.joints):
+                return True
+    return False
+
+
+def _bodies_overlap(a: Shape, b: Shape) -> bool:
+    skip = _joined(a, b)
+    for i, x in enumerate(a.hulls):
+        for j, y in enumerate(b.hulls):
+            if skip and a.joint_hulls[i] and b.joint_hulls[j]:
+                continue
+            if overlap(x, y):
+                return True
+    return False
 
 
 def clash(a: Shape, b: Shape) -> Optional[str]:
@@ -130,7 +154,7 @@ def clash(a: Shape, b: Shape) -> Optional[str]:
     inside the other's body other than in one of its slots."""
     if not boxes_overlap(a.box, b.box):
         return None
-    if hulls_overlap(a.hulls, b.hulls):
+    if _bodies_overlap(a, b):
         return "bodies"
     for x, y in ((a, b), (b, a)):
         for base, axis, h in x.studs:

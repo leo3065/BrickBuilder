@@ -1,0 +1,30 @@
+# nanoblock.info "1x2 : JO-D" (block 6): a 1×2 with a ball centred on a long side, at mid-height.
+# Measured: ball Ø4.0 mm, its centre 3.75 mm from the face; the arm is modelled as a Ø1.95 mm
+# cylinder (its narrowest, at the ball).
+name = "Joint 1×2 ball"
+
+[[body]]
+shape = "box"
+size = [1, 2, 1]
+
+[[body]]
+shape = "cylinder"
+at = [1.0, 1.0, 0.5]
+axis = "+x"
+length_mm = 3.75
+diameter_mm = 1.95
+joint = true
+
+[[body]]
+shape = "sphere"
+at = [1.0, 1.0, 0.5]
+axis = "+x"
+offset_mm = 3.75
+diameter_mm = 4.0
+joint = true
+
+[[socket]]
+type = "ball"
+at = [1.0, 1.0, 0.5]
+axis = "+x"
+offset_mm = 3.75

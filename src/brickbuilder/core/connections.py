@@ -63,12 +63,65 @@ def iter_contacts(profile: Profile, stud_parts: Iterable, slot_parts: Iterable) 
                                 yield Contact(stud, (a, b), other, placed.id, axis)
 
 
+@dataclass(frozen=True)
+class JointContact:
+    pivot: glm.vec3      # world position of the ball's centre (= the cup's pivot)
+    ball_part: int
+    cup_part: int
+    ball_axis: glm.vec3  # the ball's arm direction (world)
+    cup_axis: glm.vec3   # out of the cup
+    cup_slot: glm.vec3   # the way the cup's slot opens
+
+
+def joint_limits(profile: Profile) -> Tuple[float, float]:
+    """(cone, slot) in degrees for a cup, from the profile's socket types."""
+    cup = profile.socket_types.get("cup", {})
+    return float(cup.get("cone", 0.0)), float(cup.get("slot", 0.0))
+
+
+def within_limits(ball_axis: glm.vec3, cup_axis: glm.vec3, cup_slot: glm.vec3, cone: float, slot: float) -> bool:
+    """Is the arm direction allowed: within the cone of straight (the arm pointing into the cup),
+    or in the slot's plane within the slot's range."""
+    straight = -glm.normalize(cup_axis)
+    d = glm.normalize(ball_axis)
+    tilt = math.degrees(math.acos(max(-1.0, min(1.0, glm.dot(d, straight)))))
+    if tilt <= cone + 1e-3:
+        return True
+    across = glm.normalize(glm.cross(cup_axis, cup_slot))  # out of the slot's plane
+    return abs(glm.dot(d, across)) < 1e-3 and tilt <= slot + 1e-3
+
+
+def joint_contacts(profile: Profile, parts_a: Iterable, parts_b: Iterable) -> List[JointContact]:
+    """Balls of one set sitting in cups of the other (either way round): centre on the pivot and
+    the arm within the cup's limits."""
+    cone, slot = joint_limits(profile)
+    a, b = list(parts_a), list(parts_b)
+    out = []
+    for xs, ys in ((a, b), (b, a)):
+        for p in xs:
+            for kind, point, axis, _ in getattr(p, "joints", ()):
+                if kind != "ball":
+                    continue
+                for q in ys:
+                    if q.id == p.id:
+                        continue
+                    for kind2, point2, axis2, slot2 in getattr(q, "joints", ()):
+                        if kind2 == "cup" and glm.distance(point, point2) <= TOLERANCE \
+                                and within_limits(axis, axis2, slot2, cone, slot):
+                            out.append(JointContact(point, p.id, q.id, axis, axis2, slot2))
+    return out
+
+
 def find_connections(profile: Profile, parts: Iterable) -> Dict[int, Set[int]]:
     parts = list(parts)
     links: Dict[int, Set[int]] = {placed.id: set() for placed in parts}
     for c in iter_contacts(profile, parts, parts):
         links[c.slot_part].add(c.stud_part)
         links[c.stud_part].add(c.slot_part)
+    jointed = [p for p in parts if getattr(p, "joints", ())]
+    for j in joint_contacts(profile, jointed, jointed):
+        links[j.ball_part].add(j.cup_part)
+        links[j.cup_part].add(j.ball_part)
     return links
 
 

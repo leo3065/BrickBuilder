@@ -129,7 +129,8 @@ def test_off_centre_studs():
 
 
 @pytest.mark.parametrize("socket, message", [
-    ({"type": "cup", "at": [0, 0, 1]}, "type"),
+    ({"type": "hinge", "at": [0, 0, 1]}, "type"),
+    ({"type": "cup", "at": [0, 0, 1], "slot": "+x", "axis": "+x"}, "slot"),
     ({"type": "stud", "at": [0, 0]}, "at"),
     ({"type": "stud", "at": [0, 0, 1], "normal": "+z"}, "unknown keys"),
 ])

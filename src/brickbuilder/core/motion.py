@@ -18,7 +18,7 @@ from typing import List, Optional, Set
 import glm
 import numpy as np
 
-from brickbuilder.core.connections import AXIS_TOLERANCE, Contact, contacts_between
+from brickbuilder.core.connections import AXIS_TOLERANCE, Contact, contacts_between, joint_contacts
 from brickbuilder.core.model import plane_basis
 
 # Errors are in mm, from float32 positions: a turned frame puts studs ~1e-6 mm off, so anything
@@ -100,7 +100,10 @@ def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
         return TurnPlan("locked", moving, fixed, reason="nothing selected")
     if not fixed:
         return TurnPlan("free", moving, reason="not held by anything else")
-    contacts = contacts_between(model.profile, [model.parts[p] for p in moving], [model.parts[p] for p in fixed])
+    moving_parts, fixed_parts = [model.parts[p] for p in moving], [model.parts[p] for p in fixed]
+    if joint_contacts(model.profile, moving_parts, fixed_parts):
+        return TurnPlan("locked", moving, fixed, reason="posing ball joints isn't built yet")
+    contacts = contacts_between(model.profile, moving_parts, fixed_parts)
     if not contacts:  # connected through the selection but no contact between the two sides
         return TurnPlan("free", moving, fixed, reason="not held by anything else")
     axis = contacts[0].axis

@@ -34,6 +34,81 @@ class Body:
 
 
 @dataclass(frozen=True)
+class RoundBody:
+    """A sphere or cylinder off a part's grid (a joint's ball, arm or cup). Placed in cells, sized in
+    mm (a sphere can't be sized in cells that aren't cubes). Not in the occupancy grid: the clash
+    test covers it."""
+    kind: str                       # "sphere" | "cylinder"
+    at: Tuple[float, float, float]  # cells: a point on the face it starts from
+    axis: Int3                      # which way it points from there
+    offset: float = 0.0             # mm along the axis to where it starts (sphere: its centre)
+    length: float = 0.0             # mm, cylinder only
+    radius: float = 0.0             # mm
+    joint: bool = False             # part of a joint: a joined ball and cup may overlap
+
+
+ROUND_SEGMENTS = 16  # around a cylinder or a sphere's equator
+
+
+def _basis(n):
+    """Two unit vectors across `n` (a glm.vec3)."""
+    import glm
+    ref = glm.vec3(1, 0, 0) if abs(n.x) < 0.9 else glm.vec3(0, 1, 0)
+    u = glm.normalize(ref - n * glm.dot(ref, n))
+    return u, glm.cross(n, u)
+
+
+def round_faces(body: RoundBody, base, axis) -> List[list]:
+    """Outward faces of a round body starting at world point `base` along unit `axis` (glm)."""
+    import glm
+    u, v = _basis(axis)
+    n_around = ROUND_SEGMENTS
+    ring = [u * math.cos(2 * math.pi * i / n_around) + v * math.sin(2 * math.pi * i / n_around)
+            for i in range(n_around)]
+    if body.kind == "cylinder":
+        a = base + axis * body.offset
+        b = a + axis * body.length
+        lo = [a + r * body.radius for r in ring]
+        hi = [b + r * body.radius for r in ring]
+        faces = [hi, lo[::-1]] + [[lo[i], lo[(i + 1) % n_around], hi[(i + 1) % n_around], hi[i]]
+                                  for i in range(n_around)]
+        centre = (a + b) * 0.5
+    else:
+        centre = base + axis * body.offset
+        bands = n_around // 2
+        rings = []
+        for k in range(1, bands):
+            t = math.pi * k / bands  # from +axis
+            rings.append([centre + (axis * math.cos(t) + r * math.sin(t)) * body.radius for r in ring])
+        top, bottom = centre + axis * body.radius, centre - axis * body.radius
+        faces = [[top, rings[0][i], rings[0][(i + 1) % n_around]] for i in range(n_around)]
+        for k in range(len(rings) - 1):
+            faces += [[rings[k][i], rings[k + 1][i], rings[k + 1][(i + 1) % n_around], rings[k][(i + 1) % n_around]]
+                      for i in range(n_around)]
+        faces += [[bottom, rings[-1][(i + 1) % n_around], rings[-1][i]] for i in range(n_around)]
+    out = []
+    for f in faces:  # make every face wind outward
+        c = sum(f, glm.vec3(0)) / len(f)
+        n = glm.cross(f[1] - f[0], f[2] - f[0])
+        out.append(f if glm.dot(n, c - centre) >= 0 else f[::-1])
+    return out
+
+
+def round_edges(body: RoundBody, base, axis) -> List[tuple]:
+    """Outline of a round body: a cylinder's two end rings (a sphere has none)."""
+    if body.kind != "cylinder":
+        return []
+    u, v = _basis(axis)
+    segs = []
+    for d in (body.offset, body.offset + body.length):
+        c = base + axis * d
+        pts = [c + (u * math.cos(2 * math.pi * i / ROUND_SEGMENTS) + v * math.sin(2 * math.pi * i / ROUND_SEGMENTS))
+               * body.radius for i in range(ROUND_SEGMENTS)]
+        segs += [(pts[i], pts[(i + 1) % ROUND_SEGMENTS]) for i in range(ROUND_SEGMENTS)]
+    return segs
+
+
+@dataclass(frozen=True)
 class Cut:
     """Half-space side * (a*x + b*y + c*z + d) <= 0, in sub-grid coordinates.
     `plane` is canonical (primitive integer normal, first non-zero normal component positive),

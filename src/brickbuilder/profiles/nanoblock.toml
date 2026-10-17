@@ -26,7 +26,8 @@ slots = "none"
 stud     = { mates = ["antistud"], dof = "fixed" }
 antistud = { mates = ["stud"],     dof = "fixed" }
 ball     = { mates = ["cup"],      dof = "spherical" }
-cup      = { mates = ["ball"],     dof = "spherical" }
+cup      = { mates = ["ball"],     dof = "spherical", cone = 30, slot = 90 }  # degrees: any way within the
+                                                       # cone, or in the slot's plane up to 90° either way
 
 # Official Nanoblock color names (as listed on https://nanoblock.info/nbks/?mode=colorList),
 # in that site's order. Ids are stable keys used by save files; RGB values are rough

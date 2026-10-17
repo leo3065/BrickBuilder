@@ -1,8 +1,8 @@
 # Profiles, part definitions and the part library — design
 
-Status: **draft; implemented so far: profile + palette, box and wedge (slope) bodies, placed-part
-model with exact slope occupancy, save v2, part picker, rotation, studs, anchors, half-offset
-placement.** Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"` with
+Status: **design notes, with ✅ marking what's implemented.** Built so far: profile + palette, box,
+rounded box and wedge (slope) bodies, explicit stud/antistud sockets, placed-part model with exact
+slope occupancy, connections, frames, groups, turning and moving (save v4). Part files carry `name`, optional `ldraw`, and `[[body]]` (`shape = "box"` with
 `size`, optional `at`, `studs = "top" | "none"`; or `shape = "wedge"` with `keep` and `tall`
 too); id and category come from the file path.
 
@@ -90,8 +90,8 @@ than its length). Occupancy is decided per **sub-cell**: one entirely outside a 
 sub-grid. A derived stud is dropped when its cell's centre is cut away. A rounded box must be the
 part's only body for now.
 
-`studs` takes `"top"` or `"none"` (flat parts such as NB102F) in step 2. Explicit stud sockets
-cover irregular layouts later (single-stud parts such as NB102S/NB202S1).
+`studs` takes `"top"` or `"none"` (flat parts such as NB102F). Explicit stud sockets ✅ cover
+irregular layouts (single-stud parts such as NB102S/NB202S1).
 
 **Slope profile ✅:** seen from the side, a slope is a box (base) plus a right triangle sitting on
 it, extruded along the other horizontal axis. Studs aren't part of the outline. ✅ Ignoring studs,
@@ -449,60 +449,63 @@ to the joint angles too.
 - Thumbnails are rendered and cached outside the library.
 - Favorites live in user settings, not in the library.
 
-## Runtime model (step 2) ✅
+## Runtime model ✅
 ```python
-PartDef      # from a part TOML: id, name, category, occupied cells, derived stud positions
-PlacedPart   # id (stable int), part, frame (0 = root), pos (SUB-GRID ints), turns (0..3), color (palette id)
-Model        # parts: dict[id, PlacedPart]; occupancy: dict[sub-cell, part id]
-             # add_part(...) -> id | None (refused on overlap), remove_part, part_at, can_place
+PartDef      # from a part TOML: id, name, category, bodies, cells, studs, antistud slots, ldraw
+Frame        # id, parent, origin (mm, parent space), rotation (quaternion); 0 = the root grid
+Group        # id, name, parent: user-made subassemblies, separate from frames
+PlacedPart   # id (stable int), part, frame, pos (SUB-GRID ints), turns (0..3), color (palette id),
+             # group, plus derived world geometry (solids, outline edges, studs, slots, box)
+Model        # parts, frames, groups; occupancy: dict[(frame, sub-cell), [(part id, cut)]]
+             # add_part(...) -> PlacedPart | None (refused on same-grid overlap), remove_part,
+             # can_place, connections(), collisions(), frame/group edits, save/load
+History      # every UI edit as undoable commands, incl. move_parts (turning, moving)
 ```
-- Connections aren't stored while everything is on one frame: they can be re-derived from
-  geometry. Stored edges arrive with joints.
+- Connections aren't stored: they're re-derived from world positions (they work across Z-turned
+  frames). Stored edges may arrive with joints.
 - Placing: the cell under the cursor is where the part's **anchor cell** goes. The anchor is
   one of the part's bottom-layer cells, cycled with A / Shift+A (e.g. end / middle / end of a
-  1×3); it starts at the cell nearest the centre (ties: +X, then +Y, in part coordinates). Rotation keeps the anchor cell under the cursor. This is
-  purely an editor aid: data still stores the origin, and rotation pivots on the origin.
-  Overlap is refused and the ghost turns red.
-- ✅ **Side-face placement is allowed**, even though such a part isn't held by anything.
-  Checking for unconnected parts comes later.
+  1×3); it starts at the cell nearest the centre (ties: +X, then +Y, in part coordinates).
+  Rotation keeps the anchor cell under the cursor. This is purely an editor aid: data still
+  stores the origin, and rotation pivots on the origin. Overlap is refused and the ghost turns red.
+- ✅ **Side-face placement is allowed**, even though such a part isn't held by anything
+  (View > Highlight Unconnected Parts shows them).
 - ✅ **No hard floor at layer 0.** A global floor makes no sense for parts in other frames, and
   building down from the top is legitimate. The Z=0 grid is only a reference plane for ground
-  placement. Repositioning a whole build is a "shift all parts" operation instead.
+  placement. Repositioning a whole build: select all and move it.
 
-## Save format v2 ✅
+## Save format (v4) ✅
 ```json
 {
-  "version": 2,
+  "version": 4,
   "profile": "nanoblock",
-  "frames": [{ "id": 0 }],
+  "frames": [{ "id": 0 },
+             { "id": 1, "parent": 0, "origin": [-1.84, 1.23, 0.0], "rotation": [0.981, 0.0, 0.0, 0.195] }],
+  "groups": [{ "id": 1, "name": "Wing", "parent": null }],
   "parts": [
     { "id": 1, "part": "nanoblock:brick_2x4", "frame": 0,
-      "pos": [0, 0.5, 3], "turns": 1, "color": "red" }
+      "pos": [0, 0.5, 3], "turns": 1, "color": "red", "group": 1 }
   ]
 }
 ```
 - `pos` is in **cells** (0.5 allowed). On load it's multiplied by `subdiv` and must come out as
   integers, so saves don't depend on `subdiv`.
-- Non-root frames will look like
-  `{ "id": 1, "parent": 0, "origin": [..], "rotation": [w, x, y, z] }`; step 2 only writes frame 0.
-- ✅ `color` is a **palette id**; the palette moves into the profile. The current placeholder
-  colors become the initial palette, so renaming them to official Nanoblock colors later needs
-  an id-mapping for older saves.
-- The v1 loader maps each v1 cube to `brick_1x1` in frame 0, with RGB matched to the palette
-  (exact for files saved from the current palette, otherwise nearest). Saving always writes the
-  latest version.
-- ✅ v3 adds non-root frames; v4 adds groups:
-  `"groups": [{ "id": 1, "name": "Wing", "parent": null }, ...]` (parent-first, ids ≥ 1) and an
-  optional `"group": 1` on each part (its innermost group; omitted when ungrouped). v2 and v3
-  files still load.
+- Frames and groups are listed parent-first. A frame's `origin` is in mm in its parent's space,
+  `rotation` a unit quaternion `[w, x, y, z]`. A part's `group` (its innermost group) is omitted
+  when it's ungrouped.
+- ✅ `color` is a **palette id** from the profile; `part` a part id. Neither is translated if
+  renamed: a save using an old id fails to load.
+- History: v2 had only frame 0; v3 added frames; v4 added groups. v2 and v3 files still load.
+  The v1 loader maps each v1 cube to `brick_1x1` in frame 0, with RGB matched to the palette
+  (exact for files saved from the old palette, otherwise nearest). Saving always writes the latest
+  version.
 
-## Build order
-1. Profile file + a single cell-to-world function used by the renderer, picking and camera →
-   4×4×3 rendering.
-2. Parts limited to `box` with derived studs; occupancy map; placed-part model; save v2.
-   Starter set ✅: 1×1, 1×2, 1×3, 1×4, 1×6, 2×2, 2×3, 2×4, 2×8 (no plain 2×6 exists).
-3. Library panel.
-4. Modifiers, slopes, mesh bodies, explicit sockets → frames, fine rotation, ball joints.
+## Build order (as it happened)
+1. ✅ Profile file + a single cell-to-world function used by the renderer, picking and camera.
+2. ✅ Parts limited to `box` with derived studs; occupancy map; placed-part model; save v2.
+3. ✅ Library panel (Parts tree by category).
+4. ✅ Slopes, rounded bodies, explicit sockets, connections; frames (step A); groups; the Turn tool
+   and turned placement (step B); moving the selection. Next: joints, modifiers, mesh bodies.
 
 ## Measurements (Nanoblock, mm)
 Taken with calipers. ✅ = consistent, ❓ = needs a recheck.

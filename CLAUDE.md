@@ -18,7 +18,7 @@ diamond blocks, other micro-bricks). Rule of thumb:
 - Real Nanoblock part list (nanoblock.info names and block numbers, LDraw files, our part ids):
   `docs/nanoblock_parts.md`. Check new parts against it.
 - How turning is checked (moving set, contacts, null space, clash test, tolerances): `docs/turning.md`.
-- Design for profiles / part definitions / library / save v2: `docs/part_format.md`
+- Design for profiles / part definitions / library / save format: `docs/part_format.md`
   (TOML, cell units, derived studs, sockets with DOF, frames). Parametric part families
   are deliberately deferred — `params` key reserved only.
 - Don't build features only another system needs (Lego plates at 1/3 height, SNOT,
@@ -48,8 +48,10 @@ Koraidon/Miraidon sets (regular + sloped bricks bracing beyond the joints).
 - Also exposed as the `brickbuilder` script → `brickbuilder.main:main`.
 - Root `main.py` is the leftover `uv init` stub; not the entry point.
 - Tests: `uv run pytest` (pytest is a dev dependency; `tests/` covers profile, parts, model,
-  save/load and picking — no GL). `test_model/*.json` are hand-made v1 sample saves
-  (gitignored); a test loads them when present.
+  save/load, picking, history, groups, frames, connections, collisions, turning and moving — no
+  GL). `test_model/*.json` are hand-made sample saves (gitignored); a test loads them when present.
+  UI changes are checked with an offscreen `QT_QPA_PLATFORM=offscreen` script that drives
+  `MainWindow` with synthetic mouse/key events (not part of the suite).
 
 ## Layout
 ```
@@ -64,16 +66,17 @@ src/brickbuilder/
   core/connections.py  Stud-in-antistud-slot graph (Model.connections(), cached) + groups()
   core/motion.py     Turn planning: moving set (selection always moves; pin rule on the rest) and
                      free motion from stud-in-slot contacts (null space, numpy): turn / locked / free
-  core/collision.py  Overlap across frames: separating axis test on convex solids (numpy), touching allowed
+  core/collision.py  The clash test: SAT on convex solids (numpy, touching allowed) + studs only on slots
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
-  core/renderer.py   Legacy GL: grid, parts (one cached display list per part: box, studs,
-                     outlines), ghost, selection, axis gizmo, optional Z clip plane (section_z)
+  core/renderer.py   Legacy GL: grid (or the working frame's), parts (cached fill + outline display
+                     lists per part), moved/turned parts under a matrix, ghost, selection/hover/
+                     highlight outlines, pivot marker, axis gizmo, optional Z clip plane (section_z)
   core/tools.py      Tool enum: PLACE / SELECT / PAINT / ERASE / TURN
-  ui/main_window.py  Menus (Edit > Undo/Redo, Rotate: Space / Shift+Space, anchor: A / Shift+A,
-                     Half-Cell Snap: H, nudge: arrows), tool toolbar (Q/W/E/R), parts tree
-                     (grouped by category folder) + color docks, status bar, Save/Save As (current file + title marker), close prompt
-  ui/viewport.py     QOpenGLWidget: input handling, tool dispatch, ghost preview (red = overlap)
+  ui/main_window.py  Menus and shortcuts, tool toolbar (Q/W/E/R/T), Parts tree (by category
+                     folder), Colors and Groups docks, per-tool status bar, Save/Save As, close prompt
+  ui/viewport.py     QOpenGLWidget: input, tool dispatch, ghost preview, selection levels, Turn
+                     tool, dragging/nudging the selection, working frame (red preview = clash)
   profiles/*.toml    Built-in system profiles (nanoblock.toml, incl. 45-color palette)
   parts/<profile>/<Category>/<name>.toml   Built-in parts; id = "<profile>:<file stem>"
 tests/               pytest suite
@@ -99,29 +102,33 @@ tests/               pytest suite
 - `PartDef.antistuds` are **slots** (segments; a point = zero length) where a stud fits anywhere
   along: derived per body (1×N one slot, 2×N one per row along the long side, Y on a tie), or
   `antistuds = "none"` + explicit sockets. Rules from the real parts: docs/part_format.md
-  "Undersides". Connections are derived, never saved, while everything is on one grid.
+  "Undersides". Connections are derived from world positions (so they work across Z-turned
+  frames), never saved.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
   in save files, separate from their display `name`. Ids are ASCII `[a-z0-9_]` (checked on load).
   There's no translation for renamed ids: a save using an old id fails with "unknown part".
 - Slope naming: `slope_{footprint}_wedge_{run}x{rise}[_inverted]`, shown as
   "Slope 1×2 wedge 1×1 [inverted]" (run = cells along the slope, rise = layers).
-- **Edits from the UI go through `Viewport.history`** (add_part / remove_part / set_color), never
-  `Model` directly, or undo gets out of sync. One user action = one command (list of ops).
-  History also owns the modified flag (`mark_clean()` on save, `reset()` on new/open).
+- **Edits from the UI go through `Viewport.history`** (parts, colours, groups, frames, moves),
+  never `Model` directly, or undo gets out of sync. One user action = one command (list of ops).
+  Commands that can fail (`move_parts`, `add_part_in_new_frame`) go through `_try_run`, which rolls
+  back and returns the reason. History also owns the modified flag (`mark_clean()` on save,
+  `reset()` on new/open).
 - Renderer loads `Camera.get_projection_matrix()`, the same matrix picking inverts.
 - Ground placement only happens when the ray points downward; layer 0 sits on the grid.
 - **Frames** (`model.Frame`): a grid of its own = parent + origin (mm, parent space) + rotation
   (quaternion). Frame 0 is the root grid. A part's `pos`/`turns`/regions are in its frame's grid;
   its world geometry is that transformed by `Model.frame_matrix`. Occupancy is keyed by
-  (frame, sub-cell); parts in different frames are compared by their solids (`collision.py`):
-  `can_place` checks both, `Model.collisions()` (cached) lists cross-frame overlaps; `add_part` itself
+  (frame, sub-cell); parts in different frames are compared with the clash test (`collision.py`):
+  `can_place` checks both, `Model.collisions()` (cached) lists cross-frame clashes; `add_part` itself
   only refuses same-frame overlaps. Placing against a part
   puts the new part in that part's frame (`Model.to_frame`). A turned part's frame should be its
   original grid turned about the pivot, so it keeps its grid position (and builds stay on whole cells).
   `History.move_parts(ids, world transform)` does this: moves frames the set owns outright, gives
   other moving parts a new child frame, merges anything lined up with its parent grid back into it
-  (`model.to_parent_grid`), and refuses (unchanged, returns the reason) on overlap. Deleting parts
-  removes emptied frames.
+  (`model.to_parent_grid`), and refuses (unchanged, returns the reason) on a clash. With
+  `target_frame` (a drag) that frame becomes the home grid. Deleting parts removes emptied frames.
+  Turns are about world Z only for now (`model.turn_about_z`); all frames are Z-turned.
 - Save format v4 (see `docs/part_format.md`): `{version, profile, frames: [{id: 0}, {id, parent,
   origin, rotation}...], groups: [{id, name, parent}...], parts: [{id, part, frame, pos (cells,
   0.5 allowed), turns, color, group?}]}`; frames and groups listed parent-first. v3 (no groups),
@@ -131,54 +138,58 @@ tests/               pytest suite
   and keep older loader paths when the schema changes.
 - Type hints are used throughout; `glm` (PyGLM) types for vectors.
 
-## Known gaps / plan-vs-code drift (verify before relying on feature_plan.md)
-- **6-view / isometric / 30° rotation buttons** were ticked in `feature_plan.md` but never
-  existed in any commit (`git log -S isometric` only hits the plan). Now unticked.
-- **Moving the selection**: drag in the Select tool (`Viewport._start_drag/_update_drag/_finish_drag`,
-  `move_parts(..., target_frame)`), arrows / PgUp / PgDown (`nudge_selection`, along its own grid).
-  `move_parts` commits check the full clash test against all staying parts (same as the preview).
-- Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
-  a global floor meaningless and building from the top is legitimate. "Shift all" is planned.
-- Placement: the cell under the cursor is where the part's **anchor cell** goes (A / Shift+A
+## How the editing features work (pointers)
+- **Placement**: the cell under the cursor is where the part's **anchor cell** goes (A / Shift+A
   cycles bottom-layer cells, default nearest the centre; `model.origin_for_anchor`). The target
-  cell comes from `model.placement_target` (hit point + face normal; H toggles half-cell snap in
-  XY); arrow keys nudge it half a cell along the world axis nearest the screen direction, and
-  the nudge resets when the target changes.
+  cell comes from `Viewport._target_under` → `model.placement_target` (hit point + face normal,
+  on the hit part's frame; else the working frame's ground; H = half-cell snap in XY). Arrow keys
+  nudge it half a cell along its grid's axis nearest the screen direction (`_grid_axes`); the nudge
+  resets when the target changes. `[ / ]` turn the preview off the grid (`ghost_angle`, about the
+  anchor cell centre; placed with `History.add_part_in_new_frame`, needs a stud contact). F sets
+  `working_frame`, whose grid is used (and drawn) for the ground.
+- **Selection** (`Viewport.selection`, part ids) and **groups** (`model.Group`, `Model.groups`;
+  `PlacedPart.group` = innermost group, separate from frames): a click selects
+  `Model.selection_unit(part, Viewport.select_context)` (outermost group at the top level;
+  double-click drills one level in); Alt = one part. Delete / recolour / group / ungroup / rename
+  are one command each; `remove_parts` also drops emptied groups and frames.
+- **Turn tool (T)**: `motion.plan_turn` (moving set + free motion), dragged in
+  `Viewport._start_turn/_drag_turn/_finish_turn`, previewed with `Renderer.render(turning=(ids,
+  transform, valid), pivot=...)` (the parts' own display lists under the matrix; red from
+  `Model.moved_overlaps`), committed with `History.move_parts`. `[ / ]`, Shift+R: `turn_step`,
+  `realign_selection`. Details and tolerances: `docs/turning.md`.
+- **Moving the selection**: drag a selected part in the Select tool
+  (`_start_drag/_update_drag/_finish_drag`, `move_parts(..., target_frame)`), or arrows / PgUp /
+  PgDown (`nudge_selection`, along its own grid, never changing frames).
+- **Clash test** (`collision.clash` via `Model.part_shape`, cached): bodies by SAT, studs as
+  prisms that may enter another body only on one of its slots. Used by previews and by every
+  `move_parts` / turned-placement commit against all staying parts; the Place tool on one grid
+  still uses only the occupancy map.
+- `Viewport.notice` is a one-line status-bar message (why something was refused, what's moving).
+  A turn or drag in progress is cancelled by Esc, undo/redo, delete, tool change and New/Open.
+
+## Known gaps / plan-vs-code drift (verify before relying on feature_plan.md)
+- **6-view / isometric / 30° rotation buttons** were ticked in `feature_plan.md` once but never
+  existed (`git log -S isometric` only hits the plan). Now unticked.
+- Bricks can go below the grid (`z < 0`). **Intentional**: no hard floor, since frames make
+  a global floor meaningless and building from the top is legitimate.
 - Palette RGB values are eyeballed approximations; clear colors render opaque.
 - Camera controls are middle mouse only (README and Help match); Alt+Left goes to the active tool.
 - **Section view**: `Renderer.render(section_z=...)` supports a clip plane, but the
   viewport never passes it and there's no UI for it.
-- Selection (`Viewport.selection`, a set of part ids): delete and recolour act on it via
-  `History.remove_parts` / `set_colors` (one undo step each). Moving a selection isn't built yet.
-- **Groups** (`model.Group`, `Model.groups`; `PlacedPart.group` = innermost group): separate from
-  frames. Click selects `Model.selection_unit(part, Viewport.select_context)` (outermost group at
-  the top level; double-click sets the context one level deeper); Alt = single part. Group /
-  ungroup / rename go through `History.group` / `ungroup` / `rename_group`; `remove_parts` also
-  drops groups left empty (same command).
-- **Turn tool (T)**: `Viewport._start_turn/_drag_turn/_finish_turn` plan with `motion.plan_turn`,
-  preview with `Renderer.render(turning=(ids, transform, valid), pivot=...)` (the parts' own display
-  lists, moved; `Model.moved_overlaps` for red), commit with `History.move_parts`. `[`/`]` and
-  Shift+R (`turn_step`, `realign_selection`) act on the selection. Turns are about world Z only
-  (all frames are Z-turned for now). `Viewport.notice` is a status-bar message.
-- Clash test (`collision.clash` via `Model.part_shape`, cached): bodies by SAT, plus studs as
-  prisms that may enter another body only on one of its slots. Place tool: `ghost_angle` turns the
-  preview about its anchor cell centre (`ghost_matrix`), placed with `History.add_part_in_new_frame`;
-  `working_frame` (F) sets the grid used for the ground.
-- Picking iterates every part (fine at small scale); the renderer calls one cached display
-  list per part each frame (VBOs/shaders are still the longer-term plan).
-- Profile `clearance`, `body_height` aren't used yet. Outlines come from the merged shape
+- Profile `clearance`, `body_height` and `grid_rotation` aren't used yet.
+- Picking iterates every part (fine at small scale). Outlines come from the merged shape
   (`geometry.part_outline`, once per part type), so multi-body parts have no seams. Each part
   has two display lists: all fills are drawn first, then all outlines (drawing them together
-  let later parts paint over earlier outlines). First draw of 1000 bricks ≈ 550 ms.
-- `grid_rotation` is unused. Measured: 1000 parts / 8000 studs ≈ 25 ms per frame. Display lists
-  are keyed by (id, part, pos, turns, color) — anything else that changes a part's look must join the key.
+  let later parts paint over earlier outlines). Display lists are keyed by (id, part, pos, turns,
+  color, frame, box): anything else that changes a part's look must join the key. Measured:
+  first draw of 1000 bricks ≈ 550 ms, then 1000 parts / 8000 studs ≈ 25 ms per frame.
 
 ## Architectural pressure from upcoming features
-Done: placed parts with part id, origin, quarter turns and a sub-cell occupancy map; grid frames
-in the model and save v3 (step A). Still ahead: the rotate tool (step B), ball joints, overlap
-checks across frames, circular arrays.
-- ~~non-cube cells~~ done: `Profile.cell_box()` (build step 1).
-- Prefer migrating to VBOs/shaders before mesh-heavy features (slopes, imported parts).
+Done: parts, occupancy, frames (step A), groups, the Turn tool and turned placement (step B),
+moving the selection, the clash test. Still ahead: ball joints (tilted frames, joint contacts and
+limits in the turn finder), the full snapping solver (several moving frames, loops), copy/paste,
+circular arrays, instances.
+- Prefer migrating to VBOs/shaders before mesh-heavy features (joint parts, imported meshes).
 Raise these trade-offs with the user before restructuring; don't silently rewrite.
 
 ## Working with the user

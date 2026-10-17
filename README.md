@@ -83,6 +83,10 @@ uv run pytest
 - **Paint (E):** click to recolour a part with the current colour.
 - **Erase (R):** click to remove a part.
 
+### View
+- **U:** highlight parts that aren't connected to the main build (orange).
+- **O:** highlight parts that overlap parts on another grid (red).
+
 ### Edit and file
 - **Undo:** Ctrl+Z. **Redo:** Ctrl+Y or Ctrl+Shift+Z.
 - **New:** Ctrl+N. **Open:** Ctrl+O. **Save:** Ctrl+S. **Save As:** Ctrl+Shift+S.

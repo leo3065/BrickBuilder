@@ -10,16 +10,17 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Adding support for brick block rotation around its Z axis with 90 degrees increment.
 - [x] Half-offset placement: a toggle (H) that snaps placement to half-cells, and arrow keys to nudge the preview by half a cell.
 - [x] Undo/redo.
-- [x] Multi-select: click, Ctrl+click, box drag, select all, Edit > Select Connected; delete and recolour the selection as one undo step. (Moving a selection is the next item.)
+- [x] Multi-select: click, Ctrl+click, box drag, select all, Edit > Select Connected; delete, recolour and turn the selection as one undo step.
 - [x] Groups: named, nestable subassemblies (Ctrl+G / Ctrl+Shift+G), a Groups dock, hover outline; click selects the outermost group, double-click drills in, Alt+click picks one part. Saved in the file. See docs/part_format.md "Groups, pins and moving subassemblies".
-- [ ] Moving and rotating already placed parts (pick a part up, keep its color, put it down elsewhere or turned).
-- [ ] Shifting all bricks (or a selection) by whole cells in any direction at once, e.g. to make room below a model that was built from the top down.
+- [x] Turning already placed parts: the Turn tool (see Intermediate, fine rotation).
+- [ ] Moving the selection (or everything) by half or whole cells, with the arrow keys or by dragging, e.g. to make room below a model that was built from the top down. `History.move_parts` already does a pure shift (and merges parts back onto a grid they land on); this needs the UI. Includes sliding along a slot: the turn finder already detects that freedom but doesn't offer it.
+- [ ] Copy, paste and duplicate a selection, keeping its groups and frames. Circular arrays and instances build on it.
 - [x] Highlight parts that aren't connected to the main build (View > Highlight Unconnected Parts, U): parts outside the largest connected group get an orange outline.
 
 #### Files and settings
 - [x] A save/load function to save the current model and load a saved model.
 - [x] Save (to the current file) as well as Save As, and the unsaved-changes prompt when closing the window.
-- [ ] Preferences dialog, saved per user: undo history size (fixed at 500 for now), rotation snap angle (default 7.5°) and similar editor settings.
+- [ ] Preferences dialog, saved per user: undo history size (fixed at 500 for now), rotation snap angle (default 7.5°, currently `Viewport.rotation_snap`) and similar editor settings.
 - [ ] Revisit the key mapping as a whole, and let users customise it in Preferences.
 - [ ] Parts list (bill of materials): count of each part per color, e.g. for finding kits that contain them on nanoblock.info.
 
@@ -49,16 +50,18 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Allowing semi-transparent brick blocks. (Data is ready: palette colors are flagged `clear` and carry an `alpha`.)
 
 ### Intermediate
-- [x] Connections on one grid: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Still to extend for frames (rotated parts, joints).
+- [x] Connections on one grid: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Works across Z-turned frames too (world-space contacts); joints still to come.
 - [x] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it. Done as step B (see docs/part_format.md "Step B"): Turn tool (T; Shift = free, [ / ] = one step, Shift+R = realign), placing parts already turned ([ / ] in the Place tool), and a working grid (F). Turns are about Z; the turn finder covers stud contacts (ball joints come with the joint parts).
 - [ ] Adding support for brick block to align to another brick block by rotating around the Z axis. This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
-- [ ] Snapping solver: contacts as errors minimised by least squares over the dragged frames; free motions from the same setup (hinges, locks, slides); keeps loops closed. Used by turning, align, ball joints and circular arrays. See docs/part_format.md.
-- [ ] Pins and joint chains: each connected component has one pin (explicit, else grounded, else the larger side); turning at a joint moves the unpinned side.
+- [ ] Snapping solver: contacts as errors minimised by least squares over the dragged frames; free motions from the same setup (hinges, locks, slides); keeps loops closed. Used by turning, align, ball joints and circular arrays. See docs/part_format.md. Partly built for step B (`motion.plan_turn`, docs/turning.md): one moving body, turns in the plane, stud contacts. Still open: several moving frames, chains and closed loops, ball joints, offering slides.
+- [ ] Pins and joint chains: each connected component has one pin (explicit, else grounded, else the larger side); turning at a joint moves the unpinned side. Built: grounded / largest, with the selection always moving (`motion.moving_set`). Still open: explicit pins (a "pin group" command) and turning inside joint chains.
 - [ ] Instances: define a subassembly once, place it several times, editing it updates every copy (like LDraw multi-part files).
-- [ ] Circular array: copy a selection of parts (a subassembly, possibly spanning several frames) n times, each copy turned 360/n° about a centre, e.g. rings of rounded 1×N and the alternating round 1×4 / 1×3 body segments of the Rayquaza DX set. Copies turned by a multiple of 90° reuse existing frames (that ring needs only the root grid and one 45° frame). Checks the closing contacts and reports any gap. Needs multi-select.
+- [ ] Circular array: copy a selection of parts (a subassembly, possibly spanning several frames) n times, each copy turned 360/n° about a centre, e.g. rings of rounded 1×N and the alternating round 1×4 / 1×3 body segments of the Rayquaza DX set. Copies turned by a multiple of 90° reuse existing frames (that ring needs only the root grid and one 45° frame). Checks the closing contacts and reports any gap. Each copy can reuse `History.move_parts`; needs copy/paste.
 - [ ] Allowing ball joint blocks (a socket and a ball), with free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.)
 - [x] Add a view option that highlights colliding parts in different frames (rotated parts, joints): View > Highlight Colliding Parts (O), in red. Within one frame, overlaps are already refused when placing and loading; across frames the placement preview turns red too.
-- [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation.
+- [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation. Z-turned parts: done (Shift+R realigns to the nearest quarter turn of the grid they're held on). Ball joints: still to do.
+- [ ] Stud check on one grid: a half-offset part whose studs miss the slots of the part above isn't caught (the stud part of the clash test only runs across frames; see docs/turning.md).
+- [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.
 
 ### Advanced
 - [ ] Exporting the model for the current view as an image, both raster and vector formats.

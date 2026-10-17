@@ -4,7 +4,8 @@ On one grid the sub-cell occupancy decides overlap exactly when placing. Across 
 anything moved or turned, the world-space solids are compared instead. Every body is convex
 (boxes, rounded boxes, wedges), so two bodies are apart iff some axis separates them: a face
 normal of either, or the cross product of an edge direction from each. Studs are checked too:
-they may only go into another part's body on one of its slots.
+they may only go into another part's body through one of its slots (undersides are hollow along
+them, so a stud whose base is lower than the slot just goes in less deep).
 """
 import math
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from typing import List, Optional, Sequence, Tuple
 import glm
 import numpy as np
 
-from brickbuilder.core.connections import AXIS_TOLERANCE, on_slot
+from brickbuilder.core.connections import AXIS_TOLERANCE, TOLERANCE, on_slot
 
 # mm: two solids overlapping by less than this along some axis only touch (faces in contact, the
 # round ends of a stud hinge, float noise from turned frames)
@@ -133,8 +134,19 @@ def clash(a: Shape, b: Shape) -> Optional[str]:
         return "bodies"
     for x, y in ((a, b), (b, a)):
         for base, axis, h in x.studs:
-            if hulls_overlap([h], y.hulls) and not any(
-                    glm.dot(axis, slot_axis) > 1 - AXIS_TOLERANCE and on_slot(base, s0, s1)
-                    for s0, s1, slot_axis in y.slots):
+            if hulls_overlap([h], y.hulls) and not any(in_slot(base, axis, slot) for slot in y.slots):
                 return "stud"
     return None
+
+
+def in_slot(base: glm.vec3, axis: glm.vec3, slot) -> bool:
+    """Does a stud go into a slot's hollow: pointing the slot's way, its centre line through the
+    slot, and its base on or below the slot's plane (a lower stud just goes in less deep; a higher
+    one would push into the part's ceiling)."""
+    s0, s1, slot_axis = slot
+    if glm.dot(axis, slot_axis) <= 1 - AXIS_TOLERANCE:
+        return False
+    t = glm.dot(base - s0, slot_axis)  # how far the base is above the slot's plane
+    if t > TOLERANCE:
+        return False
+    return on_slot(base - slot_axis * t, s0, s1)

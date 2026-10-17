@@ -107,10 +107,14 @@ View > Highlight Colliding Parts. On one grid the sub-cell occupancy map decides
   separates them: a face normal of either, or the cross product of an edge direction from each
   (separating axis test, numpy). They clash only if they overlap by more than `PENETRATION` along
   **every** axis, so touching faces and round ends touching at a hinge are fine.
-- **Studs**: the solids are solid, but real undersides are hollow. Each stud is an octagonal prism
-  (profile stud diameter and height). A stud inside another part's body is fine only if its base
-  is on one of that part's antistud slots; otherwise it clashes (e.g. a part turned on a brick with
-  several studs: the others poke into it).
+- **Studs**: the solids are solid, but real undersides are hollow along their slots. Each stud is
+  an octagonal prism (profile stud diameter and height), along its own axis. A stud inside another
+  part's body is fine only if it goes into one of that part's slots (`collision.in_slot`): pointing
+  the slot's way, its centre line through the slot, and its base on or *below* the slot's plane. A
+  lower stud just goes in less deep (e.g. a side stud 0.25 mm below the top stud a 1×3 sits on);
+  a higher one would push into the ceiling and clashes, as does a stud off the slots (a part turned
+  on a brick with several studs: the others poke into it). Only a stud exactly at the slot's plane
+  counts as a contact (connection).
 - Broad phase: bounding boxes (part boxes widened by the stud height).
 
 ## Tolerances

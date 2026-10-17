@@ -108,3 +108,34 @@ def test_side_stud_brick_and_shared_frames(model):
     assert first.frame not in model.frames               # emptied frame removed
     bridge = h.add_part_in_new_frame(model.library["nanoblock:brick_1x2"], (0, 2, 0), 3, "white", 0, origin, rotation)
     assert bridge is not None and model.connections()[bridge.id] == {a.id, b.id}
+
+
+def test_lower_stud_fits_into_a_hollow_slot(model):
+    """From the user's build: a side-stud 1x1 on a side stud, a second side-stud 1x1 stacked on
+    its (sideways) top stud and turned so its own side stud points up, 0.25 mm below the top
+    stud of the column it hangs from. A 1x3 on that top stud reaches over the lower stud, which
+    goes into the 1x3's hollow slot (just less deep): allowed."""
+    from brickbuilder.core.history import History
+    from brickbuilder.core.model import decompose, origin_for_anchor
+    h = History(model)
+    lib = model.library
+    side = lib["nanoblock:brick_1x1_side_stud"]
+    h.add_part(lib["nanoblock:brick_1x1"], (0, 0, 0), 0, "red")
+    red = h.add_part(side, (0, 0, 1), 0, "red")
+    mid = h.add_part_in_new_frame(side, (0, 0, 0), 0, "white", 0, *decompose(model.side_stud_grid(red.id, 1)))
+    assert mid is not None
+    up = origin_for_anchor(model.profile, (0, 0, 0), 1, (0, 0, 1))  # turned so its side stud points up
+    right = h.add_part(side, up, 1, "white", mid.frame)
+    assert right is not None
+    stud = right.studs[1]
+    assert glm.distance(right.stud_axes[1], glm.vec3(0, 0, 1)) < 1e-5
+    assert abs(stud.z - (red.studs[0].z - 0.25)) < 1e-4 and abs(stud.x - 6.0) < 1e-4
+
+    bar = lib["nanoblock:brick_1x3"]
+    pos = origin_for_anchor(model.profile, (0, 0, 0), 3, (0, 0, 2))   # along +X from the red top stud
+    assert model.can_place(bar, pos, 3, 0)
+    placed = h.add_part(bar, pos, 3, "gray")
+    assert red.id in model.connections()[placed.id]
+    # A stud that would stick up *into* the ceiling still blocks: lift the bar's grid 0.5 mm down
+    lowered = glm.translate(glm.mat4(1.0), glm.vec3(0, 0, -0.5))
+    assert model.moved_overlaps({placed.id}, lowered) is not None

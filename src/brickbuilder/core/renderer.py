@@ -78,7 +78,7 @@ class Renderer:
         gl.glEnable(gl.GL_LIGHTING)
 
         # Render Bricks (one box per placed part; boxes come from the model's sub-grid mapping)
-        self.render_bricks(model, profile, turning)
+        self.render_bricks(model, profile, turning, camera)
 
         if highlighted:
             self.render_highlight(highlighted)
@@ -268,11 +268,13 @@ class Renderer:
         gl.glVertex3f(center.x + hs, center.y + hs, center.z)
         gl.glVertex3f(center.x - hs, center.y - hs, center.z)
 
-    def render_bricks(self, model, profile, turning=None):
+    def render_bricks(self, model, profile, turning=None, camera=None):
         # Each part is compiled once into two display lists, its fill and its outline, and only
         # recompiled when something about it changes. All fills are drawn first (offset back),
         # then all outlines: if a part's outline were drawn with its fill, a part drawn later
         # could paint over it where the two touch (e.g. the diagonal between paired slopes).
+        # Clear (translucent) parts come after the opaque ones, farthest first, blended and without
+        # writing depth, so everything behind them shows through, other clear parts included.
         live = {}
         for placed in model.parts.values():
             # The frame and world box too: a part rebuilt in a moved frame must recompile
@@ -288,7 +290,10 @@ class Renderer:
         self._part_lists = live
 
         moving = set(turning[0]) if turning else set()
-        still = [lists for key, lists in live.items() if key[0] not in moving]
+
+        def clear(pid):
+            return profile.palette[model.parts[pid].color].clear
+        still = [lists for key, lists in live.items() if key[0] not in moving and not clear(key[0])]
         gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
         gl.glPolygonOffset(1.0, 1.0)
         for fill, _ in still:
@@ -300,14 +305,41 @@ class Renderer:
             gl.glCallList(outline)
         gl.glEnable(gl.GL_LIGHTING)
 
+        see_through = [(key[0], lists) for key, lists in live.items() if key[0] not in moving and clear(key[0])]
+        if see_through:
+            if camera is not None:  # farthest first along the view direction
+                view = camera.get_view_matrix()
+                forward = -glm.vec3(view[0][2], view[1][2], view[2][2])
+                def depth(item):
+                    lo, hi = model.parts[item[0]].box
+                    return glm.dot((lo + hi) * 0.5, forward)
+                see_through.sort(key=depth, reverse=True)
+            gl.glEnable(gl.GL_BLEND)
+            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            gl.glDepthMask(gl.GL_FALSE)
+            gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+            gl.glPolygonOffset(1.0, 1.0)
+            for _, (fill, _) in see_through:
+                gl.glCallList(fill)
+            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+            gl.glDepthMask(gl.GL_TRUE)
+            gl.glDisable(gl.GL_BLEND)
+            gl.glDisable(gl.GL_LIGHTING)
+            for _, (_, outline) in see_through:
+                gl.glCallList(outline)
+            gl.glEnable(gl.GL_LIGHTING)
+
         if turning:
             # The parts being turned: their own display lists, moved by the turn
             _, transform, valid = turning
             gl.glPushMatrix()
             gl.glMultTransposeMatrixf(np.array(transform, dtype=np.float32).flatten())
             turned = [lists for key, lists in live.items() if key[0] in moving]
+            gl.glEnable(gl.GL_BLEND)  # clear parts stay see-through while they move
+            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
             for fill, _ in turned:
                 gl.glCallList(fill)
+            gl.glDisable(gl.GL_BLEND)
             gl.glDisable(gl.GL_LIGHTING)
             for _, outline in turned:
                 gl.glCallList(outline)
@@ -330,8 +362,9 @@ class Renderer:
         outline = fill + 1
 
         gl.glNewList(fill, gl.GL_COMPILE)
-        rgb = profile.palette[placed.color].rgb
-        gl.glColor3f(rgb.x, rgb.y, rgb.z)
+        color = profile.palette[placed.color]
+        rgb = color.rgb
+        gl.glColor4f(rgb.x, rgb.y, rgb.z, color.alpha if color.clear else 1.0)
         self.draw_faces(placed.solids)
         self.call_at(stud_fill, placed.studs, placed.stud_axes)
         gl.glEndList()

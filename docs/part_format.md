@@ -58,7 +58,7 @@ clear = { name = "Clear", rgb = "#FFFFFF", clear = true, alpha = 0.5 }   # alpha
   rules: no derived antistuds.
 - `cup` carries the joint limits: `cone` (any direction) and `slot` (in the slot's plane, either way).
 - Palette ids are stable keys in save files, ASCII `[a-z0-9_]`; `name` is for display. RGB values
-  are approximate; clear colours render opaque for now.
+  are approximate. Clear colours (`clear = true`) render translucent at their `alpha`.
 
 ## Part files
 `src/brickbuilder/parts/<profile>/<Category folders>/<name>.toml`. The id is `<profile>:<file stem>`

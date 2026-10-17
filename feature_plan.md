@@ -49,7 +49,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Allowing selecting the color of the brick blocks, both before building and after building.
 - [x] Adding a color palette menu for brick colors.
 - [ ] Custom colors in a separate user palette file (with stable ids so saves keep working), which can be exported and imported to share them.
-- [ ] Allowing semi-transparent brick blocks. (Data is ready: palette colors are flagged `clear` and carry an `alpha`.)
+- [x] Allowing semi-transparent brick blocks: clear palette colours render at their `alpha` (drawn after the opaque parts, farthest first, without writing depth, so other clear parts show through too).
 
 ### Intermediate
 - [x] Connections: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Works across any frames (world-space contacts with stud directions, side studs included); a stud holds with half its height in. Ball joints count too (the ball's centre on the cup's pivot, the arm within the cup's limits).

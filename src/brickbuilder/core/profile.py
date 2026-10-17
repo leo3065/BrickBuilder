@@ -47,7 +47,7 @@ class PaletteColor:
     id: str
     name: str
     rgb: glm.vec3       # 0..1
-    clear: bool = False # translucent; rendered opaque for now
+    clear: bool = False # translucent: rendered at `alpha`
     alpha: float = 1.0  # opacity for when translucency is rendered
 
 

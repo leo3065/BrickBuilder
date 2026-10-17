@@ -124,6 +124,8 @@ History      # every UI edit as undoable commands (lists of ops)
 - Each part has two display lists, fill and outline: all fills are drawn first, then all outlines
   (drawing them together let later parts paint over earlier outlines). Outlines come from the merged
   shape (`geometry.part_outline`, once per part type), so multi-body parts have no seams.
+- Clear (translucent) parts are drawn after the opaque ones, farthest first (by box centre along the
+  view), blended and without writing depth, so other clear parts show through; then their outlines.
 - Display lists are keyed by (id, part, pos, turns, color, frame, box): anything else that changes a
   part's look must join the key. Parts being turned or dragged are drawn from their own lists under
   the move's matrix.

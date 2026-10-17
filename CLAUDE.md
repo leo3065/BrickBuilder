@@ -60,7 +60,7 @@ borrows from the Koraidon/Miraidon sets (regular + sloped bricks bracing beyond 
 ## Known gaps
 - Section view: `Renderer.render(section_z=...)` supports a clip plane, but there's no UI for it.
 - Profile `clearance`, `body_height` and `grid_rotation` aren't used yet.
-- Palette RGB values are approximate; clear colours render opaque.
+- Palette RGB values are approximate (eyeballed, not measured).
 - Bricks can go below the grid (`z < 0`) on purpose: no hard floor (`docs/design.md`).
 - Chains and closed loops of joints need the full snapping solver (`docs/design.md`).
 - Prefer migrating to VBOs/shaders before mesh-heavy features (imported meshes). Raise such

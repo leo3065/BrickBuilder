@@ -35,8 +35,8 @@ data, not code, so other micro-brick systems could be added without changing the
   steps, and fitting the build or the selection in view.
 - **Checks:** View > Highlight Unconnected Parts (U) marks parts the main build doesn't hold;
   View > Highlight Colliding Parts (O) marks parts on different grids that overlap.
-- **The 45 official Nanoblock colours.** Names come from nanoblock.info; the RGB values are
-  approximate.
+- **The 45 official Nanoblock colours**, the clear ones translucent. Names come from nanoblock.info;
+  the RGB values are approximate.
 - **Undo/redo** for every edit, Save / Save As, and a prompt before closing with unsaved changes.
 
 See [`feature_plan.md`](feature_plan.md) for what's planned next (copy/paste, circular arrays,

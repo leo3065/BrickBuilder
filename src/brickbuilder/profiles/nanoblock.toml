@@ -33,8 +33,7 @@ cup      = { mates = ["ball"],     dof = "spherical", cone = 30, slot = 90 }  # 
 # Official Nanoblock color names (as listed on https://nanoblock.info/nbks/?mode=colorList),
 # in that site's order. Ids are stable keys used by save files; RGB values are rough
 # eyeballed approximations, not measured. `clear = true` marks translucent colors; their
-# opacity is `alpha` (default 0.75 for clear colors, 1.0 otherwise). Rendered opaque until
-# semi-transparency is supported.
+# opacity is `alpha` (default 0.75 for clear colors, 1.0 otherwise); they render translucent.
 [palette]
 white           = { name = "White",           rgb = "#F4F4F2" }
 clear           = { name = "Clear",           rgb = "#FFFFFF", clear = true, alpha = 0.5 }

@@ -273,8 +273,10 @@ class Renderer:
         # recompiled when something about it changes. All fills are drawn first (offset back),
         # then all outlines: if a part's outline were drawn with its fill, a part drawn later
         # could paint over it where the two touch (e.g. the diagonal between paired slopes).
-        # Clear (translucent) parts come after the opaque ones, farthest first, blended and without
-        # writing depth, so everything behind them shows through, other clear parts included.
+        # Clear (translucent) parts come after the opaque ones, farthest first: each one's outline,
+        # then its fill blended over it without writing depth. So everything behind a clear part
+        # shows through it dimmed (outlines too, its own back edges included), and its front edges
+        # stay crisp (they win the depth test against its own, offset, faces).
         live = {}
         for placed in model.parts.values():
             # The frame and world box too: a part rebuilt in a moved frame must recompile
@@ -314,20 +316,19 @@ class Renderer:
                     lo, hi = model.parts[item[0]].box
                     return glm.dot((lo + hi) * 0.5, forward)
                 see_through.sort(key=depth, reverse=True)
-            gl.glEnable(gl.GL_BLEND)
             gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-            gl.glDepthMask(gl.GL_FALSE)
-            gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
             gl.glPolygonOffset(1.0, 1.0)
-            for _, (fill, _) in see_through:
-                gl.glCallList(fill)
-            gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
-            gl.glDepthMask(gl.GL_TRUE)
-            gl.glDisable(gl.GL_BLEND)
-            gl.glDisable(gl.GL_LIGHTING)
-            for _, (_, outline) in see_through:
+            for _, (fill, outline) in see_through:
+                gl.glDisable(gl.GL_LIGHTING)
                 gl.glCallList(outline)
-            gl.glEnable(gl.GL_LIGHTING)
+                gl.glEnable(gl.GL_LIGHTING)
+                gl.glEnable(gl.GL_BLEND)
+                gl.glDepthMask(gl.GL_FALSE)
+                gl.glEnable(gl.GL_POLYGON_OFFSET_FILL)
+                gl.glCallList(fill)
+                gl.glDisable(gl.GL_POLYGON_OFFSET_FILL)
+                gl.glDepthMask(gl.GL_TRUE)
+                gl.glDisable(gl.GL_BLEND)
 
         if turning:
             # The parts being turned: their own display lists, moved by the turn

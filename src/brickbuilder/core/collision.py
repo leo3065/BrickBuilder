@@ -100,6 +100,7 @@ class Shape:
     box: Tuple[glm.vec3, glm.vec3]                # around bodies and studs
     joint_hulls: Tuple[bool, ...] = ()            # per hull: part of a joint (ball, arm, cup)
     joints: Tuple = ()                            # (kind, pivot, axis, slot) per joint socket
+    hollows: Tuple = ()                           # (corner, side end, other side end, axis): studs fit, no grip
 
 
 def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> Hull:
@@ -117,7 +118,7 @@ def stud_hull(base: glm.vec3, axis: glm.vec3, radius: float, height: float) -> H
 
 
 def make_shape(solids, studs, stud_axes, slots, slot_axes, stud_radius: float, stud_height: float,
-               joint_solids=(), joints=()) -> Shape:
+               joint_solids=(), joints=(), hollows=()) -> Shape:
     stud_hulls = [(s, axis, stud_hull(s, axis, stud_radius, stud_height)) for s, axis in zip(studs, stud_axes)]
     lo, hi = solids_box(solids)
     for s, axis in zip(studs, stud_axes):
@@ -126,7 +127,8 @@ def make_shape(solids, studs, stud_axes, slots, slot_axes, stud_radius: float, s
             hi = glm.vec3(max(hi.x, p.x + stud_radius), max(hi.y, p.y + stud_radius), max(hi.z, p.z + stud_radius))
     flags = tuple(joint_solids) + (False,) * (len(solids) - len(joint_solids))
     return Shape([hull(s) for s in solids], stud_hulls,
-                 [(a, b, axis) for (a, b), axis in zip(slots, slot_axes)], (lo, hi), flags, tuple(joints))
+                 [(a, b, axis) for (a, b), axis in zip(slots, slot_axes)], (lo, hi), flags, tuple(joints),
+                 tuple(hollows))
 
 
 def _joined(a: Shape, b: Shape) -> bool:
@@ -158,9 +160,28 @@ def clash(a: Shape, b: Shape) -> Optional[str]:
         return "bodies"
     for x, y in ((a, b), (b, a)):
         for base, axis, h in x.studs:
-            if hulls_overlap([h], y.hulls) and not any(in_slot(base, axis, slot) for slot in y.slots):
+            if hulls_overlap([h], y.hulls) and not any(in_slot(base, axis, slot) for slot in y.slots) \
+                    and not any(in_hollow(base, axis, area) for area in y.hollows):
                 return "stud"
     return None
+
+
+def in_hollow(base: glm.vec3, axis: glm.vec3, area) -> bool:
+    """Does a stud go into a hollow (a base plate's open middle): pointing the hollow's way, its
+    base on or below the hollow's plane, its centre line inside the rectangle."""
+    p0, p1, p2, n = area
+    if glm.dot(axis, n) <= 1 - AXIS_TOLERANCE:
+        return False
+    t = glm.dot(base - p0, n)
+    if t > TOLERANCE:
+        return False
+    q = base - n * t - p0
+    for edge in (p1 - p0, p2 - p0):
+        length2 = glm.dot(edge, edge)
+        s = glm.dot(q, edge) / length2 if length2 > 0 else 0.0
+        if s < -TOLERANCE or s > 1 + TOLERANCE:
+            return False
+    return True
 
 
 def blocking_studs(a: Shape, b: Shape) -> List[Tuple[glm.vec3, glm.vec3]]:
@@ -168,7 +189,8 @@ def blocking_studs(a: Shape, b: Shape) -> List[Tuple[glm.vec3, glm.vec3]]:
     if not boxes_overlap(a.box, b.box):
         return []
     return [(base, axis) for x, y in ((a, b), (b, a)) for base, axis, h in x.studs
-            if hulls_overlap([h], y.hulls) and not any(in_slot(base, axis, slot) for slot in y.slots)]
+            if hulls_overlap([h], y.hulls) and not any(in_slot(base, axis, slot) for slot in y.slots)
+            and not any(in_hollow(base, axis, area) for area in y.hollows)]
 
 
 def in_slot(base: glm.vec3, axis: glm.vec3, slot) -> bool:

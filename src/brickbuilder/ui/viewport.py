@@ -99,7 +99,8 @@ class Viewport(QOpenGLWidget):
                                                 self.ghost_matrix())
             # Show where its studs fit, and what's in the way when it's red
             blocking = () if self.ghost_valid else self.model.blocking_studs(self.model.shape(geo))
-            ghost = (geo["solids"], geo["studs"], self.ghost_valid, geo["stud_axes"], [(a, b, n) for (a, b), n in zip(geo["antistuds"], geo["antistud_axes"])], blocking)
+            ghost = (geo["solids"], geo["studs"], self.ghost_valid, geo["stud_axes"], [(a, b, n) for (a, b), n in zip(geo["antistuds"], geo["antistud_axes"])], blocking,
+                     geo["hollows"])
         rect = None
         if self.select_rect:
             rect = tuple(v * pixel_ratio for v in self.select_rect)

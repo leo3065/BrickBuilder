@@ -34,7 +34,8 @@ def seg(a, b, z=0.0):
     ("slope_1x2_wedge_1x2_inverted", [seg((0.5, 0.5), (0.5, 0.5)), seg((0.5, 1.5), (0.5, 1.5))]),
     ("round_1x3", [seg((0.5, 0.5), (0.5, 2.5))]),
     ("round_2x2_fan", [seg((0.5, 0.5), (0.5, 0.5)), seg((0.5, 1.5), (0.5, 1.5)), seg((1.5, 0.5), (1.5, 0.5))]),
-    ("plate_10x10", []),
+    ("plate_10x10", [seg((0.5, 0.5), (9.5, 0.5)), seg((9.5, 0.5), (9.5, 9.5)),       # four 9-cell slots
+                     seg((9.5, 9.5), (0.5, 9.5)), seg((0.5, 9.5), (0.5, 0.5))]),      # on the sides
 ])
 def test_undersides(library, name, expected):
     assert segs(library, name) == sorted(expected)
@@ -68,12 +69,13 @@ def test_underside_rules_come_from_the_profile():
     from brickbuilder.core.profile import UndersideRule
     body = {"name": "B", "body": [{"shape": "box", "size": [2, 4, 1]}]}
     rows = (UndersideRule(2, "rows"), UndersideRule(None, "none"))
+    nanoblock = (UndersideRule(2, "rows"), UndersideRule(None, "perimeter"))
     assert len(part_from_dict("t:b", "", body, rows).antistuds) == 2          # one slot per row
     assert part_from_dict("t:b", "", body, (UndersideRule(1, "rows"),)).antistuds == ()  # too wide
     assert part_from_dict("t:b", "", body).antistuds == ()                    # no rules: none
     # The built-in Nanoblock profile carries the measured rules
     profile = load_builtin_profile()
-    assert profile.underside == rows
+    assert profile.underside == nanoblock
 
 
 def test_bad_underside_rules():
@@ -84,3 +86,21 @@ def test_bad_underside_rules():
         with pytest.raises(ProfileError):
             profile_from_dict({**data, "underside": bad})
     assert profile_from_dict(data).underside == ()
+
+
+def test_base_plate_grips_on_its_sides_and_lets_studs_into_the_middle(library):
+    from brickbuilder.core.model import Model
+    plate = library["nanoblock:plate_10x10"]
+    assert plate.hollows == (((1.5, 1.5, 0.0), (8.5, 1.5, 0.0), (1.5, 8.5, 0.0)),)   # a 7x7 middle
+    profile = load_builtin_profile()
+    model = Model(profile, library)
+    brick = library["nanoblock:brick_1x1"]
+    corner = model.add_part(brick, (0, 0, 0), 0, "red")          # its stud under the plate's corner cell
+    middle = model.add_part(brick, (8, 8, 0), 0, "red")          # its stud at (4.5, 4.5) in plate cells
+    assert model.can_place(plate, (0, 0, 1), 0)
+    placed = model.add_part(plate, (0, 0, 1), 0, "white")
+    links = model.connections()
+    assert corner.id in links[placed.id] and middle.id not in links[placed.id]   # the middle doesn't grip
+    # Between a side slot and the middle (a stud at (1.0, 2.0) in plate cells): blocked by the ribs
+    model.add_part(brick, (31, 3, 0), 0, "red")
+    assert not model.can_place(plate, (30, 0, 1), 0)

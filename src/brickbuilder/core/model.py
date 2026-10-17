@@ -66,6 +66,7 @@ class PlacedPart:
     antistud_axes: Tuple[glm.vec3, ...] = ()  # world direction a stud in each slot points
     joint_solids: Tuple[bool, ...] = ()       # per solid: part of a joint (ball, arm, cup)
     joints: Tuple = ()                        # (kind, world pivot, axis, slot) per ball / cup socket
+    hollows: Tuple = ()                       # (corner, side end, other side end, axis) per hollow
     group: Optional[int] = None    # the innermost group it belongs to, if any
 
 
@@ -109,6 +110,12 @@ def part_solids(profile: Profile, part: PartDef, pos: Sub, turns: int) -> Tuple[
     grid = tuple(transform_faces(faces, turns, pos, profile.sub_to_world) for faces in _FACE_CACHE[key])
     return grid + tuple(round_faces(rb, part_point_to_world(profile, rb.at, pos, turns), turn_axis(rb.axis, turns))
                         for rb in part.round_bodies)
+
+
+def hollow_areas(profile: Profile, part: PartDef, pos: Sub, turns: int):
+    """(corner, side end, other side end, axis) of a part's hollows, in its grid's space."""
+    return tuple((part_point_to_world(profile, a, pos, turns), part_point_to_world(profile, b, pos, turns),
+                  part_point_to_world(profile, c, pos, turns), glm.vec3(0, 0, 1)) for a, b, c in part.hollows)
 
 
 def joint_solid_flags(part: PartDef) -> Tuple[bool, ...]:
@@ -499,7 +506,8 @@ class Model:
         g = geo if isinstance(geo, dict) else vars(geo)
         st = self.profile.stud
         return collision.make_shape(g["solids"], g["studs"], g["stud_axes"], g["antistuds"], g["antistud_axes"],
-                                    st.diameter / 2, st.height, g.get("joint_solids", ()), g.get("joints", ()))
+                                    st.diameter / 2, st.height, g.get("joint_solids", ()), g.get("joints", ()),
+                                    g.get("hollows", ()))
 
     def part_shape(self, part_id: int) -> collision.Shape:
         if part_id not in self._shapes:
@@ -549,6 +557,7 @@ class Model:
             "antistud_axes": tuple(axis(a) for a in antistud_axes(part, turns)),
             "joint_solids": joint_solid_flags(part),
             "joints": tuple((k, pt(p), axis(a), axis(s)) for k, p, a, s in joint_sockets(self.profile, part, pos, turns)),
+            "hollows": tuple((pt(a), pt(b), pt(c), axis(n)) for a, b, c, n in hollow_areas(self.profile, part, pos, turns)),
         }
 
     def turned_placement_problem(self, part: PartDef, pos: Sub, turns: int, matrix: glm.mat4) -> Optional[str]:
@@ -584,7 +593,8 @@ class Model:
                                 "antistuds": [(pt(a), pt(b)) for a, b in p.antistuds],
                                 "antistud_axes": [axis(a) for a in p.antistud_axes],
                                 "joint_solids": p.joint_solids,
-                                "joints": [(k, pt(q), axis(a), axis(s)) for k, q, a, s in p.joints]})
+                                "joints": [(k, pt(q), axis(a), axis(s)) for k, q, a, s in p.joints],
+                                "hollows": [(pt(a), pt(b), pt(c), axis(n)) for a, b, c, n in p.hollows]})
             hit = self.clashes(shape, lambda q: q.id in moving)
             if hit:
                 return hit[0]
@@ -628,11 +638,11 @@ class Model:
         return out
 
     def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=(), stud_axes=(), antistud_axes=(),
-                  joints=()):
+                  joints=(), hollows=()):
         """Move frame-space geometry into the world (a no-op for the root frame)."""
         if frame == 0:
             return {"solids": solids, "edges": edges, "studs": studs, "antistuds": antistuds,
-                    "stud_axes": stud_axes, "antistud_axes": antistud_axes, "joints": joints}
+                    "stud_axes": stud_axes, "antistud_axes": antistud_axes, "joints": joints, "hollows": hollows}
         m = self.frame_matrix(frame)
 
         def pt(p):
@@ -648,6 +658,7 @@ class Model:
             "stud_axes": tuple(axis(a) for a in stud_axes),
             "antistud_axes": tuple(axis(a) for a in antistud_axes),
             "joints": tuple((k, pt(p), axis(a), axis(s)) for k, p, a, s in joints),
+            "hollows": tuple((pt(a), pt(b), pt(c), axis(n)) for a, b, c, n in hollows),
         }
 
     def connections(self) -> Dict[int, set]:
@@ -689,7 +700,8 @@ class Model:
                                antistuds=antistud_slots(self.profile, part, pos, turns),
                                stud_axes=stud_axes(part, turns),
                                antistud_axes=antistud_axes(part, turns),
-                               joints=joint_sockets(self.profile, part, pos, turns))
+                               joints=joint_sockets(self.profile, part, pos, turns),
+                               hollows=hollow_areas(self.profile, part, pos, turns))
         if frame == 0 and not part.round_bodies:
             box = subcells_box(self.profile, (s for s, _ in regions))
         else:
@@ -697,7 +709,7 @@ class Model:
         placed = PlacedPart(part_id, part, tuple(pos), turns % 4, color, frame,
                             tuple(regions), box, world["solids"], world["edges"],
                             world["studs"], world["antistuds"], world["stud_axes"], world["antistud_axes"],
-                            joint_solid_flags(part), world["joints"], group)
+                            joint_solid_flags(part), world["joints"], world["hollows"], group)
         self.parts[part_id] = placed
         for sub, cut in regions:
             self.occupancy.setdefault((frame, sub), []).append((part_id, cut))

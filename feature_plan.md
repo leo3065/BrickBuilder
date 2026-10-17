@@ -42,7 +42,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Round parts: round 1×1, 1×2, 1×3, 1×4, 2×2 and the 2×2 fan (boxes with `corner_radius`).
 - [x] 1×1 with a side stud (nanoblock.info "1x1 : 2凸", in 173 of 671 kits: the biggest gap). Hovering its side face places on the stud's grid (a frame turned 90° about a horizontal axis, shared by side studs in one plane); parts on it turn about the stud.
 - [x] Joint parts: ball and socket on 1×2 and 2×2 (nanoblock.info JO-C / JO-D), with round bodies (sphere, cylinder), ball / cup sockets and joint contacts. Hovering a matching joint places a part on it straight. Posing is under Intermediate.
-- [ ] Base plate undersides: real plates grip studs in places, but the profile gives plates no slots (underside rule "none"), so they can't be placed on studs. Measure where they grip (into docs/measurements.md) and add explicit antistud sockets.
+- [x] Base plate undersides: four slots on the sides (through the corner cells' centres) and a hollow middle one cell in, where studs fit without gripping (underside pattern "perimeter"); the preview outlines both.
 - [ ] A menu for browsing the part library, with a tree view, thumbnail previews and mark-as-favorite. (The tree view grouped by category is done; thumbnails and favorites are not.)
 
 #### Colors
@@ -66,7 +66,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Dragging the selection onto a side stud (it lands on the stud's grid, like placing).
 - [x] Dragging the selection onto a joint: the grabbed part goes on straight, the rest comes along (Space: rolled 180°).
 - [x] Placing on a joint rolled 180° (tops swapped) with Space: the joint sits at mid-height, so the flipped part lines up too.
-- [x] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above is now refused, as is a part flush against a side-stud face (`can_place` runs the full clash test). Base plates have no slots (underside rule "none"), so they can't be placed on studs.
+- [x] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above is now refused, as is a part flush against a side-stud face (`can_place` runs the full clash test). Base plates grip on their side slots and let studs into their hollow middle.
 - [x] Reuse a frame that lines up when turning or placing a turned part (as side studs already do, `Model.find_grid`), so parts turned to the same angle on studs in one line share a grid and can be bridged (`Model.lined_up_frames`).
 - [ ] A view option showing the underside slots of placed parts (all, or the selection), like the preview does for itself, to check orientations after building. Low priority.
 - [ ] Choosing the pivot when turning something not held by anything (now: the centre of its bounding box), e.g. click a stud or point. Low priority.

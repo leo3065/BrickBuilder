@@ -27,8 +27,10 @@ class StudSpec:
 
 # Underside slot patterns a profile can pick (see UndersideRule). Add one here when a system needs it.
 UNDERSIDE_PATTERNS = {
-    "rows",   # one slot per row of cells, along the long side (Y on a tie); 1xN: its middle line
-    "none",   # no antistuds (e.g. Nanoblock base plates, for now)
+    "rows",       # one slot per row of cells, along the long side (Y on a tie); 1xN: its middle line
+    "perimeter",  # four slots along the sides, through the corner cells' centres, and a hollow inside
+                  # them (studs fit anywhere there without gripping), one cell in (Nanoblock base plates)
+    "none",       # no antistuds
 }
 
 

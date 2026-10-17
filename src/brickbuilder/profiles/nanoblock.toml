@@ -14,13 +14,14 @@ hollow_diameter = 0.0         # solid
 
 # Where studs fit under a body when its part file doesn't list antistud sockets (measured from the
 # real parts, docs/part_format.md "Undersides"): 1xN and 2xN undersides are hollow slots, one per
-# row along the long side; wider footprints (the base plates) take none for now.
+# row along the long side. Wider footprints (the base plates) grip studs along four slots on the
+# sides, through the corner cells' centres; inside them, one cell in, studs fit without gripping.
 [[underside]]
 max_short_side = 2
 slots = "rows"
 
 [[underside]]
-slots = "none"
+slots = "perimeter"
 
 [socket_types]
 stud     = { mates = ["antistud"], dof = "fixed" }

@@ -43,6 +43,10 @@ class PartDef:
     antistud_axes: Tuple[Axis, ...] = ()
     round_bodies: Tuple[RoundBody, ...] = ()  # spheres and cylinders off the grid (joints)
     joints: Tuple["Joint", ...] = ()          # ball and cup sockets
+    # Hollows: rectangles in a bottom face (corner, corner + one side, corner + the other side, in
+    # cells) where studs fit anywhere without gripping (a base plate's open middle); studs in them
+    # point up (+z)
+    hollows: Tuple[Tuple[Point, Point, Point], ...] = ()
 
     def __post_init__(self):
         # Parts built without axes (tests, older code) point everything up
@@ -218,11 +222,13 @@ def _underside_pattern(rules: Sequence[UndersideRule], w: int, d: int) -> str:
     return "none"
 
 
-def _derived_antistuds(bodies, cell_set, rules: Sequence[UndersideRule]) -> List[Segment]:
+def _derived_antistuds(bodies, cell_set, rules: Sequence[UndersideRule], hollows=None) -> List[Segment]:
     """Slots under each body whose bottom isn't sitting on another body of the part, laid out by
     the profile's underside rules (system specific). A lower wedge's bottom always sits on its
     base, so only boxes and upper wedges count. The "rows" pattern: one slot per row of cells
-    along the long side (Y when the sides are equal); a 1xN gets its middle line, a 1x1 a point."""
+    along the long side (Y when the sides are equal); a 1xN gets its middle line, a 1x1 a point.
+    "perimeter": four slots along the sides through the corner cells' centres, plus (appended to
+    `hollows`) the rectangle one cell inside them, where studs fit without gripping."""
     out: List[Segment] = []
     for b in bodies:
         if b.kind == "wedge" and b.keep == "lower":
@@ -230,7 +236,15 @@ def _derived_antistuds(bodies, cell_set, rules: Sequence[UndersideRule]) -> List
         (x0, y0, z), (w, d) = b.lo, b.size[:2]
         if z > 0 and all((x, y, z - 1) in cell_set for x in range(x0, x0 + w) for y in range(y0, y0 + d)):
             continue
-        if _underside_pattern(rules, w, d) != "rows":
+        pattern = _underside_pattern(rules, w, d)
+        if pattern == "perimeter":
+            corners = [(x0 + 0.5, y0 + 0.5), (x0 + w - 0.5, y0 + 0.5), (x0 + w - 0.5, y0 + d - 0.5), (x0 + 0.5, y0 + d - 0.5)]
+            out += [((*corners[i], float(z)), (*corners[(i + 1) % 4], float(z))) for i in range(4)]
+            if hollows is not None and w >= 3 and d >= 3:
+                hollows.append(((x0 + 1.5, y0 + 1.5, float(z)), (x0 + w - 1.5, y0 + 1.5, float(z)),
+                                (x0 + 1.5, y0 + d - 1.5, float(z))))
+            continue
+        if pattern != "rows":
             continue
         along_y = d >= w
         rows = w if along_y else d
@@ -295,11 +309,12 @@ def part_from_dict(part_id: str, category: str, data: Dict[str, Any],
     mode = data.get("antistuds", "derived")
     if mode not in _ANTISTUD_MODES:
         raise PartError(f"{part_id}: 'antistuds' must be one of {sorted(_ANTISTUD_MODES)}")
-    derived = _derived_antistuds(bodies, cell_set, underside) if mode == "derived" else []
+    hollows: List = []
+    derived = _derived_antistuds(bodies, cell_set, underside, hollows) if mode == "derived" else []
     antistuds = tuple(derived + [seg for kind, seg, _ in sockets if kind == "antistud"])
     antistud_axes = tuple([UP] * len(derived) + [axis for kind, _, axis in sockets if kind == "antistud"])
     return PartDef(part_id, data["name"], category, bodies, cells, tuple(studs), antistuds,
-                   tuple(stud_axes), antistud_axes, round_bodies, joints)
+                   tuple(stud_axes), antistud_axes, round_bodies, joints, tuple(hollows))
 
 
 def _walk(folder: Traversable, category: List[str], profile: Profile, out: Dict[str, PartDef]) -> None:

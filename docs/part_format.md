@@ -34,7 +34,7 @@ hollow_diameter = 0.0         # solid
 max_short_side = 2            # 1xN and 2xN: one slot per row, along the long side
 slots = "rows"
 [[underside]]
-slots = "none"                # wider (the base plates): none for now
+slots = "perimeter"           # wider (the base plates): slots on the sides, a hollow middle
 
 [socket_types]
 stud     = { mates = ["antistud"], dof = "fixed" }
@@ -52,8 +52,9 @@ clear = { name = "Clear", rgb = "#FFFFFF", clear = true, alpha = 0.5 }   # alpha
   steps, which swaps them).
 - `[[underside]]` rules: tried in order; the first whose `max_short_side` the body's footprint fits
   (omitted = any) names a pattern. Patterns are code (`profile.UNDERSIDE_PATTERNS`): `rows` (one
-  slot per row of cells along the long side, Y on a tie; a 1×N gets its middle line, a 1×1 a point)
-  and `none`. A system with another underside (Lego's tubes) adds a pattern when it's needed. No
+  slot per row of cells along the long side, Y on a tie; a 1×N gets its middle line, a 1×1 a point),
+  `perimeter` (four slots along the sides through the corner cells' centres, and a **hollow** one cell
+  inside them: studs fit anywhere there without gripping) and `none`. A system with another underside (Lego's tubes) adds a pattern when it's needed. No
   rules: no derived antistuds.
 - `cup` carries the joint limits: `cone` (any direction) and `slot` (in the slot's plane, either way).
 - Palette ids are stable keys in save files, ASCII `[a-z0-9_]`; `name` is for display. RGB values
@@ -155,7 +156,9 @@ Nanoblock (from the real parts):
 - **1×1**: a point at the cell centre. **1×N**: one slot along the middle line, first cell centre to
   last (it's hollow: a 1×N sits half-offset, or at an angle across two 1×1s). **2×N**: one slot per
   row along the long side (ribs block the middle); along Y when the sides are equal.
-- Wider (base plates): none for now.
+- Wider (base plates): four slots on the sides, through the corner cells' centres, and a hollow one
+  cell in from them where studs fit without gripping. A 10×10: four 9-cell slots and a 7×7 hollow;
+  studs between a side slot and the hollow are blocked (the ribs).
 - Same footprint, same underside: flats, single-stud bricks, the 1×3 with 2 studs, round 1×N.
   L = a 1×2 slot + a 1×1 point, T = a 1×3 slot + a 1×1 point (their bodies are split that way).
 - Explicit instead: the 2×2 fan has three points at its cell centres; the 2×2 round a centre point
@@ -167,7 +170,8 @@ Per **sub-cell** of the profile's `subdiv` grid. A box fills whole sub-cells. A 
 coefficients and the kept side), from the sub-cell's 8 corners. Two parts may share a sub-cell only if
 **neither is full and both are cut by the same plane on opposite sides** (two-colour slope pairs). A
 sub-cell entirely outside a rounded corner is free; one the curve crosses counts as full. Studs and
-round bodies are handled by the clash test, not occupancy.
+round bodies are handled by the clash test, not occupancy. A stud may be inside another part's body
+only through one of its slots or hollows, its base on or below their plane.
 
 ### Naming
 - Slopes: `slope_{footprint}_wedge_{run}x{rise}[_inverted]`, shown as "Slope 1×2 wedge 1×1

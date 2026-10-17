@@ -23,6 +23,8 @@ The widely quoted "4×4×5" includes the 2 mm stud; nominal is 4 × 4 × 3 (Lego
 | 1×N underside | hollow | one slot along the middle: studs fit anywhere along it |
 | 2×N underside | double ribs along the long axis; a 2×2 photo shows a centre bar with two round holes | wall → rib gap 2.15 ❓ (< stud Ø, measure at the bottom edge); ribs + gap 1.70; ribs recessed 0.75 from the bottom edge |
 
+| base plate underside (10×10, 20×20) | slots along the four sides, through the corner cells' centres; one cell in from them, a hollow where studs fit without gripping ✅ | a 10×10: four 9-cell slots, a 7×7 hollow |
+
 Underside numbers affect rendering only; where studs fit comes from the slot rules
 (`part_format.md` "Undersides"). Decision: render an antistud as a plain round hole of stud diameter;
 don't model the exact cavity unless a close-up view ever needs it.

@@ -357,9 +357,10 @@ class Renderer:
         gl.glDepthFunc(gl.GL_LESS)
         gl.glEnable(gl.GL_LIGHTING)
 
-    def render_ghost(self, profile, solids, studs, valid, stud_axes=None, slots=(), blocking=()):
+    def render_ghost(self, profile, solids, studs, valid, stud_axes=None, slots=(), blocking=(), hollows=()):
         # slots: the preview's antistud slots (world), drawn on its underside so the way its rows
-        # run is visible; blocking: (base, axis) of studs in the way, ringed in red
+        # run is visible; hollows: areas where studs fit without gripping (a base plate's middle),
+        # outlined lighter; blocking: (base, axis) of studs in the way, ringed in red
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
@@ -378,6 +379,8 @@ class Renderer:
         gl.glDisable(gl.GL_BLEND)
         if slots:
             self.draw_slots(slots, profile)
+        if hollows:
+            self.draw_hollows(hollows)
         if blocking:
             self.draw_blocking(blocking, profile)
 
@@ -401,6 +404,20 @@ class Renderer:
                 gl.glVertex3f(a.x, a.y, a.z)
                 gl.glVertex3f(b.x, b.y, b.z)
         gl.glEnd()
+        gl.glPopAttrib()
+
+    def draw_hollows(self, hollows):
+        # Outline of each hollow (corner, side end, other side end), thinner and lighter than slots
+        gl.glPushAttrib(gl.GL_ENABLE_BIT | gl.GL_CURRENT_BIT | gl.GL_LINE_BIT)
+        gl.glDisable(gl.GL_LIGHTING)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glLineWidth(1.5)
+        gl.glColor3f(0.45, 0.65, 1.0)
+        for p0, p1, p2, _ in hollows:
+            gl.glBegin(gl.GL_LINE_LOOP)
+            for p in (p0, p1, p1 + (p2 - p0), p2):
+                gl.glVertex3f(p.x, p.y, p.z)
+            gl.glEnd()
         gl.glPopAttrib()
 
     def draw_blocking(self, studs, profile):

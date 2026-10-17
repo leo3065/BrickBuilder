@@ -17,6 +17,7 @@ diamond blocks, other micro-bricks). Rule of thumb:
   setting**, not a system property — it doesn't belong in the profile.
 - Real Nanoblock part list (nanoblock.info names and block numbers, LDraw files, our part ids):
   `docs/nanoblock_parts.md`. Check new parts against it.
+- How turning is checked (moving set, contacts, null space, clash test, tolerances): `docs/turning.md`.
 - Design for profiles / part definitions / library / save v2: `docs/part_format.md`
   (TOML, cell units, derived studs, sockets with DOF, frames). Parametric part families
   are deliberately deferred — `params` key reserved only.

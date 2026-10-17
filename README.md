@@ -89,5 +89,7 @@ uv run pytest
 ## Documentation
 - [`docs/part_format.md`](docs/part_format.md): design and file formats for system profiles,
   part definitions, the part library and save files, plus the measured Nanoblock dimensions.
+- [`docs/turning.md`](docs/turning.md): how the Turn tool decides what turns, about which
+  axis, and when a turn is refused.
 - [`docs/nanoblock_parts.md`](docs/nanoblock_parts.md): the real Nanoblock part list from
   nanoblock.info, matched to LDraw files and BrickBuilder part ids.

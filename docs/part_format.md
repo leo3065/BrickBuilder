@@ -285,6 +285,7 @@ stud and T stays. A move is refused only when the selection is wedged between pa
 that it would tear apart (a real lock, e.g. a brace on both sides).
 
 ## Step B: the Turn tool and turned frames (decided ✅, built ✅)
+How the checks work as built, with tolerances: `docs/turning.md`.
 Scope: turning about Z, and placing on turned frames. Ball joints and tilted frames reuse it later;
 sliding along slots and general moving belong to "moving placed parts".
 - **Turn tool (T).** Press on a part (or the selection); the moving set comes from the selection

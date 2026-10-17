@@ -230,11 +230,30 @@ def yaw_degrees(rotation: glm.quat) -> float:
     return math.degrees(math.atan2(x.y, x.x))
 
 
+def turn_about(pivot: glm.vec3, axis: glm.vec3, degrees: float) -> glm.mat4:
+    """Turning about the line through `pivot` along `axis` (right-handed)."""
+    return (glm.translate(glm.mat4(1.0), pivot)
+            * glm.mat4_cast(glm.angleAxis(math.radians(degrees), glm.normalize(axis)))
+            * glm.translate(glm.mat4(1.0), -pivot))
+
+
 def turn_about_z(pivot: glm.vec3, degrees: float) -> glm.mat4:
     """Turning about the vertical axis through `pivot`."""
-    return (glm.translate(glm.mat4(1.0), pivot)
-            * glm.mat4_cast(glm.angleAxis(math.radians(degrees), glm.vec3(0, 0, 1)))
-            * glm.translate(glm.mat4(1.0), -pivot))
+    return turn_about(pivot, glm.vec3(0, 0, 1), degrees)
+
+
+def plane_basis(axis: glm.vec3) -> Tuple[glm.vec3, glm.vec3]:
+    """Two unit vectors (u, v) across `axis`, with u x v = axis. For +Z: X and Y."""
+    n = glm.normalize(axis)
+    ref = glm.vec3(1, 0, 0) if abs(n.x) < 0.9 else glm.vec3(0, 1, 0)
+    u = glm.normalize(ref - n * glm.dot(ref, n))
+    return u, glm.cross(n, u)
+
+
+def angle_about(axis: glm.vec3, a: glm.vec3, b: glm.vec3) -> float:
+    """Signed angle (degrees) from a to b seen along `axis` (both projected across it)."""
+    u, v = plane_basis(axis)
+    return math.degrees(math.atan2(glm.dot(b, v), glm.dot(b, u)) - math.atan2(glm.dot(a, v), glm.dot(a, u)))
 
 
 def to_parent_grid(profile: Profile, origin: glm.vec3, rotation: glm.quat,

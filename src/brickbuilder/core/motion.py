@@ -1,4 +1,4 @@
-"""What a turn moves and how it may turn (step B: turning about Z).
+"""What a turn moves and how it may turn: about the axis its holding studs share.
 
 Moving set: the selection always moves, plus whatever hangs only off it; the rest of its connected
 component stays if it's pinned (grounded: a part on the root grid's layer 0), otherwise the
@@ -6,8 +6,9 @@ largest piece of the rest stays (docs/part_format.md, "Pins").
 
 Free motion: the contacts between the moving and the staying parts, linearised. Each stud in a
 slot is an error that must stay zero (the stud's distance from the slot's line; both directions
-for a point antistud). The moving set's motion is (angle, x, y); the motions that keep every
-error at zero are the null space of the errors' Jacobian. A turn about a contact stud that's in
+for a point antistud), measured in the plane across the studs' shared axis (vertical for top
+studs, horizontal for a side stud). The moving set's motion in that plane is (angle, x, y); the
+motions that keep every error at zero are the null space of the errors' Jacobian. A turn about a contact stud that's in
 that null space is the turn the tool offers (it keeps the contact exactly, not just to first
 order). No null space with a turn in it: locked.
 """
@@ -17,7 +18,8 @@ from typing import List, Optional, Set
 import glm
 import numpy as np
 
-from brickbuilder.core.connections import Contact, contacts_between
+from brickbuilder.core.connections import AXIS_TOLERANCE, Contact, contacts_between
+from brickbuilder.core.model import plane_basis
 
 # Errors are in mm, from float32 positions: a turned frame puts studs ~1e-6 mm off, so anything
 # below this counts as zero (well under connections.TOLERANCE)
@@ -29,7 +31,8 @@ class TurnPlan:
     kind: str                       # "free" (not held), "turn" (about pivot) or "locked"
     moving: Set[int]
     fixed: Set[int] = field(default_factory=set)
-    pivot: Optional[glm.vec3] = None  # a point on the vertical axis to turn about ("turn")
+    pivot: Optional[glm.vec3] = None  # a point on the line to turn about ("turn")
+    axis: glm.vec3 = field(default_factory=lambda: glm.vec3(0, 0, 1))  # its direction
     reason: str = ""
     contacts: List[Contact] = field(default_factory=list)
 
@@ -70,18 +73,21 @@ def moving_set(model, selection) -> (Set[int], Set[int]):
     return component - fixed, fixed
 
 
-def _jacobian_rows(contact: Contact, centre: glm.vec3) -> List[List[float]]:
-    """Rows d(error)/d(angle, x, y) for one contact, turning about `centre`. The stud and the
-    slot move relative to each other, so it doesn't matter which one is on the moving side."""
-    r = contact.stud - centre
-    j = np.array([[-r.y, 1.0, 0.0],   # d(stud.x)
-                  [r.x, 0.0, 1.0]])   # d(stud.y)
+def _jacobian_rows(contact: Contact, centre: glm.vec3, basis) -> List[List[float]]:
+    """Rows d(error)/d(angle, x, y) for one contact, turning about `centre` in the plane spanned by
+    `basis` (u, v). The stud and the slot move relative to each other, so it doesn't matter which
+    one is on the moving side."""
+    bu, bv = basis
+    d = contact.stud - centre
+    rx, ry = glm.dot(d, bu), glm.dot(d, bv)
+    j = np.array([[-ry, 1.0, 0.0],    # d(stud.u)
+                  [rx, 0.0, 1.0]])    # d(stud.v)
     a, b = contact.slot
-    u = glm.vec2(b.x - a.x, b.y - a.y)
-    if glm.length(u) < 1e-9:
+    s = glm.vec2(glm.dot(b - a, bu), glm.dot(b - a, bv))
+    if glm.length(s) < 1e-9:
         return j.tolist()             # a point antistud: both directions
-    u = glm.normalize(u)
-    n = np.array([-u.y, u.x])         # across the slot
+    s = glm.normalize(s)
+    n = np.array([-s.y, s.x])         # across the slot
     return [list(n @ j)]
 
 
@@ -96,23 +102,32 @@ def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
     contacts = contacts_between(model.profile, [model.parts[p] for p in moving], [model.parts[p] for p in fixed])
     if not contacts:  # connected through the selection but no contact between the two sides
         return TurnPlan("free", moving, fixed, reason="not held by anything else")
+    axis = contacts[0].axis
+    if any(abs(glm.dot(c.axis, axis)) < 1 - AXIS_TOLERANCE for c in contacts):
+        return TurnPlan("locked", moving, fixed, reason="held by studs pointing different ways", contacts=contacts)
+    basis = plane_basis(axis)
+    bu, bv = basis
     centre = contacts[0].stud
-    a = np.array([row for c in contacts for row in _jacobian_rows(c, centre)])
+    a = np.array([row for c in contacts for row in _jacobian_rows(c, centre, basis)])
     s = np.linalg.svd(a, compute_uv=False)
     rank = int(np.sum(s > EPS))
     if rank >= 3:
         return TurnPlan("locked", moving, fixed, reason="held by studs on different axes", contacts=contacts)
 
-    def turns_freely_about(p: glm.vec3) -> bool:
-        r = p - centre
-        q = np.array([1.0, r.y, -r.x])  # turning about p: velocity at the centre = -ez x (p - centre)
+    def in_plane(p: glm.vec3):
+        d = p - centre
+        return round(glm.dot(d, bu), 4), round(glm.dot(d, bv), 4)
+
+    def turns_freely_about(x: float, y: float) -> bool:
+        q = np.array([1.0, y, -x])  # turning about (x, y): velocity at the centre = -n x (p - centre)
         return float(np.linalg.norm(a @ q)) < EPS * float(np.linalg.norm(q))
 
-    studs = sorted({(round(c.stud.x, 4), round(c.stud.y, 4)) for c in contacts},
-                   key=lambda xy: (xy[0] - hint.x) ** 2 + (xy[1] - hint.y) ** 2 if hint else 0.0)
+    hint_xy = in_plane(hint) if hint is not None else None
+    studs = sorted({in_plane(c.stud) for c in contacts},
+                   key=lambda xy: (xy[0] - hint_xy[0]) ** 2 + (xy[1] - hint_xy[1]) ** 2 if hint_xy else 0.0)
     for x, y in studs:
-        p = glm.vec3(x, y, centre.z)
-        if turns_freely_about(p):
-            return TurnPlan("turn", moving, fixed, pivot=p, contacts=contacts)
+        if turns_freely_about(x, y):
+            return TurnPlan("turn", moving, fixed, pivot=centre + bu * x + bv * y, axis=glm.vec3(axis),
+                            contacts=contacts)
     return TurnPlan("locked", moving, fixed, reason="the contacts only allow sliding, not turning",
                     contacts=contacts)

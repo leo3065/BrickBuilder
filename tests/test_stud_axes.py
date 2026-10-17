@@ -46,3 +46,35 @@ def test_contacts_need_matching_axes(model):
         slot = SimpleNamespace(id=2, antistuds=[(glm.vec3(2, 2, 1.5), glm.vec3(2, 6, 1.5))],
                                antistud_axes=[slot_axis])
         assert len(list(iter_contacts(model.profile, [stud], [slot]))) == expected
+
+
+def side_frame(model, stud: glm.vec3, axis: glm.vec3):
+    """A frame whose Z is `axis` and whose Y is world up, with its origin on the stud: a grid
+    for parts built on a side stud (cell (0, 0)'s centre on the stud, layer 0 against the face)."""
+    from brickbuilder.core.model import decompose
+    z = glm.normalize(axis)
+    y = glm.vec3(0, 0, 1)
+    x = glm.cross(y, z)
+    m = glm.mat4(glm.vec4(x, 0), glm.vec4(y, 0), glm.vec4(z, 0), glm.vec4(stud, 1))
+    return model.add_frame(0, *decompose(m))
+
+
+def test_part_on_a_side_stud_turns_about_it(model):
+    from brickbuilder.core.history import History
+    from brickbuilder.core.model import turn_about
+    from brickbuilder.core.motion import plan_turn
+    side = model.add_part(part_from_dict("t:side", "", SIDE, model.profile.underside), (0, 0, 0), 0, "red")
+    stud, axis = side.studs[-1], side.stud_axes[-1]
+    frame = side_frame(model, stud, axis)
+    brick = model.add_part(model.library["nanoblock:brick_1x2"], (0, 0, 0), 0, "white", frame=frame.id)
+    assert brick is not None and model.connections()[brick.id] == {side.id}
+
+    plan = plan_turn(model, {brick.id})
+    assert plan.kind == "turn" and abs(abs(glm.dot(plan.axis, glm.vec3(1, 0, 0))) - 1) < 1e-6
+    assert glm.distance(plan.pivot, stud) < 1e-3
+
+    h = History(model)
+    assert h.move_parts({brick.id}, turn_about(plan.pivot, plan.axis, 30)) is None
+    assert model.connections()[brick.id] == {side.id}     # still on the stud
+    moved = model.parts[brick.id]
+    assert moved.frame == frame.id                         # its own grid turned, not merged

@@ -10,7 +10,7 @@ from brickbuilder.core.camera import Camera
 from brickbuilder.core.connections import groups
 from brickbuilder.core.history import History
 from brickbuilder.core.model import (Model, Sub, anchor_cells, decompose, default_anchor_index, origin_for_anchor,
-                                     placement_target, turn_about_z, yaw_degrees)
+                                     angle_about, placement_target, plane_basis, turn_about, turn_about_z)
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
@@ -118,7 +118,7 @@ class Viewport(QOpenGLWidget):
                              collided=[self.model.parts[pid].edges for pid in self.model.collisions()]
                              if self.highlight_collisions else (),
                              turning=moving,
-                             pivot=self.turning["pivot"] if self.turning else None,
+                             pivot=(self.turning["pivot"], self.turning["axis"]) if self.turning else None,
                              grid_matrix=self.model.frame_matrix(self.working_frame) if self.working_frame else None)
 
     def set_tool(self, tool: Tool):
@@ -318,7 +318,7 @@ class Viewport(QOpenGLWidget):
         if plan is None:
             self.edited.emit()
             return False
-        return self._commit_turn(plan.moving, turn_about_z(pivot, degrees))
+        return self._commit_turn(plan.moving, turn_about(pivot, plan.axis, degrees))
 
     @staticmethod
     def _add_angle(turns: int, angle: float, degrees: float):
@@ -394,17 +394,21 @@ class Viewport(QOpenGLWidget):
         if held is not None:
             mine, other = ((held.stud_part, held.slot_part) if held.stud_part in plan.moving
                            else (held.slot_part, held.stud_part))
-            base = glm.quat_cast(glm.mat3(self.model.frame_matrix(self.model.parts[other].frame)))
+            base = glm.mat3(self.model.frame_matrix(self.model.parts[other].frame))
         else:
             mine = min(plan.moving)
-            base = glm.quat()
-        angle = yaw_degrees(glm.inverse(base) * glm.quat_cast(glm.mat3(self.model.frame_matrix(self.model.parts[mine].frame))))
+            base = glm.mat3(1.0)
+        own = glm.mat3(self.model.frame_matrix(self.model.parts[mine].frame))
+
+        def across(m):  # the grid axis of `m` that lies most across the turning axis
+            return max((m[0], m[1], m[2]), key=lambda v: glm.length(glm.cross(v, plan.axis)))
+        angle = angle_about(plan.axis, across(base), across(own))
         delta = round(angle / 90) * 90 - angle
         if abs(delta) < 1e-4:
             self.notice = "already lined up with the grid"
             self.edited.emit()
             return False
-        return self._commit_turn(plan.moving, turn_about_z(pivot, delta))
+        return self._commit_turn(plan.moving, turn_about(pivot, plan.axis, delta))
 
     def _commit_turn(self, moving, transform) -> bool:
         reason = self.history.move_parts(moving, transform)
@@ -413,14 +417,16 @@ class Viewport(QOpenGLWidget):
         self.edited.emit()
         return reason is None
 
-    def _ground_angle(self, pos, pivot: glm.vec3) -> Optional[float]:
-        """Angle (degrees) of the point under the cursor around the pivot, on its horizontal plane."""
+    def _turn_angle(self, pos, pivot: glm.vec3, axis: glm.vec3) -> Optional[float]:
+        """Angle (degrees) of the point under the cursor around the pivot, on the plane across the
+        turning axis."""
         ray = picking.get_mouse_ray(pos.x(), pos.y(), self.width(), self.height(), self.camera)
-        t = picking.intersect_plane(ray, glm.vec3(0, 0, 1), pivot)
+        t = picking.intersect_plane(ray, axis, pivot)
         if t is None:
             return None
         p = ray.origin + ray.direction * t - pivot
-        return math.degrees(math.atan2(p.y, p.x))
+        u, v = plane_basis(axis)
+        return math.degrees(math.atan2(glm.dot(p, v), glm.dot(p, u)))
 
     def _start_turn(self, event: QMouseEvent):
         hit, _, point = picking.intersect_model(
@@ -435,8 +441,8 @@ class Viewport(QOpenGLWidget):
             self.selection = self._unit(hit.id, bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
         plan, pivot = self._turn_plan(point)
         if plan is not None:
-            start = self._ground_angle(event.position(), pivot)
-            self.turning = {"moving": plan.moving, "pivot": pivot, "last": start or 0.0,
+            start = self._turn_angle(event.position(), pivot, plan.axis)
+            self.turning = {"moving": plan.moving, "pivot": pivot, "axis": plan.axis, "last": start or 0.0,
                             "raw": 0.0, "angle": 0.0, "transform": glm.mat4(1.0), "valid": True}
             self.notice = "turning 0°"
         self.update()
@@ -444,7 +450,7 @@ class Viewport(QOpenGLWidget):
 
     def _drag_turn(self, event: QMouseEvent):
         t = self.turning
-        a = self._ground_angle(event.position(), t["pivot"])
+        a = self._turn_angle(event.position(), t["pivot"], t["axis"])
         if a is None:
             return
         step = (a - t["last"] + 180) % 360 - 180  # unwrapped, so it can go round more than once
@@ -454,7 +460,7 @@ class Viewport(QOpenGLWidget):
         angle = t["raw"] if free else round(t["raw"] / self.rotation_snap) * self.rotation_snap
         if angle != t["angle"]:
             t["angle"] = angle
-            t["transform"] = turn_about_z(t["pivot"], angle)
+            t["transform"] = turn_about(t["pivot"], t["axis"], angle)
             t["valid"] = self.model.moved_overlaps(t["moving"], t["transform"]) is None
             self.notice = f"turning {angle:.4g}°" + ("" if t["valid"] else " (overlaps)")
             self.edited.emit()
@@ -485,16 +491,21 @@ class Viewport(QOpenGLWidget):
             counts[f] = counts.get(f, 0) + 1
         return min(counts, key=lambda f: (-counts[f], f))
 
-    def _grid_axes(self, frame: int):
-        """Grid axes (as (x, y) steps) of a frame that best match screen right and screen up from
-        the current view: right gets the closer one (X on a tie), up the other."""
-        frame_yaw = yaw_degrees(glm.quat_cast(glm.mat3(self.model.frame_matrix(frame))))
-        yaw = self.camera.yaw - math.radians(frame_yaw)  # the camera's yaw seen from that grid
-        right = glm.vec2(-math.sin(yaw), math.cos(yaw))
-        up = glm.vec2(-math.cos(yaw), -math.sin(yaw))
-        if abs(right.x) >= abs(right.y):
-            return (int(math.copysign(1, right.x)), 0), (0, int(math.copysign(1, up.y)))
-        return (0, int(math.copysign(1, right.y))), (int(math.copysign(1, up.x)), 0)
+    def _grid_axes(self, matrix: glm.mat4):
+        """Grid X / Y axes (as (x, y) steps) of a grid (grid space -> world `matrix`) that best match
+        screen right and screen up from the current view: right gets the closer one (X on a tie),
+        up the other. "Up" also counts "away from the viewer", so on a grid seen from above or the
+        side, Up moves away."""
+        view = self.camera.get_view_matrix()
+        right = glm.vec3(view[0][0], view[1][0], view[2][0])
+        up = glm.vec3(view[0][1], view[1][1], view[2][1])
+        forward = -glm.vec3(view[0][2], view[1][2], view[2][2])
+        x = glm.vec3(matrix * glm.vec4(1, 0, 0, 0))
+        y = glm.vec3(matrix * glm.vec4(0, 1, 0, 0))
+        away = up + forward
+        if abs(glm.dot(x, right)) >= abs(glm.dot(y, right)):
+            return (int(math.copysign(1, glm.dot(x, right))), 0), (0, int(math.copysign(1, glm.dot(y, away))))
+        return (0, int(math.copysign(1, glm.dot(y, right)))), (int(math.copysign(1, glm.dot(x, away))), 0)
 
     def nudge_keys(self, screen_dx: int, screen_dy: int):
         """Arrow keys: move the selection (Select / Turn tool) or nudge the placement preview."""
@@ -510,7 +521,7 @@ class Viewport(QOpenGLWidget):
             return False
         frame = self._home_frame(self.selection)
         nx, ny, nz = self.profile.subdiv
-        right, up = self._grid_axes(frame)
+        right, up = self._grid_axes(self.model.frame_matrix(frame))
         dx = (right[0] * screen_dx + up[0] * screen_dy) * (1 if self.half_snap else nx)
         dy = (right[1] * screen_dx + up[1] * screen_dy) * (1 if self.half_snap else ny)
         offset = self.profile.sub_to_world((dx, dy, layers * nz)) - self.profile.sub_to_world((0, 0, 0))
@@ -808,7 +819,7 @@ class Viewport(QOpenGLWidget):
     def nudge_ghost(self, screen_dx: int, screen_dy: int):
         """Move the preview one sub-cell (half a cell) along the axis of its grid that best matches
         the screen direction (right = +screen_dx, up = +screen_dy) from the current view."""
-        right_axis, up_axis = self._grid_axes(self.ghost_frame if self.ghost_pos is not None else 0)
+        right_axis, up_axis = self._grid_axes(self.ghost_matrix() if self.ghost_pos is not None else glm.mat4(1.0))
         dx = right_axis[0] * screen_dx + up_axis[0] * screen_dy
         dy = right_axis[1] * screen_dx + up_axis[1] * screen_dy
         self.ghost_nudge = (self.ghost_nudge[0] + dx, self.ghost_nudge[1] + dy)

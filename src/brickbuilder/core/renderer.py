@@ -3,6 +3,7 @@ import glm
 import numpy as np
 import math
 from brickbuilder.core.geometry import face_normal
+from brickbuilder.core.model import plane_basis
 
 STUD_SEGMENTS = 16
 
@@ -35,7 +36,7 @@ class Renderer:
         # collided: the same for parts overlapping another frame's parts, in red
         # ghost: (solids, stud positions, valid) or None; solids are lists of world-space faces
         # turning: (part ids, world transform, valid) while turning parts: drawn moved, red if
-        # blocked; pivot: a world point whose vertical axis gets a marker; grid_matrix: draw the
+        # blocked; pivot: (point, axis) of the turn, drawn as a marker; grid_matrix: draw the
         # grid of that frame (grid space -> world) instead of the root grid (the working frame)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
@@ -87,7 +88,7 @@ class Renderer:
         if ghost:
             self.render_ghost(profile, *ghost)
         if pivot is not None:
-            self.draw_pivot(pivot, profile)
+            self.draw_pivot(*pivot, profile)
 
         if hovered_edges:
             # What a click would select (a whole group), in a soft blue
@@ -374,23 +375,27 @@ class Renderer:
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDisable(gl.GL_BLEND)
 
-    def draw_pivot(self, pivot, profile):
-        # A vertical line through the pivot and a ring around it, seen through everything
+    def draw_pivot(self, pivot, axis, profile):
+        # The turning axis through the pivot and a ring around it, seen through everything
         gl.glPushAttrib(gl.GL_ENABLE_BIT | gl.GL_CURRENT_BIT | gl.GL_LINE_BIT)
         gl.glDisable(gl.GL_LIGHTING)
         gl.glDisable(gl.GL_DEPTH_TEST)
         gl.glLineWidth(2.0)
         gl.glColor3f(0.2, 0.9, 1.0)
+        n = glm.normalize(axis)
         h = profile.cell.z
+        a, b = pivot - n * (2 * h), pivot + n * (3 * h)
         gl.glBegin(gl.GL_LINES)
-        gl.glVertex3f(pivot.x, pivot.y, pivot.z - 2 * h)
-        gl.glVertex3f(pivot.x, pivot.y, pivot.z + 3 * h)
+        gl.glVertex3f(a.x, a.y, a.z)
+        gl.glVertex3f(b.x, b.y, b.z)
         gl.glEnd()
+        u, v = plane_basis(n)
         r = profile.cell.x * 0.5
         gl.glBegin(gl.GL_LINE_LOOP)
         for i in range(32):
-            a = 2 * math.pi * i / 32
-            gl.glVertex3f(pivot.x + r * math.cos(a), pivot.y + r * math.sin(a), pivot.z)
+            t = 2 * math.pi * i / 32
+            p = pivot + (u * math.cos(t) + v * math.sin(t)) * r
+            gl.glVertex3f(p.x, p.y, p.z)
         gl.glEnd()
         gl.glPopAttrib()
 

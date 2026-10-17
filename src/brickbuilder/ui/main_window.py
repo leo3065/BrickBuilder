@@ -152,8 +152,13 @@ class MainWindow(QMainWindow):
         realign_action = QAction("Realign Selection", self)
         realign_action.setShortcut("Shift+R")
         realign_action.setToolTip("Turn the selection back onto the grid it's held on (nearest quarter turn)")
-        realign_action.triggered.connect(self.viewport.realign_selection)
+        realign_action.triggered.connect(lambda: self.viewport.realign_selection())
         edit_menu.addAction(realign_action)
+        reset_joint_action = QAction("Reset Joint", self)
+        reset_joint_action.setShortcut("Ctrl+Shift+R")
+        reset_joint_action.setToolTip("Straighten a ball joint and undo its roll: back the way it was placed")
+        reset_joint_action.triggered.connect(self.viewport.reset_joint)
+        edit_menu.addAction(reset_joint_action)
 
         edit_menu.addSeparator()
         group_action = QAction("Group", self)
@@ -351,7 +356,7 @@ class MainWindow(QMainWindow):
         Tool.SELECT: "drag a selected part: move; arrows / PgUp / PgDown: nudge; Ctrl+G: group; "
                      "double-click: into a group, Alt: one part",
         Tool.TURN: "drag: turn about the stud (on a ball joint: point it), Shift: free; Ctrl+drag: slide "
-                   "(on a joint: roll); [ / ]: a step; Shift+R: realign / straighten",
+                   "(on a joint: roll); [ / ]: a step; Shift+R: realign / straighten (Ctrl: and unroll)",
         Tool.PAINT: "click: paint with the current colour",
         Tool.ERASE: "click: remove",
     }
@@ -496,7 +501,7 @@ class MainWindow(QMainWindow):
           cells; Shift: free). [ / ] turn the selection a step, Shift+R turns it back onto its grid.<br>
           On a ball joint: drag points the part at the cursor (tilt and direction in 7.5° steps,<br>
           inside the cup's 30° cone or its 90° slot), Ctrl+drag rolls, [ / ] roll a step, Shift+R<br>
-          straightens. Two joints on one line turn like a hinge.<br>
+          straightens, Ctrl+Shift+R also undoes the roll. Two joints on one line turn like a hinge.<br>
           Locked parts say why in the status bar; red = it would overlap.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>

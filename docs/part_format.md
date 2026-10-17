@@ -458,7 +458,7 @@ for its cup) puts it on straight: pivots together, arm into the cup, tops the sa
 pins its centre, so one joint gives turning any way about it (posing), two on a line a hinge, three
 off a line nothing. Posing one joint: drag points the part at the cursor (on the plane facing the
 camera through the joint), snapped as tilt θ and direction φ in 7.5° steps, inside the cone or
-else in the slot; Ctrl+drag rolls; [ / ] roll a step; Shift+R straightens, keeping the roll. Turns
+else in the slot; Ctrl+drag rolls; [ / ] roll a step; Shift+R straightens, keeping the roll; Ctrl+Shift+R also undoes the roll. Turns
 that would bend a joint past its limits are refused.
 
 Parts: nanoblock.info JO-C (cup / socket) and JO-D (ball), each on a 1×2 or a 2×2, with the cup or

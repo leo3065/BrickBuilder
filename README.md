@@ -96,7 +96,7 @@ Click to place the part chosen in the Parts list; Ctrl + click removes a part.
 - **[ / ]** turn the selection a step; **Shift+R** turns it back onto its grid.
 - **On a ball joint:** drag points the part at the cursor (tilt and direction in 7.5° steps,
   inside the cup's cone or its slot), **Ctrl+drag** rolls it, **[ / ]** roll a step, **Shift+R**
-  straightens. Two joints on one line turn like a hinge.
+  straightens, **Ctrl+Shift+R** also undoes the roll. Two joints on one line turn like a hinge.
 - If the contacts lock it (studs on different axes, two studs in one slot), the status bar says
   why; a red preview means it would overlap something or bend a joint too far.
 

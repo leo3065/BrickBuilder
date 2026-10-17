@@ -379,7 +379,12 @@ class Viewport(QOpenGLWidget):
         self.update()
         self.edited.emit()
 
-    def realign_selection(self) -> bool:
+    def reset_joint(self) -> bool:
+        """Ctrl+Shift+R: like Shift+R, but a joint also loses its roll: back the way it was placed
+        (straight, tops the same way)."""
+        return self.realign_selection(reset_roll=True)
+
+    def realign_selection(self, reset_roll: bool = False) -> bool:
         """Shift+R: turn the selection to the nearest quarter turn of the grid it's held on (the
         root grid if it isn't held), which puts it back on that grid. In the Place tool: the
         preview back onto its grid."""
@@ -398,12 +403,25 @@ class Viewport(QOpenGLWidget):
         if plan is None:
             self.edited.emit()
             return False
-        if plan.kind == "pose":  # straighten the joint (the roll stays)
+        if plan.kind == "pose":  # straighten the joint (the roll stays, unless reset_roll)
             j = plan.joint
-            q = (min_rotation(j.ball_axis, -j.cup_axis) if j.ball_part in plan.moving
-                 else min_rotation(j.cup_axis, -j.ball_axis))
+            ball_moves = j.ball_part in plan.moving
+            if reset_roll:
+                # Turn the moving part's arm (or cup) straight and its up onto the other part's up
+                def up(pid):
+                    return glm.vec3(self.model.frame_matrix(self.model.parts[pid].frame) * glm.vec4(0, 0, 1, 0))
+                mine, other = (j.ball_part, j.cup_part) if ball_moves else (j.cup_part, j.ball_part)
+                axis, target = (j.ball_axis, -j.cup_axis) if ball_moves else (j.cup_axis, -j.ball_axis)
+
+                def basis(x, z):
+                    x = glm.normalize(x)
+                    z = glm.normalize(z - x * glm.dot(z, x))
+                    return glm.mat3(x, z, glm.cross(x, z))
+                q = glm.quat_cast(basis(target, up(other)) * glm.transpose(basis(axis, up(mine))))
+            else:
+                q = min_rotation(j.ball_axis, -j.cup_axis) if ball_moves else min_rotation(j.cup_axis, -j.ball_axis)
             if glm.length(glm.vec3(q.x, q.y, q.z)) < 1e-6:
-                self.notice = "the joint is already straight"
+                self.notice = "the joint is already " + ("as placed" if reset_roll else "straight")
                 self.edited.emit()
                 return False
             return self._commit_turn(plan.moving, self._about(pivot, q))

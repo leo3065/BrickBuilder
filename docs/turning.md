@@ -81,7 +81,8 @@ from it, a cup part's body toward it). The arm direction relative to the cup is 
 (from straight) and direction φ (around the cup's axis, from its slot), snapped to `rotation_snap`
 (Shift: free) and clamped by `motion.clamp_arm`: inside the cone, else in the slot's plane (φ = 0 or
 180) up to the slot's range. The turn is the smallest rotation that gets there, so the roll stays.
-Ctrl+drag rolls about the arm (`_drag_roll`); `[ / ]` roll a step; Shift+R straightens. Any turn
+Ctrl+drag rolls about the arm (`_drag_roll`); `[ / ]` roll a step; Shift+R straightens; Ctrl+Shift+R
+also undoes the roll (`reset_joint`: back the way it was placed, tops the same way). Any turn
 that moves a joint (posing, rolling, a hinge, a turn elsewhere that drags a joint along) must keep
 every joint within its limits (`Model.joints_within_limits`), else it's refused.
 

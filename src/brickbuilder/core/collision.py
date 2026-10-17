@@ -131,6 +131,31 @@ def make_shape(solids, studs, stud_axes, slots, slot_axes, stud_radius: float, s
                  tuple(hollows))
 
 
+def _move_hull(h: Hull, rot: np.ndarray, shift: np.ndarray) -> Hull:
+    verts, normals, edges = h
+    return verts @ rot + shift, normals @ rot, edges @ rot
+
+
+def transform_shape(s: Shape, m: glm.mat4) -> Shape:
+    """A shape moved by a rigid transform: the hulls' vertices, normals and edge directions are just
+    rotated and shifted, so nothing is rebuilt (building hulls is the slow part)."""
+    r3 = glm.mat3(m)
+    rot = np.array([[r3[i][j] for j in range(3)] for i in range(3)])  # rows = columns of r3: v @ rot = r3 * v
+    shift = np.array([m[3][0], m[3][1], m[3][2]])
+
+    def pt(p):
+        return glm.vec3(m * glm.vec4(p, 1.0))
+    hulls = [_move_hull(h, rot, shift) for h in s.hulls]
+    studs = [(pt(b), r3 * a, _move_hull(h, rot, shift)) for b, a, h in s.studs]
+    verts = [h[0] for h in hulls] + [h[0] for _, _, h in studs]
+    allv = np.vstack(verts)
+    lo, hi = allv.min(axis=0), allv.max(axis=0)
+    return Shape(hulls, studs, [(pt(a), pt(b), r3 * n) for a, b, n in s.slots],
+                 (glm.vec3(*map(float, lo)), glm.vec3(*map(float, hi))), s.joint_hulls,
+                 tuple((k, pt(p), r3 * a, r3 * sl) for k, p, a, sl in s.joints),
+                 tuple((pt(p0), pt(p1), pt(p2), r3 * n) for p0, p1, p2, n in s.hollows))
+
+
 def _joined(a: Shape, b: Shape) -> bool:
     """A ball of one on a cup of the other (centres together): their joint bodies may overlap."""
     for x, y in ((a, b), (b, a)):

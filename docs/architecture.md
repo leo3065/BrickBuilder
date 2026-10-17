@@ -112,6 +112,9 @@ History      # every UI edit as undoable commands (lists of ops)
   target_frame)`), arrows / PgUp / PgDown (`nudge_selection`, never changing frames).
 - **Clash test**: `collision.clash` via `Model.part_shape` (cached). Used by previews, by every
   `_try_run` commit, by `can_place` and by `Model.collisions()` (View > Highlight Colliding Parts).
+  Shapes are built once per part type and turn (`Model.placed_shape`) and moved into place with
+  `collision.transform_shape` (no hulls rebuilt); `Model.near` (a spatial index of the parts' boxes,
+  8 mm buckets, kept in step by add/remove) limits each query to nearby parts.
 - **Connections**: `Model.connections()` (cached until the next change) from
   `connections.iter_contacts` and `joint_contacts`.
 - **Camera**: `Camera.set_view` / `fit` (`camera.VIEWS`), View > Camera keys, gizmo clicks
@@ -133,7 +136,11 @@ History      # every UI edit as undoable commands (lists of ops)
 - PyOpenGL's per-call error checking is off (`brickbuilder/__init__.py`; `BRICKBUILDER_GL_DEBUG=1` turns
   it back on): it was ~90% of a frame's CPU time. Measured CPU time per frame: 1000 parts ≈ 2.5 ms,
   4000 ≈ 11.5 ms (20% clear); the first draw compiles lists, ≈ 250 ms per 1000 parts.
-  Picking iterates every part (1000 parts ≈ 1 ms). VBOs/shaders are the longer-term plan.
+  Picking iterates every part (1000 parts ≈ 1 ms). At 4000 parts a frame takes ≈ 48 ms wall time:
+  the GPU drawing the display lists, not Python (VBOs are on the todo list).
+- Measured editing costs (on top of a 1000-part model): placement preview per mouse move ≈ 3 ms;
+  turning an arm carrying 200 parts ≈ 15 ms per drag step, 40 ms to commit (800 parts: 47 / 170 ms);
+  the connection graph ≈ 22 ms per 1000 parts after each edit; loading ≈ 110 ms per 1000 parts. VBOs/shaders are the longer-term plan.
 
 ## Saving
 - `Model.to_dict` / `from_dict` (format: `part_format.md` "Save format"). Bad files raise

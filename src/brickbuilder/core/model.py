@@ -357,6 +357,9 @@ class Model:
         self._links = None  # cached connection graph, dropped on any add/remove
         self._collisions: Optional[Set[int]] = None  # cached collisions(), dropped likewise
         self._shapes: Dict[int, collision.Shape] = {}  # part id -> its clash-test shape, built on demand
+        # A spatial index of the parts' boxes (widened by the stud height): bucket -> part ids, so a
+        # clash query only looks at nearby parts
+        self._index: Dict[Tuple[int, int, int], Set[int]] = {}
 
     # --- frames ----------------------------------------------------------------------------
 
@@ -498,8 +501,52 @@ class Model:
         outside the new part's slots, or the new part's stud outside another's, blocks)."""
         if not self._fits(frame, footprint_regions(self.profile, part, pos, turns)):
             return False
-        geo = self.placement_geometry(part, pos, turns, self.frame_matrix(frame))
-        return not self.clashes(self.shape(geo))
+        return not self.clashes(self.placed_shape(part, pos, turns, self.frame_matrix(frame)))
+
+    INDEX_SIZE = 8.0  # mm: the spatial index's bucket size (two Nanoblock cells)
+
+    def _buckets(self, box):
+        s = self.INDEX_SIZE
+        lo = [math.floor(box[0][k] / s) for k in range(3)]
+        hi = [math.floor(box[1][k] / s) for k in range(3)]
+        for i in range(lo[0], hi[0] + 1):
+            for j in range(lo[1], hi[1] + 1):
+                for k in range(lo[2], hi[2] + 1):
+                    yield i, j, k
+
+    def _index_box(self, placed) -> Tuple[glm.vec3, glm.vec3]:
+        h = self.profile.stud.height
+        return placed.box[0] - glm.vec3(h), placed.box[1] + glm.vec3(h)
+
+    def _index_add(self, placed) -> None:
+        for key in self._buckets(self._index_box(placed)):
+            self._index.setdefault(key, set()).add(placed.id)
+
+    def _index_remove(self, placed) -> None:
+        for key in self._buckets(self._index_box(placed)):
+            ids = self._index.get(key)
+            if ids is not None:
+                ids.discard(placed.id)
+                if not ids:
+                    del self._index[key]
+
+    def near(self, box) -> Set[int]:
+        """Parts whose (stud-widened) box may touch `box`, from the spatial index."""
+        out: Set[int] = set()
+        for key in self._buckets(box):
+            out |= self._index.get(key, set())
+        return out
+
+    _LOCAL_SHAPES: Dict[Tuple[str, Tuple[int, int, int], int], collision.Shape] = {}
+
+    def placed_shape(self, part: PartDef, pos: Sub, turns: int, matrix: glm.mat4) -> collision.Shape:
+        """The clash-test shape of a part at pos / turns on a grid placed by `matrix`: built once per
+        part type and turn (at pos 0), then moved into place."""
+        key = (part.id, self.profile.subdiv, turns % 4)
+        if key not in self._LOCAL_SHAPES:
+            self._LOCAL_SHAPES[key] = self.shape(self.placement_geometry(part, (0, 0, 0), turns, glm.mat4(1.0)))
+        offset = self.profile.sub_to_world(pos) - self.profile.sub_to_world((0, 0, 0))
+        return collision.transform_shape(self._LOCAL_SHAPES[key], matrix * glm.translate(glm.mat4(1.0), offset))
 
     def shape(self, geo) -> collision.Shape:
         """World geometry (a placement_geometry dict, or a PlacedPart) -> what the clash test needs."""
@@ -511,14 +558,19 @@ class Model:
 
     def part_shape(self, part_id: int) -> collision.Shape:
         if part_id not in self._shapes:
-            self._shapes[part_id] = self.shape(self.parts[part_id])
+            p = self.parts[part_id]
+            self._shapes[part_id] = self.placed_shape(p.part, p.pos, p.turns, self.frame_matrix(p.frame))
         return self._shapes[part_id]
 
     def clashes(self, shape: collision.Shape, skip=lambda p: False) -> List[int]:
-        """Parts (except those `skip` says) that a shape clashes with."""
-        return [p.id for p in self.parts.values()
-                if not skip(p) and collision.boxes_overlap(shape.box, p.box, -self.profile.stud.height)
-                and collision.clash(shape, self.part_shape(p.id)) is not None]
+        """Parts (except those `skip` says) that a shape clashes with, nearest by id order."""
+        out = []
+        for pid in sorted(self.near(shape.box)):
+            p = self.parts[pid]
+            if not skip(p) and collision.boxes_overlap(shape.box, p.box, -self.profile.stud.height) \
+                    and collision.clash(shape, self.part_shape(pid)) is not None:
+                out.append(pid)
+        return out
 
     def blocking_studs(self, shape: collision.Shape) -> List[Tuple[glm.vec3, glm.vec3]]:
         """Studs (base, axis), of the shape or of any part, that stop the shape going where it is."""
@@ -566,7 +618,7 @@ class Model:
         from types import SimpleNamespace
         from brickbuilder.core.connections import contacts_between, joint_contacts
         geo = self.placement_geometry(part, pos, turns, matrix)
-        shape = self.shape(geo)
+        shape = self.placed_shape(part, pos, turns, matrix)
         hit = self.clashes(shape)
         if hit:
             return self.clash_reason(shape, hit[0])
@@ -580,21 +632,8 @@ class Model:
         """A part the given parts would clash with if moved by a world transform (the first
         found), or None. For previews; History.move_parts does the real check."""
         moving = set(part_ids)
-
-        def pt(v):
-            return glm.vec3(transform * glm.vec4(v, 1.0))
-
-        def axis(v):
-            return glm.vec3(transform * glm.vec4(v, 0.0))
         for pid in sorted(moving):
-            p = self.parts[pid]
-            shape = self.shape({"solids": [[[pt(v) for v in face] for face in solid] for solid in p.solids],
-                                "studs": [pt(v) for v in p.studs], "stud_axes": [axis(a) for a in p.stud_axes],
-                                "antistuds": [(pt(a), pt(b)) for a, b in p.antistuds],
-                                "antistud_axes": [axis(a) for a in p.antistud_axes],
-                                "joint_solids": p.joint_solids,
-                                "joints": [(k, pt(q), axis(a), axis(s)) for k, q, a, s in p.joints],
-                                "hollows": [(pt(a), pt(b), pt(c), axis(n)) for a, b, c, n in p.hollows]})
+            shape = collision.transform_shape(self.part_shape(pid), transform)
             hit = self.clashes(shape, lambda q: q.id in moving)
             if hit:
                 return hit[0]
@@ -624,17 +663,15 @@ class Model:
         return self._collisions
 
     def _find_collisions(self) -> Set[int]:
-        by_frame: Dict[int, List[PlacedPart]] = {}
-        for p in self.parts.values():
-            by_frame.setdefault(p.frame, []).append(p)
-        frames = sorted(by_frame)
         out: Set[int] = set()
-        for i, fa in enumerate(frames):
-            for fb in frames[i + 1:]:
-                for a in by_frame[fa]:
-                    for b in by_frame[fb]:
-                        if collision.clash(self.part_shape(a.id), self.part_shape(b.id)) is not None:
-                            out |= {a.id, b.id}
+        if len({p.frame for p in self.parts.values()}) < 2:
+            return out  # one grid: the occupancy map already rules overlaps out
+        for a in self.parts.values():
+            for bid in self.near(self._index_box(a)):
+                b = self.parts[bid]
+                if bid > a.id and b.frame != a.frame and \
+                        collision.clash(self.part_shape(a.id), self.part_shape(bid)) is not None:
+                    out |= {a.id, bid}
         return out
 
     def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=(), stud_axes=(), antistud_axes=(),
@@ -711,6 +748,7 @@ class Model:
                             world["studs"], world["antistuds"], world["stud_axes"], world["antistud_axes"],
                             joint_solid_flags(part), world["joints"], world["hollows"], group)
         self.parts[part_id] = placed
+        self._index_add(placed)
         for sub, cut in regions:
             self.occupancy.setdefault((frame, sub), []).append((part_id, cut))
         self._links = self._collisions = None
@@ -722,6 +760,7 @@ class Model:
         if placed is None:
             return
         self._shapes.pop(part_id, None)
+        self._index_remove(placed)
         for sub, _ in placed.regions:
             key = (placed.frame, sub)
             remaining = [entry for entry in self.occupancy[key] if entry[0] != part_id]
@@ -839,6 +878,7 @@ class Model:
         self._links = self._collisions = None
         self.parts.clear()
         self._shapes = {}
+        self._index = {}
         self.frames = {0: ROOT}
         self.groups = {}
         self.occupancy.clear()
@@ -917,6 +957,7 @@ class Model:
         self.groups = loaded.groups
         self._links = self._collisions = None
         self._shapes = {}
+        self._index = loaded._index
         self.modified = False
 
     def _load_v1(self, data: Dict[str, Any]) -> None:

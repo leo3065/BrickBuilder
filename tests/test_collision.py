@@ -107,3 +107,47 @@ def test_placing_checks_studs_on_one_grid_too(model):
     assert model.can_place(lib(model, "brick_1x3"), (10, -1, 1), 0)
     # Plain stacking, of course
     assert model.can_place(lib(model, "brick_2x2"), (10, 0, 1), 0)
+
+
+def test_moved_shape_matches_a_rebuilt_one(model):
+    """placed_shape moves a cached shape instead of rebuilding it: same hulls, box and studs."""
+    import numpy as np
+    from brickbuilder.core import collision
+    part = lib(model, "slope_2x4_wedge_1x1")
+    frame = turned_about(model, cell_centre(model, (4, 4, 0)), 22.5)
+    m = model.frame_matrix(frame.id)
+    moved = model.placed_shape(part, (3, 1, 2), 3, m)
+    rebuilt = model.shape(model.placement_geometry(part, (3, 1, 2), 3, m))
+    for a, b in zip(moved.hulls, rebuilt.hulls):
+        assert np.allclose(np.sort(a[0], axis=0), np.sort(b[0], axis=0), atol=1e-4)
+    assert glm.distance(moved.box[0], rebuilt.box[0]) < 1e-4 and glm.distance(moved.box[1], rebuilt.box[1]) < 1e-4
+    assert all(glm.distance(x[0], y[0]) < 1e-4 for x, y in zip(moved.studs, rebuilt.studs))
+    assert collision.clash(moved, rebuilt) == "bodies"
+
+
+def test_spatial_index_follows_the_parts(model):
+    from brickbuilder.core.history import History
+    h = History(model)
+
+    def indexed():
+        out = {}
+        for key, ids in model._index.items():
+            for pid in ids:
+                out.setdefault(pid, set()).add(key)
+        return out
+
+    def expected():
+        return {pid: set(model._buckets(model._index_box(p))) for pid, p in model.parts.items()}
+    base = h.add_part(lib(model, "brick_2x2_1_stud"), (0, 0, 0), 0, "gray")
+    arm = h.add_part(lib(model, "brick_1x4"), (1, 1, 1), 0, "red")
+    h.add_part(lib(model, "plate_10x10"), (20, 0, 0), 0, "white")
+    assert indexed() == expected()
+    from brickbuilder.core.model import turn_about_z
+    h.move_parts([arm.id], turn_about_z(base.studs[0], 30))
+    assert indexed() == expected()
+    h.undo()
+    h.remove_part(base.id)
+    assert indexed() == expected()
+    data = model.to_dict()
+    model.from_dict(data)
+    assert indexed() == expected() and model.near(model.parts[arm.id].box)

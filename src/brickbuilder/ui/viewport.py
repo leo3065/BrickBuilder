@@ -851,7 +851,45 @@ class Viewport(QOpenGLWidget):
 
         self.update()
 
+    def _joint_target(self, mouse_x, mouse_y):
+        """If the cursor is on a joint that the current part has the mate for (a cup for its ball,
+        a ball for its cup): (frame, the current part's grid in that frame's space) putting it on
+        the joint straight; else None."""
+        mates = range(len(self.current_part.joints))
+        if not mates:
+            return None
+        ray = picking.get_mouse_ray(mouse_x, mouse_y, self.width(), self.height(), self.camera)
+        hit, _, point = picking.intersect_model(ray, self.model)
+        if hit is None or not hit.joints:
+            return None
+        best = None
+        for target in hit.joints:
+            for i in mates:
+                if {self.current_part.joints[i].kind, target[0]} != {"ball", "cup"}:
+                    continue
+                d = glm.distance(point, target[1])
+                if d < 6.0 and (best is None or d < best[0]):  # on or near the ball / cup
+                    best = (d, i, target)
+        if best is None:
+            return None
+        up = glm.vec3(self.model.frame_matrix(hit.frame) * glm.vec4(0, 0, 1, 0))
+        grid = self.model.joint_grid(self.current_part, self.current_turns, best[1], best[2], up)
+        return hit.frame, glm.inverse(self.model.frame_matrix(hit.frame)) * grid
+
     def update_ghost(self, mouse_x, mouse_y):
+        on_joint = self._joint_target(mouse_x, mouse_y)
+        if on_joint is not None:
+            # Straight onto the joint: the part's own position is fixed by the joint
+            self.ghost_frame, self._ghost_grid = on_joint
+            self.ghost_pos = (0, 0, 0)
+            self._ghost_pivot = None  # no fine turn on a joint (posing comes later)
+            problem = self.model.turned_placement_problem(self.current_part, self.ghost_pos, self.current_turns,
+                                                          self.ghost_matrix())
+            self.ghost_valid = problem is None
+            self.notice = f"can't place: {problem}" if problem else "on the joint"
+            return
+        if self.notice == "on the joint":
+            self.notice = ""
         # Parts placed against a part go on that part's grid (its frame), so building on a turned
         # part follows its turn; in empty space, the working grid's ground
         frame, target, grid = self._target_under(mouse_x, mouse_y)

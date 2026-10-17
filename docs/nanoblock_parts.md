@@ -42,8 +42,8 @@ The largest gap is the 1×1 with a side stud (`1x1 : 2凸`, in 173 kits), then t
 | 1x2 : 1/2C | 29 | `brick_1x2` | NB102 | plain 1×2 |
 | 1x2 : 1/2BO-1 | 33 | `brick_1x2_1_stud` | NB102S | 1×2 with one centre stud (half-offset stud; fine rotation) |
 | 1x2 : flat | 25 | `flat_1x2` | NB102F | 1×2, no studs; top flush with a brick's body top |
-| 1x2 : JO-C(?) | 5 | | NB201S ❓ | 1×2 with a socket on the side |
-| 1x2 : JO-D(?) | 6 | | NB201B ❓ | 1×2 with a ball on the side |
+| 1x2 : JO-C(?) | 5 | `joint_1x2_cup` | NB201S ❓ | 1×2 with a cup centred on a long side (Ø5.20 × 5.90 mm, pivot 4.25 mm out) |
+| 1x2 : JO-D(?) | 6 | `joint_1x2_ball` | NB201B ❓ | 1×2 with a ball centred on a long side (Ø4.0 mm, centre 3.75 mm out) |
 | 1x2 : Ring | 51 | | | 1×2 with a flat loop attached. ⏭ **skipped**: keychain-style kits |
 | 1x2 : Round | 40 | `round_1x2` | NB102R | 1×2 with rounded ends |
 | 1x2 : Slope 1 | 12 | `slope_1x2_wedge_1x1` | NB102A | |
@@ -61,8 +61,8 @@ The largest gap is the 1×1 with a side stud (`1x1 : 2凸`, in 173 kits), then t
 | 2x2 : 1凸 | 10 | `brick_2x2_1_stud` | NB202S1 | 2×2 with one centre stud (fine rotation) |
 | 2x2 : Axle | 42 | | NB202X | ⏭ **skipped**: train/car part |
 | 2x2 : Fan-shaped | 46 | `round_2x2_fan` | NB202C | quarter circle, radius 2 cells; studs in an L (the curved corner cell has none) |
-| 2x2 : JO-C | 3 | | NB202S | 2×2 with a socket on the side |
-| 2x2 : JO-D | 4 | | NB202B | 2×2 with a ball on the side |
+| 2x2 : JO-C | 3 | `joint_2x2_cup` | NB202S | 2×2 with a cup centred on a side, pointing along its slots |
+| 2x2 : JO-D | 4 | `joint_2x2_ball` | NB202B | 2×2 with a ball centred on a side, pointing along its slots |
 | 2x2 : L | 20 | `brick_2x2_l` | NB202L | L of three cells, a stud on each |
 | 2x2 : Round | 15 | `round_2x2` | NB202R | cylinder 2 cells across, a stud per cell, extra antistud in the centre of the underside |
 | 2x2 : Slope 1 | 41 | `slope_2x2_wedge_1x1` | | |

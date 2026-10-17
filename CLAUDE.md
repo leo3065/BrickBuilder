@@ -175,6 +175,12 @@ tests/               pytest suite
   that adds the stud rule to the occupancy map). Base plates have no slots, so they can't go on studs.
 - The ghost also draws its antistud slots (`Renderer.draw_slots`) and, when blocked, rings the
   studs in the way (`Model.blocking_studs`, `Renderer.draw_blocking`).
+- **Joints**: `PartDef.round_bodies` (spheres, cylinders: sized in mm, off the occupancy grid,
+  appended to `PlacedPart.solids`, flagged in `joint_solids`) and `PartDef.joints` (ball / cup:
+  pivot = `at` + `offset` mm along `axis`; world copies in `PlacedPart.joints`). Joint contacts:
+  `connections.joint_contacts` (limits from `profile.socket_types["cup"]`); a joined pair's joint
+  bodies may overlap. Placing on a joint: `Viewport._joint_target` → `Model.joint_grid`. Turning a
+  joint-held part is locked until posing (J5).
 - `Viewport.notice` is a one-line status-bar message (why something was refused, what's moving).
   A turn or drag in progress is cancelled by Esc, undo/redo, delete, tool change and New/Open.
 

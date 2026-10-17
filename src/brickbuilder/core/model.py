@@ -423,6 +423,22 @@ class Model:
         x = glm.cross(y, z)
         return glm.mat4(glm.vec4(x, 0), glm.vec4(y, 0), glm.vec4(z, 0), glm.vec4(p.studs[stud], 1))
 
+    def joint_grid(self, part: PartDef, turns: int, joint: int, target, up: glm.vec3) -> glm.mat4:
+        """The grid (grid space -> world) that puts `part` (at pos 0, `turns`) with its joint number
+        `joint` straight on `target` (kind, pivot, axis, slot in world): the pivots together, the
+        arm pointing into the cup (opposite axes), and the part's up along `up` (the other part's
+        up, so a straight joint has both tops the same way)."""
+        _, local_pivot, local_axis, _ = joint_sockets(self.profile, part, (0, 0, 0), turns)[joint]
+        _, pivot, axis, _ = target
+
+        def basis(x, z):
+            x, z = glm.normalize(x), glm.normalize(z)
+            return glm.mat3(x, z, glm.cross(x, z))
+        r = basis(-axis, up) * glm.transpose(basis(local_axis, glm.vec3(0, 0, 1)))
+        m = glm.mat4(r)
+        m[3] = glm.vec4(pivot - r * local_pivot, 1.0)
+        return m
+
     def lined_up_frames(self, grid: glm.mat4, exclude: Iterable[int] = ()):
         """Existing frames whose grid lines up with `grid` (grid space -> world): turned by whole
         quarter turns about Z and offset by whole sub-cells. Yields (frame, origin, rotation): `grid`

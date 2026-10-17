@@ -76,3 +76,25 @@ def test_joint_limits():
     assert not within_limits(tilt(40, glm.vec3(0, 0, 1)), cup_axis, slot, 30, 90)  # sideways, too far
     assert within_limits(tilt(80, glm.vec3(0, 1, 0)), cup_axis, slot, 30, 90)      # up, in the slot
     assert not within_limits(tilt(100, glm.vec3(0, 1, 0)), cup_axis, slot, 30, 90)
+
+
+@pytest.mark.parametrize("cup_name, ball_name", [("joint_1x2_cup", "joint_1x2_ball"), ("joint_2x2_cup", "joint_2x2_ball"),
+                                                 ("joint_1x2_cup", "joint_2x2_ball")])
+def test_joint_grid_puts_a_part_straight_on_a_joint(model, cup_name, ball_name):
+    h = History(model)
+    cup = h.add_part(lib(model, cup_name), (0, 0, 0), 0, "red")
+    ball = lib(model, ball_name)
+    for turns in (0, 1):  # whichever way the part was turned, the joint decides
+        grid = model.joint_grid(ball, turns, 0, cup.joints[0], glm.vec3(0, 0, 1))
+        assert model.turned_placement_problem(ball, (0, 0, 0), turns, grid) is None
+    placed = h.add_part_in_new_frame(ball, (0, 0, 0), 0, "white", 0,
+                                     *decompose(model.joint_grid(ball, 0, 0, cup.joints[0], glm.vec3(0, 0, 1))))
+    assert placed is not None and model.connections()[placed.id] == {cup.id}
+    assert glm.distance(placed.joints[0][2], -cup.joints[0][2]) < 1e-5              # straight
+    up = glm.vec3(model.frame_matrix(placed.frame) * glm.vec4(0, 0, 1, 0))
+    assert glm.distance(up, glm.vec3(0, 0, 1)) < 1e-5                               # tops the same way
+    # And the other way round: a cup part onto a ball
+    other = h.add_part(lib(model, "joint_1x2_ball"), (20, 0, 0), 0, "white")
+    cup_part = lib(model, "joint_1x2_cup")
+    grid = model.joint_grid(cup_part, 0, 0, other.joints[0], glm.vec3(0, 0, 1))
+    assert model.turned_placement_problem(cup_part, (0, 0, 0), 0, grid) is None

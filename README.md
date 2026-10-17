@@ -16,6 +16,7 @@ data, not code, so other micro-brick systems could be added without changing the
     the two 1×2 slopes. A slope and its inverted partner can share a cell, as in two-colour
     patterns from real sets.
   - **Round:** 1×1 and 2×2 cylinders, 1×2, 1×3 and 1×4 with rounded ends, and the 2×2 quarter-circle fan.
+  - **Joints:** 1×2 and 2×2 with a cup or a ball.
   - **Plates:** 10×10 and 20×20 base plates.
 - **Building that follows the real parts.** Parts snap to the grid, in 90° steps and at half-cell
   offsets. Undersides take studs where the real ones do (a 1×N's hollow slot anywhere along it, a
@@ -24,6 +25,7 @@ data, not code, so other micro-brick systems could be added without changing the
 - **Turned parts.** Turn a placed part to any angle about the stud it's held by, slide it along
   the slot it's in, or place a part already turned. Whatever is built on a turned part follows its
   grid, and parts turned alike share one, so they can be bridged.
+- **Ball joints.** Cup and ball parts that snap together straight (posing them is next).
 - **Side studs.** Build sideways off the 1×1 side-stud brick. Side studs in one plane share a
   grid, so a part can bridge them, and a part on a side stud turns about it.
 - **Moving and grouping.** Select parts or whole named, nestable groups; move them by dragging
@@ -69,6 +71,8 @@ Click to place the part chosen in the Parts list; Ctrl + click removes a part.
 - **[ / ]:** turn the preview off the grid in 7.5° steps (it then needs a stud to sit on);
   **Shift+R** puts it back.
 - **Side studs:** hover the face a side stud sticks out of to build on the stud.
+- **Joints:** with a ball part chosen, hover a cup (or with a cup part, a ball) to put it on straight.
+  Posing joints is coming next.
 - **F:** use the grid of the part under the cursor for empty space and the ground too; F over
   empty space goes back to the main grid.
 

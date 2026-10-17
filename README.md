@@ -115,8 +115,12 @@ Click to recolour a part with the current colour, or to remove it.
 - **Help:** F1.
 
 ## Documentation
-- [`docs/part_format.md`](docs/part_format.md): design and file formats for system profiles,
-  part definitions, the part library and save files, plus the measured Nanoblock dimensions.
+- [`docs/part_format.md`](docs/part_format.md): the data formats: system profiles, part files, the
+  part library and save files.
+- [`docs/design.md`](docs/design.md): the design decisions and why, with worked examples from real sets.
+- [`docs/architecture.md`](docs/architecture.md): how the code is organised and how each feature flows
+  through it.
+- [`docs/measurements.md`](docs/measurements.md): the measured Nanoblock dimensions.
 - [`docs/turning.md`](docs/turning.md): how the Turn tool decides what turns, about which
   axis, and when a turn is refused, plus the clash test and its tolerances.
 - [`docs/nanoblock_parts.md`](docs/nanoblock_parts.md): the real Nanoblock part list from

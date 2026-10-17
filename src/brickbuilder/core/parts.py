@@ -1,4 +1,4 @@
-"""Part definitions and the built-in part library (see docs/part_format.md, "Layer 2").
+"""Part definitions and the built-in part library (see docs/part_format.md, "Part files").
 
 Library layout: parts/<profile id>/<category folders>/<name>.toml. A part's id is
 "<profile id>:<file stem>"; its category is the folder path below the profile folder.

@@ -2,7 +2,7 @@
 
 Moving set: the selection always moves, plus whatever hangs only off it; the rest of its connected
 component stays if it's pinned (grounded: a part on the root grid's layer 0), otherwise the
-largest piece of the rest stays (docs/part_format.md, "Pins").
+largest piece of the rest stays (docs/design.md, "Groups and pins").
 
 Free motion: the moving set's motion is a turn w (about any axis) plus a shift v of a reference
 point, six numbers. Each contact, linearised, is a set of rows that must stay zero: a stud in a slot

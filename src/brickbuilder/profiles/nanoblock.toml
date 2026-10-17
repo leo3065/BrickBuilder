@@ -1,4 +1,4 @@
-# Nanoblock system profile. Values measured with calipers; see docs/part_format.md.
+# Nanoblock system profile. Values measured with calipers; see docs/measurements.md (format: docs/part_format.md).
 id = "nanoblock"
 name = "Nanoblock"
 cell = [4.0, 4.0, 3.125]      # mm: stud pitch X/Y, stacking pitch Z (studs excluded)

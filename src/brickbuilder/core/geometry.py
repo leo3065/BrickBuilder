@@ -1,7 +1,7 @@
 """Exact part geometry on the sub-grid: bodies, wedge cut planes, per-sub-cell regions and faces.
 
 Everything here works in sub-grid coordinates (integers wherever it matters), so complementary
-wedges compare exactly equal. See docs/part_format.md ("Slope occupancy").
+wedges compare exactly equal. See docs/part_format.md ("Occupancy").
 """
 import math
 from dataclasses import dataclass

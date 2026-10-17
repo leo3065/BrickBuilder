@@ -1,7 +1,7 @@
 # How turning is checked (reference)
 
 What happens between "the user drags a part with the Turn tool" and "the turn is committed or
-refused", and which tolerances decide it. Design reasons are in `part_format.md` ("Pins", "Step B",
+refused", and which tolerances decide it. Design reasons are in `design.md` ("Groups and pins", "Turning (step B)",
 "Snapping solver"); this file describes the code as built (turns about any stud axis).
 
 ## Pipeline
@@ -112,7 +112,7 @@ overlap via the occupancy map, or a model error), or any moved part clashes with
 stayed (the full clash test, on its own grid too, the same as the preview), everything applied is
 undone and the reason is returned. Nothing is pushed then. `move_parts` also does plain moves:
 nudges (no target) and drags (`target_frame`: the grid it's put down on becomes every part's home,
-see part_format.md "Moving the selection").
+see design.md "Moving the selection").
 
 ## The clash test (`collision.py`)
 Used by the turn preview, `move_parts`, `can_place`, turned placement and View > Highlight

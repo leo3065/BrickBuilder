@@ -27,7 +27,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 
 #### View
 - [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Coordinate system: +X is Right, +Y is Forward, +Z is Up.
-- [x] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis. Done as View > Camera with keys (1 / 3 / 7, Ctrl for the opposite side, 5 isometric, 4 / 6 / 8 / 2 orbit 30°, top row or numpad), clicking a corner gizmo axis to look along it, Home to fit all and . to fit the selection. (The orbit camera turns about Z and up/down; there's no roll about the view axis.)
+- [x] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis. Done as View > Camera with keys (1 / 3 / 7, Ctrl for the opposite side, 5 isometric, 4 / 6 / 8 / 2 orbit 15°, top row or numpad), clicking a corner gizmo axis to look along it, Home to fit all and . to fit the selection. (The orbit camera turns about Z and up/down; there's no roll about the view axis.)
 - [ ] Allowing section view of the model, especially viewing blocks under a selected layer. Makes it easy to go though layers.
 - [ ] Smooth shading for curved parts (round parts currently show faint bands, one per flat facet). Low priority.
 - [ ] Draw bodies with the profile's measured `clearance` and `body_height`, so neighbouring bricks show a seam. Low priority: the outlines already show where bricks meet.

@@ -42,7 +42,7 @@ The largest gap is the 1×1 with a side stud (`1x1 : 2凸`, in 173 kits), then t
 | 1x2 : 1/2C | 29 | `brick_1x2` | NB102 | plain 1×2 |
 | 1x2 : 1/2BO-1 | 33 | `brick_1x2_1_stud` | NB102S | 1×2 with one centre stud (half-offset stud; fine rotation) |
 | 1x2 : flat | 25 | `flat_1x2` | NB102F | 1×2, no studs; top flush with a brick's body top |
-| 1x2 : JO-C(?) | 5 | `joint_1x2_cup` | NB201S ❓ | 1×2 with a cup centred on a long side (Ø5.20 × 5.90 mm, pivot 4.25 mm out) |
+| 1x2 : JO-C(?) | 5 | `joint_1x2_cup` | NB201S ❓ | 1×2 with a cup centred on a long side (Ø5.20, 5.90 mm out, on a neck from Ø2.9; pivot 4.25 mm out) |
 | 1x2 : JO-D(?) | 6 | `joint_1x2_ball` | NB201B ❓ | 1×2 with a ball centred on a long side (Ø4.0 mm, centre 3.75 mm out) |
 | 1x2 : Ring | 51 | | | 1×2 with a flat loop attached. ⏭ **skipped**: keychain-style kits |
 | 1x2 : Round | 40 | `round_1x2` | NB102R | 1×2 with rounded ends |

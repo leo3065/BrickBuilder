@@ -35,7 +35,7 @@ class Body:
 
 @dataclass(frozen=True)
 class RoundBody:
-    """A sphere or cylinder off a part's grid (a joint's ball, arm or cup). Placed in cells, sized in
+    """A sphere or (possibly tapered) cylinder off a part's grid (a joint's ball, arm or cup). Placed in cells, sized in
     mm (a sphere can't be sized in cells that aren't cubes). Not in the occupancy grid: the clash
     test covers it."""
     kind: str                       # "sphere" | "cylinder"
@@ -43,8 +43,13 @@ class RoundBody:
     axis: Int3                      # which way it points from there
     offset: float = 0.0             # mm along the axis to where it starts (sphere: its centre)
     length: float = 0.0             # mm, cylinder only
-    radius: float = 0.0             # mm
+    radius: float = 0.0             # mm (a cylinder's at its start)
     joint: bool = False             # part of a joint: a joined ball and cup may overlap
+    end_radius: float = 0.0         # mm, a cylinder's at its far end (0 = the same: no taper)
+
+    @property
+    def far_radius(self) -> float:
+        return self.end_radius or self.radius
 
 
 ROUND_SEGMENTS = 16  # around a cylinder or a sphere's equator
@@ -69,7 +74,7 @@ def round_faces(body: RoundBody, base, axis) -> List[list]:
         a = base + axis * body.offset
         b = a + axis * body.length
         lo = [a + r * body.radius for r in ring]
-        hi = [b + r * body.radius for r in ring]
+        hi = [b + r * body.far_radius for r in ring]
         faces = [hi, lo[::-1]] + [[lo[i], lo[(i + 1) % n_around], hi[(i + 1) % n_around], hi[i]]
                                   for i in range(n_around)]
         centre = (a + b) * 0.5
@@ -100,10 +105,10 @@ def round_edges(body: RoundBody, base, axis) -> List[tuple]:
         return []
     u, v = _basis(axis)
     segs = []
-    for d in (body.offset, body.offset + body.length):
+    for d, radius in ((body.offset, body.radius), (body.offset + body.length, body.far_radius)):
         c = base + axis * d
         pts = [c + (u * math.cos(2 * math.pi * i / ROUND_SEGMENTS) + v * math.sin(2 * math.pi * i / ROUND_SEGMENTS))
-               * body.radius for i in range(ROUND_SEGMENTS)]
+               * radius for i in range(ROUND_SEGMENTS)]
         segs += [(pts[i], pts[(i + 1) % ROUND_SEGMENTS]) for i in range(ROUND_SEGMENTS)]
     return segs
 

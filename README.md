@@ -61,7 +61,7 @@ uv run pytest
 ### Camera
 - **Orbit:** middle mouse drag. **Pan:** Shift + middle mouse drag. **Zoom:** scroll wheel.
 - **Views** (top-row digits or numpad): **1** front, **3** right, **7** top (with **Ctrl**: back,
-  left, bottom), **5** isometric; **4 / 6** orbit left / right and **8 / 2** up / down by 30°.
+  left, bottom), **5** isometric; **4 / 6** orbit left / right and **8 / 2** up / down by 15°.
   Clicking an axis of the corner gizmo looks along it (again: from the other side).
 - **Home** fits everything in view; **.** fits the selection.
 

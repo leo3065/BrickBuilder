@@ -1,5 +1,3 @@
-import math
-
 import glm
 
 from brickbuilder.core import picking

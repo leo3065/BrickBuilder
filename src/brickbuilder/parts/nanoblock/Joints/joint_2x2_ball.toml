@@ -1,6 +1,6 @@
-# nanoblock.info "2x2 : JO-D" (block 4): a 2×2 with a ball centred on a side, pointing along its slots, at mid-height.
-# Measured: ball Ø4.0 mm, its centre 3.75 mm from the face; the arm is modelled as a Ø1.95 mm
-# cylinder (its narrowest, at the ball).
+# nanoblock.info "2x2 : JO-D" (block 4): a 2×2 with a ball centred on a side, pointing along its
+# slots, at mid-height. Measured: ball Ø4.0 mm, its centre 3.75 mm from the face; the arm is
+# modelled as a Ø1.95 mm cylinder (its narrowest, at the ball).
 name = "Joint 2×2 ball"
 
 [[body]]

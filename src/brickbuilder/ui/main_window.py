@@ -194,8 +194,8 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda _=False, n=name: self.viewport.set_view(n))
             camera_menu.addAction(action)
         camera_menu.addSeparator()
-        for label, key, yaw, pitch in (("Orbit Left 30°", "4", -30, 0), ("Orbit Right 30°", "6", 30, 0),
-                                       ("Orbit Up 30°", "8", 0, 30), ("Orbit Down 30°", "2", 0, -30)):
+        for label, key, yaw, pitch in (("Orbit Left 15°", "4", -15, 0), ("Orbit Right 15°", "6", 15, 0),
+                                       ("Orbit Up 15°", "8", 0, 15), ("Orbit Down 15°", "2", 0, -15)):
             action = QAction(label, self)
             action.setShortcuts([QKeySequence(key), QKeySequence("Num+" + key)])
             action.triggered.connect(lambda _=False, y=yaw, p=pitch: self.viewport.orbit_view(y, p))
@@ -500,7 +500,7 @@ class MainWindow(QMainWindow):
         <br>
         <b>View:</b><br>
         - 1 / 3 / 7: front / right / top view (Ctrl: back / left / bottom); 5: isometric<br>
-        - 4 / 6: orbit left / right 30°; 8 / 2: orbit up / down 30° (top row or numpad)<br>
+        - 4 / 6: orbit left / right 15°; 8 / 2: orbit up / down 15° (top row or numpad)<br>
         - Home: fit everything; . (period): fit the selection; click a gizmo axis to look along it<br>
         - U: highlight parts not connected to the main build (in orange)<br>
         - O: highlight parts overlapping parts on another grid (in red)<br>

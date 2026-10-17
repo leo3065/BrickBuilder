@@ -75,7 +75,7 @@ _BODY_KEYS = {
 }
 _ROUND_KEYS = {
     "sphere": {"shape", "at", "axis", "offset_mm", "diameter_mm", "joint"},
-    "cylinder": {"shape", "at", "axis", "offset_mm", "length_mm", "diameter_mm", "joint"},
+    "cylinder": {"shape", "at", "axis", "offset_mm", "length_mm", "diameter_mm", "end_diameter_mm", "joint"},
 }
 _STUD_MODES = {"top", "none"}
 _TALL = {"+x": (0, 1), "-x": (0, -1), "+y": (1, 1), "-y": (1, -1)}
@@ -163,9 +163,10 @@ def _parse_round_body(where: str, body: Dict[str, Any]) -> RoundBody:
     if not isinstance(joint, bool):
         raise PartError(f"{where}.joint must be true or false")
     length = _mm(f"{where}.length_mm", body.get("length_mm")) if shape == "cylinder" else 0.0
+    end = _mm(f"{where}.end_diameter_mm", body["end_diameter_mm"]) / 2 if "end_diameter_mm" in body else 0.0
     return RoundBody(shape, _point(f"{where}.at", body.get("at")), AXES[axis],
                      _mm(f"{where}.offset_mm", body.get("offset_mm", 0), positive=False), length,
-                     _mm(f"{where}.diameter_mm", body.get("diameter_mm")) / 2, joint)
+                     _mm(f"{where}.diameter_mm", body.get("diameter_mm")) / 2, joint, end)
 
 
 def _point(where: str, value: Any) -> Point:

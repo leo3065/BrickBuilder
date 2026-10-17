@@ -440,7 +440,7 @@ joint contacts and placing straight onto a joint. Posing (turning a part about i
 
 **Round bodies ✅.** `shape = "sphere"` or `"cylinder"`: `at` (cells, a point on the face it starts
 from), `axis`, `offset_mm` (along the axis to where it starts; a sphere's centre), `length_mm`
-(cylinder), `diameter_mm`, and `joint = true` for a joint's ball, arm or cup. Sized in mm, since a
+(cylinder), `diameter_mm` (and `end_diameter_mm` for a tapered cylinder, e.g. the cup's neck), and `joint = true` for a joint's ball, arm or cup. Sized in mm, since a
 sphere can't be sized in cells that aren't cubes. They aren't in the occupancy grid (the ball and cup
 stick out past the brick's cells); the clash test covers them. A joined ball and cup may overlap
 (the cup is modelled as a solid cylinder, inside ignored).

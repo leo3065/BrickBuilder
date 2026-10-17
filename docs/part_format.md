@@ -334,7 +334,8 @@ stud and T stays. A move is refused only when the selection is wedged between pa
 that it would tear apart (a real lock, e.g. a brace on both sides).
 
 ## Step B: the Turn tool and turned frames (decided ✅, built ✅)
-How the checks work as built, with tolerances: `docs/turning.md`.
+The decisions as made at the time. Since extended (turning about any stud axis, side studs, ball
+joints, full 3D free motions): how it all works now, with tolerances, is in `docs/turning.md`.
 Scope: turning about Z, and placing on turned frames. Ball joints and tilted frames reuse it later;
 sliding along slots and general moving belong to "moving placed parts".
 - **Turn tool (T).** Press on a part (or the selection); the moving set comes from the selection
@@ -397,8 +398,10 @@ pinned, turning H moves only H; turning G moves G and H, keeping the fold betwee
 | Dragon: 2×2 round as a 45° adapter | studs in its centre hole and diagonal slots | none | find the 45° turn |
 | Seregios wing fold, Dragon wing (above) | stud hinge; 2 ball joints | hinge (1) | one snapped angle within limits |
 
-## Snapping solver (planned) ✅
-Local and geometric, not physics: it moves only the frames being dragged.
+## Snapping solver (decided ✅, partly built)
+Local and geometric, not physics: it moves only the frames being dragged. Built so far: step 3, the
+free motions, for one moving body (`motion.plan_turn`, docs/turning.md). Not yet: least-squares
+snapping over several frames at once, chains and closed loops.
 1. Every contact is an error to minimise: a stud's distance from its slot line (point to segment)
    and how far its axis tilts from the slot's, a ball's distance from its cup centre.
 2. Snapping = least squares on those errors over the moving frames' 6 numbers each, starting from
@@ -513,8 +516,8 @@ Model        # parts, frames, groups; occupancy: dict[(frame, sub-cell), [(part 
              # can_place, connections(), collisions(), frame/group edits, save/load
 History      # every UI edit as undoable commands, incl. move_parts (turning, moving)
 ```
-- Connections aren't stored: they're re-derived from world positions (they work across Z-turned
-  frames). Stored edges may arrive with joints.
+- Connections aren't stored: they're re-derived from world positions (they work across any
+  frames), ball-in-cup joints included.
 - Placing: the cell under the cursor is where the part's **anchor cell** goes. The anchor is
   one of the part's bottom-layer cells, cycled with A / Shift+A (e.g. end / middle / end of a
   1×3); it starts at the cell nearest the centre (ties: +X, then +Y, in part coordinates).

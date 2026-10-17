@@ -28,7 +28,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 #### View
 - [x] A 3D view with free rotate and zoom in/out, with a grid on XY plane. Coordinate system: +X is Right, +Y is Forward, +Z is Up.
 - [x] Buttons/Widgets for rotating to 6 main views (front, back, top, bottom, left, right), to the isometric view, as well as for rotating views in 30 degrees increment around X, Y, and Z axis. Done as View > Camera with keys (1 / 3 / 7, Ctrl for the opposite side, 5 isometric, 4 / 6 / 8 / 2 orbit 15°, top row or numpad), clicking a corner gizmo axis to look along it, Home to fit all and . to fit the selection. (The orbit camera turns about Z and up/down; there's no roll about the view axis.)
-- [ ] Allowing section view of the model, especially viewing blocks under a selected layer. Makes it easy to go though layers.
+- [ ] Allowing section view of the model, especially viewing blocks under a selected layer. Makes it easy to go through layers.
 - [ ] Smooth shading for curved parts (round parts currently show faint bands, one per flat facet). Low priority.
 - [ ] Draw bodies with the profile's measured `clearance` and `body_height`, so neighbouring bricks show a seam. Low priority: the outlines already show where bricks meet.
 
@@ -46,24 +46,25 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] A menu for browsing the part library, with a tree view, thumbnail previews and mark-as-favorite. (The tree view grouped by category is done; thumbnails and favorites are not.)
 
 #### Colors
-- [x] Allowing selecing the color of the brick blocks, both before building and after building.
+- [x] Allowing selecting the color of the brick blocks, both before building and after building.
 - [x] Adding a color palette menu for brick colors.
 - [ ] Custom colors in a separate user palette file (with stable ids so saves keep working), which can be exported and imported to share them.
 - [ ] Allowing semi-transparent brick blocks. (Data is ready: palette colors are flagged `clear` and carry an `alpha`.)
 
 ### Intermediate
-- [x] Connections: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Works across any frames (world-space contacts with stud directions, side studs included); a stud holds with half its height in. Joints still to come.
-- [x] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it. Done as step B (see docs/part_format.md "Step B"): Turn tool (T; Shift = free, [ / ] = one step, Shift+R = realign), placing parts already turned ([ / ] in the Place tool), and a working grid (F). Turns are about Z; the turn finder covers stud contacts (ball joints come with the joint parts).
+- [x] Connections: antistud slots on every underside (from the real parts) and a graph of which studs sit in which slots. Worked out from the parts, not saved. Works across any frames (world-space contacts with stud directions, side studs included); a stud holds with half its height in. Ball joints count too (the ball's centre on the cup's pivot, the arm within the cup's limits).
+- [x] Allowing fine rotation of brick blocks around its Z axis, snapped in the UI to a configurable increment (default 7.5 degrees). Only allowed where the connection permits it (in practice a part held by a single stud); the part turns about that stud and gets its own grid frame. New blocks built on the rotated block snap to the same grid as the rotated block. Optionally, also placing a part into another part's frame without touching it. Done as step B (see docs/part_format.md "Step B"): Turn tool (T; Shift = free, [ / ] = one step, Shift+R = realign), placing parts already turned ([ / ] in the Place tool), and a working grid (F). Since extended: turns go about whichever stud axis holds the part (side studs included), and joints pose (see below).
 - [ ] Adding support for brick block to align to another brick block by rotating around the stud it's held by (any axis, e.g. a side stud). This works by fixing a selected point of a brick block, and aligning another selected point of the same brick block to face a selected point on another brick block.
 - [ ] Snapping solver: contacts as errors minimised by least squares over the dragged frames; free motions from the same setup (hinges, locks, slides); keeps loops closed. Used by turning, align, ball joints and circular arrays. See docs/part_format.md. Partly built (`motion.plan_turn`, docs/turning.md): one moving body, full 3D free motions from stud and ball-joint contacts (turns, hinges, joint posing, slides). Still open: several moving frames at once, chains and closed loops.
 - [ ] Pins and joint chains: each connected component has one pin (explicit, else grounded, else the larger side); turning at a joint moves the unpinned side. Built: grounded / largest, with the selection always moving (`motion.moving_set`). Still open: explicit pins (a "pin group" command) and turning inside joint chains.
 - [ ] Instances: define a subassembly once, place it several times, editing it updates every copy (like LDraw multi-part files).
 - [ ] Circular array: copy a selection of parts (a subassembly, possibly spanning several frames) n times, each copy turned 360/n° about a centre, e.g. rings of rounded 1×N and the alternating round 1×4 / 1×3 body segments of the Rayquaza DX set. Copies turned by a multiple of 90° reuse existing frames (that ring needs only the root grid and one 45° frame). Checks the closing contacts and reports any gap. Each copy can reuse `History.move_parts`; needs copy/paste.
-- [x] Posing ball joints: free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.) Turn tool on a joint: drag points the part (tilt / direction snapped, inside the cone or the slot), Ctrl+drag rolls, Shift+R straightens; two joints on a line turn as a hinge; limits are enforced. See docs/turning.md.
+- [x] Posing ball joints: free rotation of the ball joint bloc around the joint point. The ball joint block will snap to the socket block. (They might not be used in pairs.) Turn tool on a joint: drag points the part (tilt / direction snapped, inside the cone or the slot), Ctrl+drag rolls, Shift+R straightens, Ctrl+Shift+R also undoes the roll; two joints on a line turn as a hinge; limits are enforced. See docs/turning.md.
 - [x] Add a view option that highlights colliding parts in different frames (rotated parts, joints): View > Highlight Colliding Parts (O), in red. Within one frame, overlaps are already refused when placing and loading; across frames the placement preview turns red too. Studs count as well: one inside another part's body is only fine on one of its slots.
-- [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation. Stud-held parts: done (Shift+R realigns to the nearest quarter turn about the holding stud, side studs too). Ball joints: Shift+R straightens the joint; landing a jointed part on another grid is still to do.
-- [x] Tilted frames: grids turned about a horizontal axis (side studs; ball joints next). Studs and slots carry an axis (socket `axis`); contacts, the clash test, rendering, the turn finder, Shift+R and nudges work along any axis; placing against a side stud creates (or reuses) its grid.
+- [ ] Bringing two frames (Z-rotated parts or ball joints) onto the same grid with minimal rotation. Stud-held parts: done (Shift+R realigns to the nearest quarter turn about the holding stud, side studs too). Ball joints: Shift+R straightens the joint, Ctrl+Shift+R also undoes the roll (and merges it back onto a grid it lines up with); swinging a jointed part until it lands on another, nearby grid is still to do.
+- [x] Tilted frames: grids turned about a horizontal axis (side studs, ball joints). Studs and slots carry an axis (socket `axis`); contacts, the clash test, rendering, the turn finder, Shift+R and nudges work along any axis; placing against a side stud creates (or reuses) its grid.
 - [x] Dragging the selection onto a side stud (it lands on the stud's grid, like placing).
+- [ ] Dragging the selection onto a joint (placing puts a part on a joint straight; a drag still goes against the face).
 - [x] Stud check on one grid when placing: a half-offset part whose studs miss the slots of the part above is now refused, as is a part flush against a side-stud face (`can_place` runs the full clash test). Base plates have no slots (underside rule "none"), so they can't be placed on studs.
 - [x] Reuse a frame that lines up when turning or placing a turned part (as side studs already do, `Model.find_grid`), so parts turned to the same angle on studs in one line share a grid and can be bridged (`Model.lined_up_frames`).
 - [ ] A view option showing the underside slots of placed parts (all, or the selection), like the preview does for itself, to check orientations after building. Low priority.
@@ -71,8 +72,8 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 
 ### Maintenance
 - [ ] Switch to `from pyglm import glm` (PyGLM warns that `import glm` will be deprecated). Touches every module.
-- [ ] Move rendering to VBOs/shaders before mesh-heavy features (joint parts, imported meshes); display lists are fine for now (1000 parts ≈ 25 ms per frame).
-- [ ] Split `ui/viewport.py` (turning and moving into their own module) once joints add more to it. Low priority.
+- [ ] Move rendering to VBOs/shaders before mesh-heavy features (imported meshes); display lists are fine for now (1000 parts ≈ 25 ms per frame; the joint parts' round bodies are low-poly).
+- [ ] Split `ui/viewport.py` (now ~1,100 lines): turning, posing, sliding and moving into their own module(s).
 
 ### Advanced
 - [ ] Exporting the model for the current view as an image, both raster and vector formats.
@@ -80,4 +81,4 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [ ] Exporting the model as multiple images for guide, with layer-by-layer and part-by-part steps.
 - [ ] Importing the model from a 3D model file, such as .stl or .obj and converting it to brick blocks builds.
 - [ ] Allowing split the importing model to multiple parts before converting to brick blocks, each part using different grid rotation (for example, for a bird model, wings and the body can be built with different grid rotations, joined by one or more ball joint blocks).
-- [ ] A plugin system for extening the functionality of the program.
+- [ ] A plugin system for extending the functionality of the program.

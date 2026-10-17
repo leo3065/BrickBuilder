@@ -65,7 +65,8 @@ src/brickbuilder/
   core/history.py    History: undo/redo; every UI edit goes through it, never Model directly
   core/connections.py  Stud-in-antistud-slot graph (Model.connections(), cached) + groups()
   core/motion.py     Turn planning: moving set (selection always moves; pin rule on the rest) and
-                     free motion from stud-in-slot contacts (null space, numpy): turn / locked / free
+                     full 3D free motion from stud and ball-joint contacts (null space, numpy):
+                     turn / pose / slide / locked / free; joint posing helpers (clamp_arm)
   core/collision.py  The clash test: SAT on convex solids (numpy, touching allowed) + studs only on slots
   core/camera.py     Orbit camera, orthographic projection, Z-up
   core/picking.py    Mouse ray, ray/plane, ray/AABB (slab), brute-force model hit test
@@ -104,8 +105,8 @@ tests/               pytest suite
   one slot, 2×N one per row along the long side, Y on a tie, wider none), or `antistuds = "none"`
   + explicit sockets. Part files have no `ldraw` key (dropped; the LDraw names are in
   `docs/nanoblock_parts.md`). Rules from the real parts: docs/part_format.md
-  "Undersides". Connections are derived from world positions (so they work across Z-turned
-  frames), never saved.
+  "Undersides". Connections are derived from world positions (so they work across any frames:
+  turned, side studs, joints), never saved.
 - Colors are **palette ids** (`profile.palette`); parts are **part ids**; both are stable keys
   in save files, separate from their display `name`. Ids are ASCII `[a-z0-9_]` (checked on load).
   There's no translation for renamed ids: a save using an old id fails with "unknown part".
@@ -205,10 +206,11 @@ tests/               pytest suite
 
 ## Architectural pressure from upcoming features
 Done: parts, occupancy, frames (step A), groups, the Turn tool and turned placement (step B),
-moving the selection, the clash test. Still ahead: ball joints (tilted frames, joint contacts and
-limits in the turn finder), the full snapping solver (several moving frames, loops), copy/paste,
-circular arrays, instances.
-- Prefer migrating to VBOs/shaders before mesh-heavy features (joint parts, imported meshes).
+moving the selection, the clash test, side studs and tilted frames, ball joints (parts, placing,
+posing, limits), camera views. Still ahead: the full snapping solver (several moving frames at once,
+chains, closed loops), copy/paste, circular arrays, instances.
+- Prefer migrating to VBOs/shaders before mesh-heavy features (imported meshes).
+- `ui/viewport.py` is ~1,100 lines; splitting turning / posing / moving out is on the todo list.
 Raise these trade-offs with the user before restructuring; don't silently rewrite.
 
 ## Working with the user

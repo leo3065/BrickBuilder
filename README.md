@@ -31,14 +31,16 @@ data, not code, so other micro-brick systems could be added without changing the
   grid, so a part can bridge them, and a part on a side stud turns about it.
 - **Moving and grouping.** Select parts or whole named, nestable groups; move them by dragging
   onto any face or grid, or nudge them with the arrow keys; delete, recolour, group and ungroup.
+- **View:** an orthographic 3D view with preset views (front, right, top, … isometric), 15° orbit
+  steps, and fitting the build or the selection in view.
 - **Checks:** View > Highlight Unconnected Parts (U) marks parts the main build doesn't hold;
   View > Highlight Colliding Parts (O) marks parts on different grids that overlap.
 - **The 45 official Nanoblock colours.** Names come from nanoblock.info; the RGB values are
   approximate.
 - **Undo/redo** for every edit, Save / Save As, and a prompt before closing with unsaved changes.
 
-See [`feature_plan.md`](feature_plan.md) for what's planned next (joints, copy/paste, circular
-arrays and more).
+See [`feature_plan.md`](feature_plan.md) for what's planned next (copy/paste, circular arrays,
+chains of joints and more).
 
 ## Getting started
 Requires Python 3.13+ and [`uv`](https://github.com/astral-sh/uv).

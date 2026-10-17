@@ -246,6 +246,25 @@ once the hand-written library shows real duplication pain.
   sockets still line up within tolerance?); the app does not solve for joint angles. v1 may
   only *create* tree-shaped frames, but nothing in the format should assume a tree.
 
+## Moving the selection (decided ✅)
+- **What moves: exactly the selection.** Moving is an edit, not a physical motion (unlike
+  turning, nothing that hangs off it comes along); groups and Select Connected make it easy to
+  take a whole subassembly. Contacts it leaves behind are simply broken.
+- **Keyboard nudge never changes frames.** Arrow keys move the selection half a cell or a whole
+  cell (following H) along the axis of its own grid nearest the screen direction; PageUp / PageDown
+  move it a layer. Its own grid = the frame most selected parts are in (a turned arm slides along its
+  turned grid and stays turned).
+- **Drag = pick up and put down**, like placing several parts at once: in the Select tool, dragging a
+  selected part moves the selection (dragging from empty space still draws a box). The grabbed part's
+  bottom-layer cell under the cursor is the anchor; the drop target is found as for placing (the face
+  under the cursor, else the working grid's ground). The selection's grid snaps onto the target's
+  grid, so it **can change frames**, taking the target's orientation with its quarter turn kept: a
+  fine turn is dropped. Space turns it 90° while dragging; [ / ] give it a fine turn relative to the
+  target (it then gets a grid of its own, as with turned placement); Shift+R clears that.
+- What moves stays rigid inside: turned grids within the selection keep their relative angles.
+  Groups don't change (they're separate from frames). Same validity as placing: red preview on a
+  clash, no stud contact required. Emptied frames are removed. One undo step.
+
 ## Groups, pins and moving subassemblies
 Two separate trees ✅ (groups implemented, save v4):
 - **Groups** (organising): named, nestable subassemblies made by the user (Group Ctrl+G,

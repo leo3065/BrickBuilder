@@ -22,7 +22,6 @@ The widely quoted "4×4×5" includes the 2 mm stud; nominal is 4 × 4 × 3 (Lego
 | 1×1 inner opening | 2.2 ❓ | consistent with the walls (0.85 + 2.2 + 0.85 = 3.9 ≈ pitch − gap). Magnifier photos: a **round counterbore at the mouth**, then a deeper **square cavity whose corners are clipped by the circle**. Best guess: the stud grips in the round bore and 2.2 is the deeper square. To confirm: round bore diameter + depth (caliper depth rod). Parked: rendering only |
 | 1×N underside | hollow | one slot along the middle: studs fit anywhere along it |
 | 2×N underside | double ribs along the long axis; a 2×2 photo shows a centre bar with two round holes | wall → rib gap 2.15 ❓ (< stud Ø, measure at the bottom edge); ribs + gap 1.70; ribs recessed 0.75 from the bottom edge |
-
 | base plate underside (10×10, 20×20) | slots along the four sides, through the corner cells' centres; one cell in from them, a hollow where studs fit without gripping ✅ | a 10×10: four 9-cell slots, a 7×7 hollow |
 
 Underside numbers affect rendering only; where studs fit comes from the slot rules

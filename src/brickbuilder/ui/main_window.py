@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QMainWindow, QMenuBar, QMenu, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QTreeWidget, QTreeWidgetItem, QAbstractItemView
-from PySide6.QtGui import QAction, QKeySequence, QIcon, QColor
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtWidgets import QMainWindow, QFileDialog, QMessageBox, QToolBar, QDockWidget, QWidget, QVBoxLayout, QPushButton, QGridLayout, QLabel, QDialog, QButtonGroup, QTreeWidget, QTreeWidgetItem, QAbstractItemView
+from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import Qt
 from pathlib import Path
 from typing import Optional
 from brickbuilder.ui.viewport import Viewport
@@ -317,28 +317,41 @@ class MainWindow(QMainWindow):
         self.viewport.set_highlight_collisions(on)
         self.update_status()
 
+    # Key reminders per tool, shown at the end of the status bar
+    TOOL_HINTS = {
+        Tool.PLACE: "Space: rotate, A: anchor cell, Shift reverses; [ / ]: fine turn; H: half-cell snap, "
+                    "arrows: nudge; F: grid under cursor",
+        Tool.SELECT: "drag a selected part: move; arrows / PgUp / PgDown: nudge; Ctrl+G: group; "
+                     "double-click: into a group, Alt: one part",
+        Tool.TURN: "drag: turn about the stud, Shift: free; [ / ]: a step; Shift+R: realign",
+        Tool.PAINT: "click: paint with the current colour",
+        Tool.ERASE: "click: remove",
+    }
+
     def update_status(self):
         vp = self.viewport
-        anchors = len(anchor_cells(vp.current_part))
-        unconnected = ""
+        parts = []
+        if vp.current_tool == Tool.PLACE:
+            anchors = len(anchor_cells(vp.current_part))
+            parts += [vp.current_part.name, f"rotated {vp.current_turns * 90 + vp.ghost_angle:g}°",
+                      f"anchor cell {vp.current_anchor + 1}/{anchors}"]
+        if vp.half_snap:
+            parts.append("half-cell snap")
+        if vp.working_frame:
+            parts.append(f"working grid: frame {vp.working_frame}")
         if vp.highlight_unconnected:
             n = len(vp.unconnected_parts())
-            unconnected = f"  ·  {n} unconnected part{'s' if n != 1 else ''}"
+            parts.append(f"{n} unconnected part{'s' if n != 1 else ''}")
         if vp.highlight_collisions:
             n = len(vp.model.collisions())
-            unconnected += f"  ·  {n} colliding part{'s' if n != 1 else ''}"
+            parts.append(f"{n} colliding part{'s' if n != 1 else ''}")
         if vp.selection:
-            n = len(vp.selection)
-            unconnected += f"  ·  {n} selected"
             group = vp.selected_group()
-            if group is not None:
-                unconnected += f" (group \"{vp.model.groups[group].name}\")"
+            name = f" (group \"{vp.model.groups[group].name}\")" if group is not None else ""
+            parts.append(f"{len(vp.selection)} selected{name}")
         if vp.notice:
-            unconnected += f"  ·  {vp.notice}"
-        self.statusBar().showMessage(
-            f"{vp.current_part.name}  ·  rotated {vp.current_turns * 90 + vp.ghost_angle:g}°  ·  anchor cell {vp.current_anchor + 1}/{anchors}"
-            f"{'  ·  half-cell snap' if vp.half_snap else ''}{unconnected}"
-            f"   (Space: rotate, A: anchor cell, Shift reverses; H: half-cell snap, arrows: nudge)")
+            parts.append(vp.notice)
+        self.statusBar().showMessage("  ·  ".join(parts) + f"   ({self.TOOL_HINTS[vp.current_tool]})")
 
     def create_color_dock(self):
         dock = QDockWidget("Colors", self)
@@ -445,11 +458,11 @@ class MainWindow(QMainWindow):
           hover); double-click drills into the group; Alt+click picks one part. Ctrl+click<br>
           adds/removes; drag a box. Delete removes the selection, picking a colour recolours it.<br>
           Ctrl+A selects all, Esc clears. Ctrl+G groups the selection, Ctrl+Shift+G ungroups;<br>
-          drag a selected part to move the selection onto another face or grid (Space turns it,<br>
-          [ / ] fine turn, Esc cancels); arrow keys move it half a cell (H) or a cell along its<br>
-          own grid, PgUp / PgDown a layer.<br>
           rename groups in the Groups dock (double-click). Edit > Select Connected grows the<br>
           selection to whole connected subassemblies.<br>
+          Drag a selected part to move the selection onto another face or grid (Space turns it,<br>
+          [ / ] fine turn, Esc cancels); arrow keys move it half a cell (H) or a cell along its<br>
+          own grid, PgUp / PgDown a layer.<br>
         - Turn (T): drag a part (or the selection) to turn it about the stud it's held by, in<br>
           7.5° steps; Shift turns freely. [ / ] turn the selection a step, Shift+R turns it back<br>
           onto its grid. Locked parts say why in the status bar; red = it would overlap.<br>

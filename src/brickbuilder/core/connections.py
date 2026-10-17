@@ -24,11 +24,12 @@ class Contact:
     slot_part: int
 
 
-def _on_segment(p: glm.vec3, a: glm.vec3, b: glm.vec3) -> bool:
+def on_slot(p: glm.vec3, a: glm.vec3, b: glm.vec3, tolerance: float = TOLERANCE) -> bool:
+    """Is point `p` on the slot from `a` to `b` (a point slot when a == b)?"""
     ab = b - a
     length2 = glm.dot(ab, ab)
     t = 0.0 if length2 == 0 else max(0.0, min(1.0, glm.dot(p - a, ab) / length2))
-    return glm.distance(p, a + ab * t) <= TOLERANCE
+    return glm.distance(p, a + ab * t) <= tolerance
 
 
 def _bucket_z(z: float) -> int:
@@ -52,7 +53,7 @@ def iter_contacts(profile: Profile, stud_parts: Iterable, slot_parts: Iterable) 
                 for i in range(x0, x1 + 1):
                     for j in range(y0, y1 + 1):
                         for stud, other in buckets.get((zz, i, j), ()):
-                            if other != placed.id and abs(stud.z - a.z) <= TOLERANCE and _on_segment(stud, a, b):
+                            if other != placed.id and abs(stud.z - a.z) <= TOLERANCE and on_slot(stud, a, b):
                                 yield Contact(stud, (a, b), other, placed.id)
 
 

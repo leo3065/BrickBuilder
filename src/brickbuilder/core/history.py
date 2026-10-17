@@ -1,8 +1,9 @@
 """Undo/redo for model edits.
 
 Every edit goes through History, which applies it to the model and records enough to reverse
-it. One user action is one command (a list of operations), so future multi-part actions
-(multi-select, shift-all) undo in one step.
+it. One user action is one command (a list of operations), so multi-part actions (deleting or
+recolouring a selection, grouping, moving, turning) undo in one step. Commands that can fail
+(moves, turns, turned placement) go through _try_run, which rolls back and returns the reason.
 """
 from collections import deque
 from dataclasses import dataclass
@@ -180,6 +181,17 @@ class History:
             return
         self.model.set_color(part_id, color)
         self._push([ColorOp(part_id, old, color)])
+
+    def set_colors(self, part_ids, color: str) -> None:
+        """Recolour several parts as one undo step."""
+        command = []
+        for part_id in sorted(set(part_ids)):
+            old = self.model.parts[part_id].color
+            if old != color:
+                self.model.set_color(part_id, color)
+                command.append(ColorOp(part_id, old, color))
+        if command:
+            self._push(command)
 
     def remove_parts(self, part_ids) -> None:
         """Remove several parts as one undo step. Groups left empty go too."""
@@ -414,17 +426,6 @@ class History:
             for g in empty:
                 ops.append(RemoveGroupOp(g, names[g], parent[g]))
                 del parent[g]
-
-    def set_colors(self, part_ids, color: str) -> None:
-        """Recolour several parts as one undo step."""
-        command = []
-        for part_id in sorted(set(part_ids)):
-            old = self.model.parts[part_id].color
-            if old != color:
-                self.model.set_color(part_id, color)
-                command.append(ColorOp(part_id, old, color))
-        if command:
-            self._push(command)
 
     # --- undo / redo --------------------------------------------------------------------
 

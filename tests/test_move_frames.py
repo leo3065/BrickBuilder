@@ -1,11 +1,10 @@
 """History.move_parts: turning parts creates, reuses, merges and removes frames."""
-import math
 
 import glm
 import pytest
 
 from brickbuilder.core.history import History
-from brickbuilder.core.model import Model
+from brickbuilder.core.model import Model, turn_about_z
 from brickbuilder.core.parts import load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 
@@ -24,11 +23,7 @@ def lib(model, name):
     return model.library[f"nanoblock:{name}"]
 
 
-def turn(pivot: glm.vec3, degrees: float) -> glm.mat4:
-    """Turning about a vertical axis through `pivot`."""
-    return (glm.translate(glm.mat4(1.0), pivot)
-            * glm.mat4_cast(glm.angleAxis(math.radians(degrees), glm.vec3(0, 0, 1)))
-            * glm.translate(glm.mat4(1.0), -pivot))
+turn = turn_about_z  # turning about a vertical axis through a pivot
 
 
 def close(a, b, eps=1e-3):

@@ -163,17 +163,7 @@ class Renderer:
         gl.glOrtho(-2, 2, -2, 2, -10, 10)
         
         gl.glMatrixMode(gl.GL_MODELVIEW)
-        # Create a rotation-only view matrix
-        # We can extract rotation from camera view matrix
-        view = camera.get_view_matrix()
-        
-        # In GLM view matrix, the top-left 3x3 is the rotation (if no scaling)
-        # We want to place the camera at some distance looking at 0,0,0
-        # But easier: just load the view rotation.
-        # However, lookAt(eye, target, up) creates translation too.
-        # Let's recreate a matrix with only rotation logic.
-        
-        # Actually simplest: Use the same rotation angles but fixed distance.
+        # A rotation-only view: the camera's angles at a fixed distance from the origin
         gizmo_cam_pos = glm.vec3(
             3.0 * math.cos(camera.pitch) * math.cos(camera.yaw),
             3.0 * math.cos(camera.pitch) * math.sin(camera.yaw),

@@ -1,9 +1,10 @@
-"""Overlap between parts in different frames: separating axis test on their convex solids.
+"""The clash test: do two parts get in each other's way (see docs/turning.md).
 
-Within one frame the sub-cell occupancy decides overlap exactly. Across frames the grids don't
-line up, so the world-space solids are compared instead. Every body is convex (boxes, rounded
-boxes, wedges), so two bodies are apart iff some axis separates them: a face normal of either,
-or the cross product of an edge direction from each.
+On one grid the sub-cell occupancy decides overlap exactly when placing. Across grids, and for
+anything moved or turned, the world-space solids are compared instead. Every body is convex
+(boxes, rounded boxes, wedges), so two bodies are apart iff some axis separates them: a face
+normal of either, or the cross product of an edge direction from each. Studs are checked too:
+they may only go into another part's body on one of its slots.
 """
 import math
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from typing import List, Optional, Sequence, Tuple
 
 import glm
 import numpy as np
+
+from brickbuilder.core.connections import on_slot
 
 # mm: two solids overlapping by less than this along some axis only touch (faces in contact, the
 # round ends of a stud hinge, float noise from turned frames)
@@ -122,17 +125,7 @@ def make_shape(solids, studs, slots, stud_radius: float, stud_height: float,
     return Shape([hull(s) for s in solids], stud_hulls, tuple(slots), (lo, hi))
 
 
-def _in_a_slot(p: glm.vec3, slots, tolerance: float) -> bool:
-    for a, b in slots:
-        ab = b - a
-        length2 = glm.dot(ab, ab)
-        t = 0.0 if length2 == 0 else max(0.0, min(1.0, glm.dot(p - a, ab) / length2))
-        if glm.distance(p, a + ab * t) <= tolerance:
-            return True
-    return False
-
-
-def clash(a: Shape, b: Shape, tolerance: float = 1e-3) -> Optional[str]:
+def clash(a: Shape, b: Shape) -> Optional[str]:
     """How two parts get in each other's way, or None: "bodies" overlapping, or a "stud" of one
     inside the other's body other than in one of its slots."""
     if not boxes_overlap(a.box, b.box):
@@ -141,6 +134,6 @@ def clash(a: Shape, b: Shape, tolerance: float = 1e-3) -> Optional[str]:
         return "bodies"
     for x, y in ((a, b), (b, a)):
         for base, h in x.studs:
-            if hulls_overlap([h], y.hulls) and not _in_a_slot(base, y.slots, tolerance):
+            if hulls_overlap([h], y.hulls) and not any(on_slot(base, s0, s1) for s0, s1 in y.slots):
                 return "stud"
     return None

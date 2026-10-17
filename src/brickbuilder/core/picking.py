@@ -1,5 +1,4 @@
 import glm
-import math
 from typing import List, Optional, Tuple
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.geometry import ray_convex
@@ -16,25 +15,8 @@ def get_mouse_ray(mouse_x: float, mouse_y: float, width: float, height: float, c
     ndc_x = (2.0 * mouse_x) / width - 1.0
     ndc_y = 1.0 - (2.0 * mouse_y) / height # Flip Y
     
-    # Clip coordinates
-    clip_coords = glm.vec4(ndc_x, ndc_y, -1.0, 1.0)
-    
-    # Inverse Projection
-    inv_proj = glm.inverse(camera.get_projection_matrix())
-    eye_coords = inv_proj * clip_coords
-    
-    # Inverse View
-    inv_view = glm.inverse(camera.get_view_matrix())
-    
-    # For Orthographic:
-    # Ray direction is the Camera's Forward vector (negative Z axis of View Space).
-    # Ray origin depends on the screen coordinate.
-    
-    # The world space position of the "mouse on near plane":
-    # (ndc_x, ndc_y, -1, 1) transformed by inv(Proj * View)
-    
-    # Let's do it fully with matrices which handles both Ortho and Persp generic cases usually.
-    # World position of near plane point
+    # The points under the mouse on the near and far planes, through inv(Proj * View): works for
+    # orthographic and perspective alike
     inv_prod = glm.inverse(camera.get_projection_matrix() * camera.get_view_matrix())
     
     # Near point (z = -1 in NDC)

@@ -1,16 +1,16 @@
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QMouseEvent, QWheelEvent
 import OpenGL.GL as gl
 import glm
 import math
-from typing import Optional, Tuple
+from typing import Optional
 from brickbuilder.core.renderer import Renderer
 from brickbuilder.core.camera import Camera
 from brickbuilder.core.connections import groups
 from brickbuilder.core.history import History
 from brickbuilder.core.model import (Model, Sub, anchor_cells, decompose, default_anchor_index, origin_for_anchor,
-                                     placement_target)
+                                     placement_target, turn_about_z, yaw_degrees)
 from brickbuilder.core.parts import PartDef, load_builtin_library
 from brickbuilder.core.profile import load_builtin_profile
 from brickbuilder.core import picking
@@ -46,14 +46,14 @@ class Viewport(QOpenGLWidget):
         self.ghost_valid = False
         self.ghost_frame = 0
         self.hover_pos = None # last mouse position over the viewport, for refreshing the ghost
-        # Half-offset placement: snap to half-cells in XY, plus a keyboard nudge (in sub-cells)
-        # that's kept until the cursor moves to a different target
+        # Half-offset placement: snap to half-cells in XY, plus a keyboard nudge of the preview (in
+        # sub-cells) that's kept until the cursor moves to a different target
         self.half_snap = False
-        # Mark parts outside the largest connected group (View > Highlight Unconnected Parts)
+        self.ghost_nudge = (0, 0)
+        self._nudge_base = None
+        # View > Highlight Unconnected Parts (outside the largest connected group) / Colliding Parts
         self.highlight_unconnected = False
         self.highlight_collisions = False
-        self.nudge = (0, 0)
-        self._nudge_base = None
 
         # Selected part ids (Select tool), and the box being dragged: (x0, y0, x1, y1) widget px
         self.selection: set = set()
@@ -65,7 +65,7 @@ class Viewport(QOpenGLWidget):
         # None = top level (clicks select whole outermost groups)
         self.select_context: Optional[int] = None
         self.hovered: set = set()  # what a click would select, outlined while hovering
-        # Turn tool: the turn being dragged (plan, pivot, start angle, angle, transform, valid)
+        # Turn tool: the turn being dragged (moving ids, pivot, angles, transform, valid)
         self.turning: Optional[dict] = None
         self.rotation_snap = 7.5  # degrees; an editor setting (TODO(preferences))
         self.notice = ""  # a short message for the status bar (why a turn can't happen, ...)
@@ -76,12 +76,8 @@ class Viewport(QOpenGLWidget):
         # Working frame: whose grid empty space and the ground use when placing (F toggles it)
         self.working_frame = 0
 
-        # Enable mouse tracking for hover effects if needed later
+        # Mouse moves without a button pressed too: the ghost and hover outlines follow the cursor
         self.setMouseTracking(True)
-
-        # Timer for continuous update if needed (or just update on events)
-        # For smooth camera, might need timer or requestUpdate
-
         self.last_mouse_pos = None
 
     def initializeGL(self):
@@ -101,9 +97,19 @@ class Viewport(QOpenGLWidget):
         rect = None
         if self.select_rect:
             rect = tuple(v * pixel_ratio for v in self.select_rect)
+        moving = self._moving_preview()
+        selected = []
+        for pid in self.selection:
+            if pid not in self.model.parts:
+                continue
+            edges = self.model.parts[pid].edges
+            if moving and pid in moving[0]:  # outline it where it's being moved to
+                m = moving[1]
+                edges = [(glm.vec3(m * glm.vec4(a, 1.0)), glm.vec3(m * glm.vec4(b, 1.0))) for a, b in edges]
+            selected.append(edges)
         self.renderer.render(self.camera, self.model, self.profile, ghost,
                              int(self.width() * pixel_ratio), int(self.height() * pixel_ratio),
-                             [self.model.parts[pid].edges for pid in self.selection if pid in self.model.parts],
+                             selected,
                              select_rect=rect,
                              hovered_edges=[self.model.parts[pid].edges for pid in self.hovered - self.selection
                                             if pid in self.model.parts],
@@ -111,45 +117,51 @@ class Viewport(QOpenGLWidget):
                              if self.highlight_unconnected else (),
                              collided=[self.model.parts[pid].edges for pid in self.model.collisions()]
                              if self.highlight_collisions else (),
-                             turning=self._moving_preview(),
+                             turning=moving,
                              pivot=self.turning["pivot"] if self.turning else None,
                              grid_matrix=self.model.frame_matrix(self.working_frame) if self.working_frame else None)
 
     def set_tool(self, tool: Tool):
         self.current_tool = tool
         self.ghost_pos = None
-        self.turning = None
-        self.dragging = None
+        self._cancel_moves()
         self.notice = ""
         if tool not in (Tool.SELECT, Tool.TURN):
-            self.selection = set()
-            self.select_context = None
-            self.hovered = set()
+            self._clear_selection_state()
+        self.update()
+        self.edited.emit()
+
+    def _cancel_moves(self):
+        """Drop a turn or drag in progress (e.g. the parts it refers to may be gone)."""
+        if self.turning or self.dragging:
+            self.turning = self.dragging = None
+            self._press = None
+            self.notice = ""
+
+    def _clear_selection_state(self):
+        self.selection = set()
+        self.select_context = None
+        self.hovered = set()
+
+    def _forget_document(self):
+        """After New or Open: drop everything that refers to the old contents."""
+        self.history.reset()
+        self.ghost_pos = None
+        self._cancel_moves()
+        self._clear_selection_state()
+        self.working_frame = 0
+        self.notice = ""
         self.update()
         self.edited.emit()
 
     def reset_scene(self):
         self.model.clear()
-        self.history.reset()
         self.camera.reset()
-        self.ghost_pos = None
-        self.selection = set()
-        self.select_context = None
-        self.hovered = set()
-        self.working_frame = 0
-        self.update()
-        self.edited.emit()
+        self._forget_document()
 
     def model_replaced(self):
-        # After loading a file: drop references into the old contents
-        self.history.reset()
-        self.ghost_pos = None
-        self.selection = set()
-        self.select_context = None
-        self.hovered = set()
-        self.working_frame = 0
-        self.update()
-        self.edited.emit()
+        # After loading a file
+        self._forget_document()
 
     def undo(self):
         if self.history.undo():
@@ -159,12 +171,10 @@ class Viewport(QOpenGLWidget):
         if self.history.redo():
             self._after_history_step()
 
-    def _check_working_frame(self):
+    def _after_history_step(self):
+        self._cancel_moves()
         if self.working_frame not in self.model.frames:
             self.working_frame = 0
-
-    def _after_history_step(self):
-        self._check_working_frame()
         self.selection &= set(self.model.parts)
         self.hovered &= set(self.model.parts)
         if self.select_context not in self.model.groups:
@@ -213,8 +223,7 @@ class Viewport(QOpenGLWidget):
 
     def clear_selection(self):
         if self.turning or self.dragging:  # Esc while turning or dragging cancels it
-            self.turning = self.dragging = None
-            self.notice = ""
+            self._cancel_moves()
             self.update()
             self.edited.emit()
             return
@@ -303,29 +312,26 @@ class Viewport(QOpenGLWidget):
             return plan, glm.vec3((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z)
         return plan, plan.pivot
 
-    @staticmethod
-    def turn_matrix(pivot: glm.vec3, degrees: float) -> glm.mat4:
-        """Turning about the vertical axis through `pivot`."""
-        return (glm.translate(glm.mat4(1.0), pivot)
-                * glm.mat4_cast(glm.angleAxis(math.radians(degrees), glm.vec3(0, 0, 1)))
-                * glm.translate(glm.mat4(1.0), -pivot))
-
     def turn_selection(self, degrees: float) -> bool:
         """Turn the selection (and what hangs off it) by an angle, as one undo step."""
         plan, pivot = self._turn_plan()
         if plan is None:
             self.edited.emit()
             return False
-        return self._commit_turn(plan.moving, self.turn_matrix(pivot, degrees))
+        return self._commit_turn(plan.moving, turn_about_z(pivot, degrees))
+
+    @staticmethod
+    def _add_angle(turns: int, angle: float, degrees: float):
+        """(quarter turns, fine angle 0 <= a < 90) after turning by `degrees` more."""
+        total = angle + degrees
+        quarters = math.floor(total / 90 + 1e-9)
+        rest = total - 90 * quarters
+        return (turns + quarters) % 4, (0.0 if abs(rest) < 1e-9 or abs(rest - 90) < 1e-9 else rest)
 
     def turn_step(self, sign: int):
         if self.dragging:
             d = self.dragging
-            angle = d["angle"] + sign * self.rotation_snap
-            d["turns"] = (d["turns"] + math.floor(angle / 90 + 1e-9)) % 4
-            d["angle"] = angle - 90 * math.floor(angle / 90 + 1e-9)
-            if abs(d["angle"]) < 1e-9 or abs(d["angle"] - 90) < 1e-9:
-                d["angle"] = 0.0
+            d["turns"], d["angle"] = self._add_angle(d["turns"], d["angle"], sign * self.rotation_snap)
             self._update_drag()
             return
         if self.current_tool == Tool.PLACE:
@@ -336,14 +342,7 @@ class Viewport(QOpenGLWidget):
     def turn_ghost(self, degrees: float):
         """Turn the placement preview off its grid. Whole quarter turns go into current_turns,
         which turns it about the same cell (the anchor stays put)."""
-        angle = self.ghost_angle + degrees
-        while angle >= 90 - 1e-9:
-            angle -= 90
-            self.current_turns = (self.current_turns + 1) % 4
-        while angle < -1e-9:
-            angle += 90
-            self.current_turns = (self.current_turns - 1) % 4
-        self.ghost_angle = 0.0 if abs(angle) < 1e-9 else angle
+        self.current_turns, self.ghost_angle = self._add_angle(self.current_turns, self.ghost_angle, degrees)
         self.refresh_ghost()
         self.edited.emit()
 
@@ -351,7 +350,7 @@ class Viewport(QOpenGLWidget):
         """The preview's turn off its frame's grid, in that grid's space."""
         if not self.ghost_angle or self._ghost_pivot is None:
             return glm.mat4(1.0)
-        return self.turn_matrix(self._ghost_pivot, self.ghost_angle)
+        return turn_about_z(self._ghost_pivot, self.ghost_angle)
 
     def ghost_matrix(self) -> glm.mat4:
         """Grid space of the preview -> world."""
@@ -399,15 +398,13 @@ class Viewport(QOpenGLWidget):
         else:
             mine = min(plan.moving)
             base = glm.quat()
-        rot = glm.inverse(base) * glm.quat_cast(glm.mat3(self.model.frame_matrix(self.model.parts[mine].frame)))
-        x = glm.mat3_cast(rot) * glm.vec3(1, 0, 0)
-        angle = math.degrees(math.atan2(x.y, x.x))
+        angle = yaw_degrees(glm.inverse(base) * glm.quat_cast(glm.mat3(self.model.frame_matrix(self.model.parts[mine].frame))))
         delta = round(angle / 90) * 90 - angle
         if abs(delta) < 1e-4:
             self.notice = "already lined up with the grid"
             self.edited.emit()
             return False
-        return self._commit_turn(plan.moving, self.turn_matrix(pivot, delta))
+        return self._commit_turn(plan.moving, turn_about_z(pivot, delta))
 
     def _commit_turn(self, moving, transform) -> bool:
         reason = self.history.move_parts(moving, transform)
@@ -429,14 +426,17 @@ class Viewport(QOpenGLWidget):
         hit, _, point = picking.intersect_model(
             picking.get_mouse_ray(event.position().x(), event.position().y(), self.width(), self.height(), self.camera),
             self.model)
-        if hit is None:
+        if hit is None:  # empty space: deselect, like the Select tool
+            self._clear_selection_state()
+            self.update()
+            self.edited.emit()
             return
         if hit.id not in self.selection:
             self.selection = self._unit(hit.id, bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
         plan, pivot = self._turn_plan(point)
         if plan is not None:
             start = self._ground_angle(event.position(), pivot)
-            self.turning = {"moving": plan.moving, "pivot": pivot, "start": start or 0.0, "last": start or 0.0,
+            self.turning = {"moving": plan.moving, "pivot": pivot, "last": start or 0.0,
                             "raw": 0.0, "angle": 0.0, "transform": glm.mat4(1.0), "valid": True}
             self.notice = "turning 0°"
         self.update()
@@ -454,7 +454,7 @@ class Viewport(QOpenGLWidget):
         angle = t["raw"] if free else round(t["raw"] / self.rotation_snap) * self.rotation_snap
         if angle != t["angle"]:
             t["angle"] = angle
-            t["transform"] = self.turn_matrix(t["pivot"], angle)
+            t["transform"] = turn_about_z(t["pivot"], angle)
             t["valid"] = self.model.moved_overlaps(t["moving"], t["transform"]) is None
             self.notice = f"turning {angle:.4g}°" + ("" if t["valid"] else " (overlaps)")
             self.edited.emit()
@@ -488,8 +488,8 @@ class Viewport(QOpenGLWidget):
     def _grid_axes(self, frame: int):
         """Grid axes (as (x, y) steps) of a frame that best match screen right and screen up from
         the current view: right gets the closer one (X on a tie), up the other."""
-        x = glm.vec3(self.model.frame_matrix(frame) * glm.vec4(1, 0, 0, 0))
-        yaw = self.camera.yaw - math.atan2(x.y, x.x)  # the camera's yaw seen from that grid
+        frame_yaw = yaw_degrees(glm.quat_cast(glm.mat3(self.model.frame_matrix(frame))))
+        yaw = self.camera.yaw - math.radians(frame_yaw)  # the camera's yaw seen from that grid
         right = glm.vec2(-math.sin(yaw), math.cos(yaw))
         up = glm.vec2(-math.cos(yaw), -math.sin(yaw))
         if abs(right.x) >= abs(right.y):
@@ -593,6 +593,7 @@ class Viewport(QOpenGLWidget):
         self.edited.emit()
 
     def delete_selection(self):
+        self._cancel_moves()
         if self.selection:
             self.history.remove_parts(self.selection)
             self.selection = set()
@@ -758,51 +759,32 @@ class Viewport(QOpenGLWidget):
         self.update()
 
     def update_ghost(self, mouse_x, mouse_y):
-        ray = picking.get_mouse_ray(mouse_x, mouse_y, self.width(), self.height(), self.camera)
-
-        # Check model intersection first
-        hit, normal, point = picking.intersect_model(ray, self.model)
-
-        target = None
-        frame = 0
-        if hit:
-            # Snap to the cell against the hit face. Parts placed against a part go on that
-            # part's grid (its frame), so building on a turned part follows its turn.
-            frame = hit.frame
-            point, normal = self.model.to_frame(frame, point, normal)
-            target = placement_target(self.profile, point, normal, self.half_snap)
-        else:
-            # The ground of the working grid (the root grid unless F picked another), only when
-            # looking down at it; layer 0 sits on it
-            frame = self.working_frame
-            m = self.model.frame_matrix(frame)
-            up = glm.normalize(glm.vec3(m * glm.vec4(0, 0, 1, 0)))
-            if glm.dot(ray.direction, up) < -1e-6:
-                t = picking.intersect_plane(ray, up, glm.vec3(m * glm.vec4(0, 0, 0, 1)))
-                if t:
-                    point, normal = self.model.to_frame(frame, ray.origin + ray.direction * t, up)
-                    target = placement_target(self.profile, point, glm.vec3(0, 0, 1), self.half_snap)
+        # Parts placed against a part go on that part's grid (its frame), so building on a turned
+        # part follows its turn; in empty space, the working grid's ground
+        frame, target = self._target_under(mouse_x, mouse_y)
 
         # A keyboard nudge applies to the spot it was made at; moving elsewhere drops it
         if target != self._nudge_base:
             self._nudge_base = target
-            self.nudge = (0, 0)
+            self.ghost_nudge = (0, 0)
 
         # The target cell is where the part's anchor cell goes
         self.ghost_pos = None
         self.ghost_valid = False
+        if self.notice.startswith("can't place"):
+            self.notice = ""
         if target is not None:
-            target = (target[0] + self.nudge[0], target[1] + self.nudge[1], target[2])
+            target = (target[0] + self.ghost_nudge[0], target[1] + self.ghost_nudge[1], target[2])
             anchor = anchor_cells(self.current_part)[self.current_anchor]
             self.ghost_pos = origin_for_anchor(self.profile, anchor, self.current_turns, target)
             self.ghost_frame = frame
-            nx, ny, _ = self.profile.subdiv
-            self._ghost_pivot = self.profile.sub_to_world((target[0] + nx / 2, target[1] + ny / 2, target[2]))
+            self._ghost_pivot = self._cell_centre(target)
             if self.ghost_angle:
                 problem = self.model.turned_placement_problem(self.current_part, self.ghost_pos,
                                                               self.current_turns, self.ghost_matrix())
                 self.ghost_valid = problem is None
-                self.notice = f"can't place: {problem}" if problem else ""
+                if problem:
+                    self.notice = f"can't place: {problem}"
             else:
                 self.ghost_valid = self.model.can_place(self.current_part, self.ghost_pos, self.current_turns, frame)
 
@@ -829,7 +811,7 @@ class Viewport(QOpenGLWidget):
         right_axis, up_axis = self._grid_axes(self.ghost_frame if self.ghost_pos is not None else 0)
         dx = right_axis[0] * screen_dx + up_axis[0] * screen_dy
         dy = right_axis[1] * screen_dx + up_axis[1] * screen_dy
-        self.nudge = (self.nudge[0] + dx, self.nudge[1] + dy)
+        self.ghost_nudge = (self.ghost_nudge[0] + dx, self.ghost_nudge[1] + dy)
         self.refresh_ghost()
 
     def leaveEvent(self, event):

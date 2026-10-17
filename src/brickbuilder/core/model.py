@@ -207,6 +207,19 @@ def decompose(m: glm.mat4) -> Tuple[glm.vec3, glm.quat]:
     return glm.vec3(m[3]), unit_quat(glm.quat_cast(glm.mat3(m)))
 
 
+def yaw_degrees(rotation: glm.quat) -> float:
+    """How far a rotation turns the X axis about Z, in degrees (-180..180]."""
+    x = glm.mat3_cast(rotation) * glm.vec3(1, 0, 0)
+    return math.degrees(math.atan2(x.y, x.x))
+
+
+def turn_about_z(pivot: glm.vec3, degrees: float) -> glm.mat4:
+    """Turning about the vertical axis through `pivot`."""
+    return (glm.translate(glm.mat4(1.0), pivot)
+            * glm.mat4_cast(glm.angleAxis(math.radians(degrees), glm.vec3(0, 0, 1)))
+            * glm.translate(glm.mat4(1.0), -pivot))
+
+
 def to_parent_grid(profile: Profile, origin: glm.vec3, rotation: glm.quat,
                    pos: Sub, turns: int) -> Optional[Tuple[Sub, int]]:
     """A part at `pos`/`turns` in a frame placed at (origin, rotation) in its parent, as a
@@ -215,8 +228,7 @@ def to_parent_grid(profile: Profile, origin: glm.vec3, rotation: glm.quat,
     r = glm.mat3_cast(rotation)
     if glm.distance(r * glm.vec3(0, 0, 1), glm.vec3(0, 0, 1)) > 1e-5:
         return None
-    x = r * glm.vec3(1, 0, 0)
-    angle = math.degrees(math.atan2(x.y, x.x))
+    angle = yaw_degrees(rotation)
     k = round(angle / 90)
     if abs(angle - k * 90) > 1e-3:
         return None
@@ -279,9 +291,7 @@ class Model:
         self._next_id = 1
         self._links = None  # cached connection graph, dropped on any add/remove
         self._collisions: Optional[Set[int]] = None  # cached collisions(), dropped likewise
-        self._hulls: Dict[int, list] = {}  # part id -> collision hulls of its solids, built on demand
-
-    # --- queries -------------------------------------------------------------------------
+        self._shapes: Dict[int, collision.Shape] = {}  # part id -> its clash-test shape, built on demand
 
     # --- frames ----------------------------------------------------------------------------
 
@@ -376,11 +386,11 @@ class Model:
         return collision.make_shape(solids, studs, slots, st.diameter / 2, st.height, up)
 
     def part_shape(self, part_id: int) -> collision.Shape:
-        if part_id not in self._hulls:
+        if part_id not in self._shapes:
             p = self.parts[part_id]
             up = glm.vec3(p.stud_rotation * glm.vec4(0, 0, 1, 0)) if p.stud_rotation is not None else glm.vec3(0, 0, 1)
-            self._hulls[part_id] = self.shape(p.solids, p.studs, p.antistuds, up)
-        return self._hulls[part_id]
+            self._shapes[part_id] = self.shape(p.solids, p.studs, p.antistuds, up)
+        return self._shapes[part_id]
 
     def clashes(self, shape: collision.Shape, skip=lambda p: False) -> List[int]:
         """Parts (except those `skip` says) that a shape clashes with."""
@@ -467,12 +477,6 @@ class Model:
                             out |= {a.id, b.id}
         return out
 
-    def placement_solids(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> Tuple[Solid, ...]:
-        return self._to_world(frame, solids=part_solids(self.profile, part, pos, turns))["solids"]
-
-    def placement_studs(self, part: PartDef, pos: Sub, turns: int, frame: int = 0) -> Tuple[glm.vec3, ...]:
-        return self._to_world(frame, studs=stud_positions(self.profile, part, pos, turns))["studs"]
-
     def _to_world(self, frame: int, solids=(), edges=(), studs=(), antistuds=()):
         """Move frame-space geometry into the world (a no-op for the root frame)."""
         if frame == 0:
@@ -544,7 +548,7 @@ class Model:
         placed = self.parts.pop(part_id, None)
         if placed is None:
             return
-        self._hulls.pop(part_id, None)
+        self._shapes.pop(part_id, None)
         for sub, _ in placed.regions:
             key = (placed.frame, sub)
             remaining = [entry for entry in self.occupancy[key] if entry[0] != part_id]
@@ -661,7 +665,7 @@ class Model:
     def clear(self) -> None:
         self._links = self._collisions = None
         self.parts.clear()
-        self._hulls = {}
+        self._shapes = {}
         self.frames = {0: ROOT}
         self.groups = {}
         self.occupancy.clear()
@@ -739,7 +743,7 @@ class Model:
         self.frames = loaded.frames
         self.groups = loaded.groups
         self._links = self._collisions = None
-        self._hulls = {}
+        self._shapes = {}
         self.modified = False
 
     def _load_v1(self, data: Dict[str, Any]) -> None:

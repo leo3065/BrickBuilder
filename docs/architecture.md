@@ -30,8 +30,13 @@ src/brickbuilder/
   core/tools.py        Tool enum: PLACE / SELECT / PAINT / ERASE / TURN
   ui/main_window.py    Menus and shortcuts, tool toolbar (Q/W/E/R/T), Parts tree (by category folder),
                        Colors and Groups docks, per-tool status bar, Save/Save As, close prompt
-  ui/viewport.py       QOpenGLWidget: input, tool dispatch, ghost preview, selection levels, Turn tool
-                       (turning, sliding, posing), dragging / nudging the selection, working frame, camera keys
+  ui/viewport.py       The 3D view widget shell: scene state, GL, painting, input dispatch, tools, undo,
+                       New/Open; behaviour comes from the mixins below
+  ui/placing.py        PlacingMixin: the Place tool preview (targets on faces, side studs, joints; turned
+                       preview; working grid; nudging)
+  ui/selecting.py      SelectionMixin: selection and groups, moving the selection (drag, nudge), Paint/Erase
+  ui/turning.py        TurningMixin: the Turn tool (turning, sliding, posing, realign / reset)
+  ui/view_controls.py  ViewControlsMixin: camera presets, orbit steps, fitting, gizmo clicks
   profiles/*.toml      Built-in system profiles (nanoblock.toml, incl. the 45-colour palette)
   parts/<profile>/<Category>/<name>.toml   Built-in parts; id = "<profile>:<file stem>"
 tests/                 pytest suite (no GL)
@@ -99,7 +104,7 @@ History      # every UI edit as undoable commands (lists of ops)
   `Model.selection_unit(part, Viewport.select_context)` (outermost group; double-click drills in);
   Alt = one part. Delete / recolour / group / ungroup / rename are one command each.
 - **Turn tool**: `motion.plan_turn` → `Viewport._start_turn` / `_drag_turn` (turn about an axis),
-  `_drag_slide` (Ctrl), `_drag_pose` / `_drag_roll` (a ball joint); preview via `Renderer.render(turning=
+  `_drag_slide` (Ctrl; clamped by `_slide_range` so a stud stays in its slot), `_drag_pose` / `_drag_roll` (a ball joint); preview via `Renderer.render(turning=
   (ids, transform, valid), pivot=(point, axis))`, red from `Model.moved_overlaps` and
   `Model.joints_within_limits`; commit with `History.move_parts`. Keys: `turn_step`, `realign_selection`,
   `reset_joint`.

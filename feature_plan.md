@@ -74,7 +74,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 ### Maintenance
 - [ ] Switch to `from pyglm import glm` (PyGLM warns that `import glm` will be deprecated). Touches every module.
 - [ ] Move rendering to VBOs/shaders before mesh-heavy features (imported meshes); display lists are fine for now (1000 parts ≈ 25 ms per frame; the joint parts' round bodies are low-poly).
-- [ ] Split `ui/viewport.py` (now ~1,150 lines): turning, posing, sliding and moving into their own module(s); the joint and side-stud targeting (`_joint_target`, `_side_stud_target`) could join the placement code.
+- [x] Split `ui/viewport.py`: the widget shell stays; placing, selecting / moving, turning and camera controls are mixins in their own modules (`ui/placing.py`, `selecting.py`, `turning.py`, `view_controls.py`).
 
 ### Advanced
 - [ ] Exporting the model for the current view as an image, both raster and vector formats.

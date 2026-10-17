@@ -56,7 +56,9 @@ What's left decides the plan, from the turning parts of the free motions:
 - **no turning** → **locked**; "only sliding" if a shift is free, else "held by studs on different
   axes" (e.g. two studs in one slot, or a top stud and a side stud).
 - two turning axes, or three not about one joint: locked for now ("can't be posed yet").
-Separately, a free motion with no turning in it (`TurnPlan.slide`) is a slide along a slot.
+Separately, a free motion with no turning in it (`TurnPlan.slide`) is a slide along a slot. Ctrl+drag in
+the Turn tool offers it, in half-cell steps (Shift: free), and stops where the last stud would leave
+its slot (`_slide_range`), so the part stays held.
 
 | Situation | Rows | Free | Result |
 |---|---|---|---|

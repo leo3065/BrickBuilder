@@ -125,3 +125,23 @@ def test_round_1x3_hinge_keeps_turning_at_any_angle(model):
     # Back to straight: on the root grid again
     assert turn_by(-total) is None
     assert model.parts[b].frame == 0 and set(model.frames) == {0}
+
+
+def test_slides_along_the_slot(model):
+    # One stud in the arm's slot: it turns, and it can also slide along the slot (Y here)
+    add(model, "brick_2x2_1_stud", (0, 0, 0))
+    arm = add(model, "brick_1x4", (1, 1, 1))
+    plan = plan_turn(model, {arm})
+    assert plan.kind == "turn" and plan.slide is not None and abs(abs(plan.slide.y) - 1) < 1e-6
+
+
+def test_two_studs_in_one_slot_slide_but_dont_turn(model):
+    add(model, "brick_2x2", (10, 0, 0))
+    arm = add(model, "brick_1x4", (10, 0, 1))
+    plan = plan_turn(model, {arm})
+    assert plan.kind == "locked" and plan.slide is not None and abs(abs(plan.slide.y) - 1) < 1e-6
+    # A point antistud on a stud: turns, but nothing to slide along
+    add(model, "brick_1x1", (20, 0, 0))
+    top = add(model, "brick_1x1", (20, 0, 1))
+    plan = plan_turn(model, {top})
+    assert plan.kind == "turn" and plan.slide is None

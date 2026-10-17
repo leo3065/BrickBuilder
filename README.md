@@ -79,7 +79,7 @@ uv run pytest
   - **Ctrl+G / Ctrl+Shift+G:** group / ungroup the selection. Groups nest; the Groups dock lists
     them with part counts (click to select, double-click to rename).
 - **Turn (T):** drag a part (or the selection) to turn it about the stud it's held by, in 7.5°
-  steps; **Shift** turns freely. **[ / ]** turn the selection a step, **Shift+R** turns it back onto
+  steps; **Shift** turns freely; **Ctrl+drag** slides it along the slot it's held in. **[ / ]** turn the selection a step, **Shift+R** turns it back onto
   its grid. Parts built on a turned part follow its grid. If the contacts lock it (studs on different
   axes, two studs in one slot), the status bar says why; a red preview means it would overlap.
 - **Paint (E):** click to recolour a part with the current colour.

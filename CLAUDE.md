@@ -162,8 +162,8 @@ tests/               pytest suite
 - **Turn tool (T)**: `motion.plan_turn` (moving set + free motion), dragged in
   `Viewport._start_turn/_drag_turn/_finish_turn`, previewed with `Renderer.render(turning=(ids,
   transform, valid), pivot=...)` (the parts' own display lists under the matrix; red from
-  `Model.moved_overlaps`), committed with `History.move_parts`. `[ / ]`, Shift+R: `turn_step`,
-  `realign_selection`. Details and tolerances: `docs/turning.md`.
+  `Model.moved_overlaps`), committed with `History.move_parts`. Ctrl+drag slides along
+  `TurnPlan.slide` (`_start_slide/_drag_slide`). `[ / ]`, Shift+R: `turn_step`, `realign_selection`. Details and tolerances: `docs/turning.md`.
 - **Moving the selection**: drag a selected part in the Select tool
   (`_start_drag/_update_drag/_finish_drag`, `move_parts(..., target_frame)`), or arrows / PgUp /
   PgDown (`nudge_selection`, along its own grid, never changing frames).

@@ -59,6 +59,10 @@ Stack the rows into `A` (k × 3) and take its singular values:
   (nearest the cursor when a hint is given) is the **pivot**: plan **turn**.
 - Rank below 3 but no stud passes: the contacts only allow sliding (e.g. two studs in one long
   slot): **locked** ("only sliding").
+- Either way, a free motion with no turning in it (`TurnPlan.slide`: the null-space combination
+  whose angle part is zero) is a slide along the slot. Ctrl+drag in the Turn tool offers it, in
+  half-cell steps (Shift: free); the clash test stops it at the slot's end (the stud would leave
+  the slot).
 
 Examples:
 
@@ -146,5 +150,4 @@ part in it, as one undo step.
   turns), so a part on a side stud keeps its own frame.
 - Only one moving body: the free-motion step doesn't solve chains or closed loops yet (the
   planned snapping solver does).
-- Sliding along a slot is detected (it's in the null space) but not offered.
 - Explicit pins don't exist yet; only grounded / largest.

@@ -35,6 +35,7 @@ class TurnPlan:
     axis: glm.vec3 = field(default_factory=lambda: glm.vec3(0, 0, 1))  # its direction
     reason: str = ""
     contacts: List[Contact] = field(default_factory=list)
+    slide: Optional[glm.vec3] = None  # a direction it can slide along without turning (a slot), if any
 
 
 def grounded(placed) -> bool:
@@ -109,10 +110,11 @@ def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
     bu, bv = basis
     centre = contacts[0].stud
     a = np.array([row for c in contacts for row in _jacobian_rows(c, centre, basis)])
-    s = np.linalg.svd(a, compute_uv=False)
+    _, s, vh = np.linalg.svd(a)
     rank = int(np.sum(s > EPS))
     if rank >= 3:
         return TurnPlan("locked", moving, fixed, reason="held by studs on different axes", contacts=contacts)
+    slide = _slide(vh[rank:], bu, bv)
 
     def in_plane(p: glm.vec3):
         d = p - centre
@@ -128,6 +130,20 @@ def plan_turn(model, selection, hint: Optional[glm.vec3] = None) -> TurnPlan:
     for x, y in studs:
         if turns_freely_about(x, y):
             return TurnPlan("turn", moving, fixed, pivot=centre + bu * x + bv * y, axis=glm.vec3(axis),
-                            contacts=contacts)
+                            contacts=contacts, slide=slide)
     return TurnPlan("locked", moving, fixed, reason="the contacts only allow sliding, not turning",
-                    contacts=contacts)
+                    axis=glm.vec3(axis), contacts=contacts, slide=slide)
+
+
+def _slide(null: np.ndarray, bu: glm.vec3, bv: glm.vec3) -> Optional[glm.vec3]:
+    """A motion in the null space (rows: angle, x, y) with no turning in it, as a world
+    direction; None if every free motion turns."""
+    if len(null) == 0:
+        return None
+    if len(null) == 1:
+        q = null[0] if abs(null[0][0]) < EPS else None
+    else:  # two free motions: the combination whose angle part cancels
+        q = null[1][0] * null[0] - null[0][0] * null[1]
+    if q is None or float(np.hypot(q[1], q[2])) < EPS:
+        return None
+    return glm.normalize(bu * float(q[1]) + bv * float(q[2]))

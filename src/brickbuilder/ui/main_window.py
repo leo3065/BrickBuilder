@@ -322,7 +322,8 @@ class MainWindow(QMainWindow):
                     "arrows: nudge; F: grid under cursor",
         Tool.SELECT: "drag a selected part: move; arrows / PgUp / PgDown: nudge; Ctrl+G: group; "
                      "double-click: into a group, Alt: one part",
-        Tool.TURN: "drag: turn about the stud, Shift: free; [ / ]: a step; Shift+R: realign",
+        Tool.TURN: "drag: turn about the stud, Shift: free; Ctrl+drag: slide along the slot; [ / ]: a step; "
+                   "Shift+R: realign",
         Tool.PAINT: "click: paint with the current colour",
         Tool.ERASE: "click: remove",
     }
@@ -463,8 +464,9 @@ class MainWindow(QMainWindow):
           [ / ] fine turn, Esc cancels); arrow keys move it half a cell (H) or a cell along its<br>
           own grid, PgUp / PgDown a layer.<br>
         - Turn (T): drag a part (or the selection) to turn it about the stud it's held by, in<br>
-          7.5° steps; Shift turns freely. [ / ] turn the selection a step, Shift+R turns it back<br>
-          onto its grid. Locked parts say why in the status bar; red = it would overlap.<br>
+          7.5° steps; Shift turns freely. Ctrl+drag slides it along the slot it's held in (half<br>
+          cells; Shift: free). [ / ] turn the selection a step, Shift+R turns it back onto its grid.<br>
+          Locked parts say why in the status bar; red = it would overlap.<br>
         - Paint (E): Click to color brick.<br>
         - Erase (R): Click to remove brick.<br>
         <br>

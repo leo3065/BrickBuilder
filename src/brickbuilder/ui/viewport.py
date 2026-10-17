@@ -121,7 +121,8 @@ class Viewport(QOpenGLWidget):
                              collided=[self.model.parts[pid].edges for pid in self.model.collisions()]
                              if self.highlight_collisions else (),
                              turning=moving,
-                             pivot=(self.turning["pivot"], self.turning["axis"]) if self.turning else None,
+                             pivot=(self.turning["pivot"], self.turning["axis"])
+                             if self.turning and self.turning["pivot"] is not None else None,
                              grid_matrix=self.model.frame_matrix(self.working_frame) if self.working_frame else None)
 
     def set_tool(self, tool: Tool):
@@ -443,6 +444,9 @@ class Viewport(QOpenGLWidget):
             return
         if hit.id not in self.selection:
             self.selection = self._unit(hit.id, bool(event.modifiers() & Qt.KeyboardModifier.AltModifier))
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self._start_slide(event, point)
+            return
         plan, pivot = self._turn_plan(point)
         if plan is not None:
             start = self._turn_angle(event.position(), pivot, plan.axis)
@@ -452,8 +456,48 @@ class Viewport(QOpenGLWidget):
         self.update()
         self.edited.emit()
 
+    def _start_slide(self, event: QMouseEvent, point: glm.vec3):
+        """Ctrl+drag in the Turn tool: slide along the slot the selection is held in."""
+        plan = plan_turn(self.model, self.selection, point)
+        if plan.slide is None:
+            self.notice = "can't slide: " + ("not held by anything else" if plan.kind == "free"
+                                             else "nothing to slide along")
+        else:
+            start = self._slide_point(event.position(), point, plan.axis)
+            self.turning = {"moving": plan.moving, "slide": plan.slide, "axis": plan.axis, "origin": point,
+                            "start": start if start is not None else point, "pivot": None,
+                            "distance": 0.0, "angle": 0.0, "transform": glm.mat4(1.0), "valid": True}
+            self.notice = "sliding 0 mm"
+        self.update()
+        self.edited.emit()
+
+    def _slide_point(self, pos, through: glm.vec3, axis: glm.vec3) -> Optional[glm.vec3]:
+        """The point under the cursor on the plane across `axis` through `through`."""
+        ray = picking.get_mouse_ray(pos.x(), pos.y(), self.width(), self.height(), self.camera)
+        t = picking.intersect_plane(ray, axis, through)
+        return None if t is None else ray.origin + ray.direction * t
+
+    def _drag_slide(self, event: QMouseEvent):
+        t = self.turning
+        p = self._slide_point(event.position(), t["origin"], t["axis"])
+        if p is None:
+            return
+        raw = glm.dot(p - t["start"], t["slide"])
+        step = self.profile.cell.x / self.profile.subdiv[0]  # half a cell
+        free = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+        distance = raw if free else round(raw / step) * step
+        if distance != t["distance"]:
+            t["distance"] = distance
+            t["transform"] = glm.translate(glm.mat4(1.0), t["slide"] * distance)
+            t["valid"] = self.model.moved_overlaps(t["moving"], t["transform"]) is None
+            self.notice = f"sliding {distance:.3g} mm" + ("" if t["valid"] else " (overlaps)")
+            self.edited.emit()
+
     def _drag_turn(self, event: QMouseEvent):
         t = self.turning
+        if t.get("slide") is not None:
+            self._drag_slide(event)
+            return
         a = self._turn_angle(event.position(), t["pivot"], t["axis"])
         if a is None:
             return
@@ -471,7 +515,7 @@ class Viewport(QOpenGLWidget):
 
     def _finish_turn(self):
         t, self.turning = self.turning, None
-        if abs(t["angle"]) > 1e-9:
+        if abs(t["angle"]) > 1e-9 or abs(t.get("distance", 0.0)) > 1e-9:
             self._commit_turn(t["moving"], t["transform"])
         else:
             self.notice = ""

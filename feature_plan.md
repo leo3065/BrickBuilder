@@ -14,7 +14,7 @@ A Python-based GUI program for designing 3D models in Nanoblock-style micro bric
 - [x] Groups: named, nestable subassemblies (Ctrl+G / Ctrl+Shift+G), a Groups dock, hover outline; click selects the outermost group, double-click drills in, Alt+click picks one part. Saved in the file. See docs/part_format.md "Groups, pins and moving subassemblies".
 - [x] Turning already placed parts: the Turn tool (see Intermediate, fine rotation).
 - [x] Moving the selection (or everything, Ctrl+A) by half or whole cells, with the arrow keys (along its own grid; PgUp / PgDown for layers) or by dragging a selected part onto any face or grid, e.g. to make room below a model that was built from the top down. See docs/part_format.md "Moving the selection".
-- [ ] Sliding along a slot (a constrained move): the turn finder already detects that freedom but doesn't offer it.
+- [x] Sliding along a slot (a constrained move): Ctrl+drag in the Turn tool slides the selection along the slot it's held in, in half-cell steps (Shift: free), also when the contacts lock turning (two studs in one slot).
 - [ ] Copy, paste and duplicate a selection, keeping its groups and frames. Circular arrays and instances build on it.
 - [x] Highlight parts that aren't connected to the main build (View > Highlight Unconnected Parts, U): parts outside the largest connected group get an orange outline.
 
